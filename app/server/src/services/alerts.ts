@@ -31,7 +31,9 @@ export async function markAlertSeen(a: SiteAccess, req: FastifyRequest, body: un
   if (state === 'resolved') throw new HttpError(409, 'This alert is already resolved, so there is nothing to mark.', 'already_resolved');
   if (state === 'seen') return { id, ackAt: String(row.ack_at ?? ''), ackBy: String(row.ack_by ?? '') };
   const ackAt = now.toISOString();
-  const ackBy = String(a.user.email ?? '').slice(0, 200);
+  // FX-SERVER (review R3 L7): the person's user id, never their e-mail: the engine row then holds no personal data, and a deleted account
+  // leaves an id that names nobody (the account deletion does not reach the engine's alert rows)
+  const ackBy = String(a.user.id ?? '').slice(0, 200);
   let ok = false;
   try {
     ok = await updateRows('consoleAlerts', match, { ack_by: ackBy, ack_at: ackAt });

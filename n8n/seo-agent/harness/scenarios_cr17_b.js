@@ -106,7 +106,7 @@ module.exports = async (ctx) => {
     const p = path.join(__dirname, '..', '..', '..', 'app', 'shared', 'src', 'engine-purge.generated.ts');
     let ts = ''; try { ts = fs.readFileSync(p, 'utf8'); } catch (e) { check('the app list is readable', false, p); return; }
     const app = {}; for (const m of ts.matchAll(/\{ table: "([a-z_]+)", keys: \[(.*?)\] \}/g)) app[m[1]] = [...m[2].matchAll(/column: "([a-z_]+)", kind: "(domain|id)"/g)].map(x => x[1] + ':' + x[2]).sort();
-    const want = { domain: ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"], id: ["={{ $('Admin Action').first().json.site_id }}"] };
+    const want = { domain: ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"], id: ["={{ $('Admin Action').first().json.purge_id }}"] };   // FX-SERVER (review R5 M5): the id-keyed deletes match purge_id
     const eng = {}; for (const n of purgeNodes()) { const p2 = byName[n].parameters; const keys = new Set();
       for (const c of p2.filters.conditions) for (const k of ['domain', 'id']) if (want[k].includes(c.keyValue)) keys.add(c.keyName + ':' + k);
       eng[tableOf(n)] = [...keys].sort(); }

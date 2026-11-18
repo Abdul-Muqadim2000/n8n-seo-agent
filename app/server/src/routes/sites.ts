@@ -163,7 +163,9 @@ export async function verifyWithGoogle(req: FastifyRequest, orgId: string, siteI
 async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
   const idSafe = await engineIdIsOwn(site, log);
   try {
-    await siteAdmin({ action: 'delete', domain: site.domain, site_id: n8nSiteId(site.domain), request_id: `app-delete-${site.id}` });
+    // FX-SERVER (review R5 M5): the engine's own delete honours the same reading: with purge_ids false, Site Admin deletes no row keyed only
+    // by the engine site id (another website's), only the rows that name this domain (engine build section 200, Admin Action purge_id)
+    await siteAdmin({ action: 'delete', domain: site.domain, site_id: n8nSiteId(site.domain), purge_ids: idSafe, request_id: `app-delete-${site.id}` });
   } catch (err) {
     log.warn({ err: String(err), domain: site.domain }, 'n8n site delete failed');
   }

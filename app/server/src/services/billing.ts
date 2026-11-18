@@ -95,6 +95,8 @@ export interface SiteForecast {
   pagesPerWeek?: number;
   pagesLeft?: number | null;
   since?: string | null;
+  /** FX-SERVER (R3 M1): rows a pending settings change switches on (creditRunway only) */
+  switchedOn?: string[];
 }
 
 /** A website as the measured forecast (shared/src/credit-forecast.ts) reads it. */
@@ -105,6 +107,7 @@ export const forecastSite = (x: SiteForecast): ForecastSiteInput => ({
   pagesLeft: x.pagesLeft === undefined ? 0 : x.pagesLeft,
   since: x.since ?? null,
   pausedByPerson: x.paused && !x.pausedForCredits,
+  ...(x.switchedOn?.length ? { switchedOn: x.switchedOn } : {}),
 });
 
 const forecastCache = new Map<string, { at: number; sites: SiteForecast[] }>();
@@ -168,8 +171,12 @@ export async function creditRunway(
   const before = await creditState(db, org, { sites });
   const mine = sites.find((x) => x.siteId === site.id);
   // a website paused by a person forecasts nothing, with or without the change; CR17-I: the changed rows go through the same measured
-  // forecast (a row switched on with no history is priced from the list, a row switched off forecasts nothing, pages a week move the pages)
-  const changed = (x: SiteForecast): SiteForecast => ({ ...x, usd: afterUsd, rows: afterRows, pagesPerWeek, pagesLeft: level === 3 ? null : chosenLadderPagesLeft(ladders, settings, level) });
+  // forecast (a row switched off forecasts nothing, pages a week move the pages). FX-SERVER (review R3 M1): a row this change switches on
+  // has no measured window yet: it is priced at its typical run when it ran before, else from the price list (`switchedOn`), never at
+  // the 0 its off weeks charged
+  const wasOn = new Set((mine?.rows ?? []).filter((r) => r.on).map((r) => r.id));
+  const switchedOn = afterRows.filter((r) => r.on && !wasOn.has(r.id)).map((r) => r.id);
+  const changed = (x: SiteForecast): SiteForecast => ({ ...x, usd: afterUsd, rows: afterRows, pagesPerWeek, pagesLeft: level === 3 ? null : chosenLadderPagesLeft(ladders, settings, level), switchedOn });
   const after = mine && !(mine.paused && !mine.pausedForCredits) ? await creditState(db, org, { sites: sites.map((x) => (x.siteId === site.id ? changed(x) : x)) }) : before;
   return { enforced: true, available: before.available, dailyBefore: before.dailyBurn, dailyAfter: after.dailyBurn };
 }
@@ -277,14 +284,17 @@ export async function usageSince(q: Q, orgId: string, since: Date): Promise<{ au
   return { autopilot: u.autopilot, onDemand: u.onDemand };
 }
 
-/** CR17-I (M2): the company's usage entries since `since`, as the measured forecast and the cost per outcome read them. */
+/**
+ * CR17-I (M2): the company's usage entries since `since`, as the measured forecast and the cost per outcome read them. FX-SERVER (review R3
+ * L6): past the limit the NEWEST are kept (the 30-day forecast and the cost per outcome read those), newest first; no consumer reads order.
+ */
 export async function usageEntries(q: Q, orgId: string, since: Date): Promise<UsageEntry[]> {
   const rows = await execRows<{ id: string; created_at: string; credits: number; origin: string; mode: string; domain: string; run_id: string | null; engine_run_id: string | null; trial: boolean }>(q, sql`
     select id, created_at, credits, ${ORIGIN} as origin, coalesce(ref->>'mode', '') as mode, coalesce(ref->>'domain', '') as domain,
       nullif(ref->>'runId', '') as run_id, nullif(ref->>'engineRunId', '') as engine_run_id, ${KI_TRIAL_RUN} as trial
     from ${schema.creditLedger}
     where org_id = ${orgId}::uuid and kind = 'usage' and credits <> 0 and created_at >= ${tsv(since)}
-    order by created_at asc limit 20000`);
+    order by created_at desc limit 20000`);
   return rows.map((r) => ({
     id: r.id,
     at: new Date(r.created_at).toISOString(),
@@ -634,12 +644,24 @@ export async function requestPack(org: OrgRow, user: { id: string; email: string
 
 /** One "Buy credits" request written and the platform admins told: a person's, or the automatic top-up's (CR17-I). */
 async function fileRequest(org: OrgRow, by: { id: string | null; email: string | null }, pack: CreditPack, creditValueUsd: number, note: string, auto: boolean, log: Log): Promise<CreditPurchaseRequestRow> {
+  const row = await insertRequest(db, org, by, pack, creditValueUsd, note, auto);
+  tellAdmins(org, row, pack, creditValueUsd, note, auto, log);
+  return row;
+}
+
+async function insertRequest(q: Q, org: OrgRow, by: { id: string | null; email: string | null }, pack: CreditPack, creditValueUsd: number, note: string, auto: boolean): Promise<CreditPurchaseRequestRow> {
   const priced = pricePack(pack, creditValueUsd);
-  const [row] = await db
+  const [row] = await q
     .insert(schema.creditPurchaseRequests)
     .values({ orgId: org.id, orgName: org.name, packId: pack.id, credits: pack.credits, priceUsd: priced.priceUsd, note, requestedBy: by.id, requestedByEmail: by.email, auto })
     .returning();
-  const who = auto ? `${org.name}'s automatic top-up (credits are running low)` : (by.email ?? 'The customer');
+  return row;
+}
+
+/** the platform admins' mail of a request just filed (never awaited: a mail never fails the request) */
+function tellAdmins(org: OrgRow, row: CreditPurchaseRequestRow, pack: CreditPack, creditValueUsd: number, note: string, auto: boolean, log: Log): void {
+  const priced = pricePack(pack, creditValueUsd);
+  const who = auto ? `${org.name}'s automatic top-up (credits are running low)` : (row.requestedByEmail ?? 'The customer');
   for (const to of config.platformAdmins)
     void sendMail(
       {
@@ -650,7 +672,6 @@ async function fileRequest(org: OrgRow, by: { id: string | null; email: string |
       },
       log,
     ).catch(() => undefined);
-  return row;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -702,15 +723,21 @@ export async function autoTopUpStep(org: OrgRow, level: CreditStatus, balance: n
     log.warn({ org: org.id, pack: org.autoTopUpPackId }, 'automatic top-up: the chosen pack no longer exists');
     return null;
   }
-  // disarm first (a second guard pass, or a second server, never files twice for one episode)
-  const [armed] = await db
-    .update(schema.organizations)
-    .set({ autoTopUpArmed: false })
-    .where(and(eq(schema.organizations.id, org.id), eq(schema.organizations.autoTopUpArmed, true)))
-    .returning({ id: schema.organizations.id });
-  if (!armed) return null;
-  const by = org.autoTopUpBy ? await db.query.users.findFirst({ where: eq(schema.users.id, org.autoTopUpBy) }) : null;
-  const row = await fileRequest(org, { id: by?.id ?? null, email: by?.email ?? null }, pack, s.creditValueUsd, 'Asked automatically: credits are running low.', true, log);
+  // disarm and file in ONE transaction (FX-SERVER, review R3 L4): a second guard pass, or a second server, never files twice for one
+  // episode (the conditional disarm), and a failed insert leaves the company armed, so the next pass asks again
+  const NOTE = 'Asked automatically: credits are running low.';
+  const row = await db.transaction(async (tx) => {
+    const [armed] = await tx
+      .update(schema.organizations)
+      .set({ autoTopUpArmed: false })
+      .where(and(eq(schema.organizations.id, org.id), eq(schema.organizations.autoTopUpArmed, true)))
+      .returning({ id: schema.organizations.id });
+    if (!armed) return null;
+    const by = org.autoTopUpBy ? await tx.query.users.findFirst({ where: eq(schema.users.id, org.autoTopUpBy) }) : null;
+    return insertRequest(tx, org, { id: by?.id ?? null, email: by?.email ?? null }, pack, s.creditValueUsd, NOTE, true);
+  });
+  if (!row) return null;
+  tellAdmins(org, row, pack, s.creditValueUsd, NOTE, true, log);
   const priced = pricePack(pack, s.creditValueUsd);
   for (const to of await billingContacts(org.id))
     await sendMail(

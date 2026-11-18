@@ -9,9 +9,11 @@ import { isKiRunMode } from './ki';
 // pulse was forecast at 169 while it was charged 10, and our own test runs (118 credits) were projected forward as the client's pace.
 //
 // The rules, one place, pure (the server reads the ledger and the websites' schedules and calls these):
-//   * each row of a website's schedules (shared/src/autopilot.ts) that is on is forecast from that website's charges of the last 30 days
-//     (the monthly audit: 60 days, the research refresh: 90), once the website has that much history; a younger website uses its typical
-//     charge per run x the runs a month the schedule makes; a website with no charge yet uses the price list ("estimate");
+//   * each row of a website's schedules (shared/src/autopilot.ts) that is on is forecast from that row's charges of the last 30 days
+//     (the monthly audit: 60 days, the research refresh: 90), once THAT ROW has that much history of its own (FX-SERVER, review R3 M1: the
+//     website's age is not the row's: a monitor switched on today on a 60-day-old website was "measured" at 0); a younger row uses its
+//     typical charge per run x the runs a month the schedule makes; a row with no charge yet, or one being switched on now, uses its
+//     typical run if it ran before, else the price list ("estimate");
 //   * pages: the typical charge of a written page (median of the last 60 days) x the pages still due: pages a week x 4.33, never more than
 //     the pages its keyword ladders still have to write (level 3 writes new topics: no ceiling), never less than the pages the autopilot
 //     really wrote in the last 30 days (approved suggestions and AI answer pages are written on top of the ladders' pages);
@@ -204,6 +206,9 @@ export interface ForecastSiteInput {
   since: string | null;
   /** paused by a person: forecasts nothing */
   pausedByPerson?: boolean;
+  /** rows being switched on by the change a person is about to save (the settings warning): no measured window, a typical run or the
+   *  price list, whatever their older history says */
+  switchedOn?: readonly string[];
 }
 
 export interface ForecastInput {
@@ -233,12 +238,13 @@ export function measuredForecast(input: ForecastInput): CreditForecast {
   const sites: SiteCreditForecast[] = input.sites.map((site) => {
     const d = host(site.domain);
     const mine = auto.filter((e) => host(e.domain) === d);
-    // the history there is: since its schedules started; a website never charged for its schedules has none yet, so every row is priced
-    // from the list until it is charged once (after that, a mature row with no charge reads 0: measured)
+    // the history there is: since the website's schedules were first charged (the pages' pace reads it); each other row reads its OWN
+    // history (rowForecast)
     const firstSeen = mine.reduce<number | null>((m, e) => (m == null || Date.parse(e.at) < m ? Date.parse(e.at) : m), null);
     const sinceMs = site.since ? Date.parse(site.since) : NaN;
     const start = firstSeen == null ? t : Number.isFinite(sinceMs) ? Math.min(sinceMs, firstSeen) : firstSeen;
     const age = Math.max(0, (t - start) / DAY);
+    const switchedOn = new Set(site.switchedOn ?? []);
     const rows: ForecastRow[] = [];
     const seenRows = new Set<string>();
     for (const row of site.rows) {
@@ -275,7 +281,7 @@ export function measuredForecast(input: ForecastInput): CreditForecast {
         });
         continue;
       }
-      rows.push(rowForecast(row.id, row.label, mine.filter((e) => ROW_OF[outcomeKindOfMode(e.mode)] === row.id), age, quote, t));
+      rows.push(rowForecast(row.id, row.label, mine.filter((e) => ROW_OF[outcomeKindOfMode(e.mode)] === row.id), quote, t, switchedOn.has(row.id), age));
     }
     // automatic work no row names (a final version, an automatic keyword re-check): what it charged, as its own row
     const other = mine.filter((e) => {
@@ -283,7 +289,7 @@ export function measuredForecast(input: ForecastInput): CreditForecast {
       return !r || !seenRows.has(r);
     });
     if (other.length && !site.pausedByPerson) {
-      const o = rowForecast('other', 'Other automatic work', other, age, 0, t);
+      const o = rowForecast('other', 'Other automatic work', other, 0, t, false, age);
       if (o.credits > 0) rows.push(o);
     }
     return { domain: site.domain, monthly: r2(rows.reduce((s, r) => s + r.credits, 0)), rows };
@@ -298,12 +304,25 @@ export function measuredForecast(input: ForecastInput): CreditForecast {
 }
 
 
-function rowForecast(id: string, label: string, entries: readonly UsageEntry[], age: number, quote: number, t: number): ForecastRow {
+/**
+ * One row of a website's schedules. "measured" (the row's charges over its window, a 0 included: an audit skipped because nothing changed)
+ * only when the row itself has history that old: its first charge at least `mature` days ago. A row with fewer days of its own history uses
+ * its typical charge per run; a row never charged, or one being switched on now (`fresh`), its typical run if it ran before, else the
+ * price list. (FX-SERVER, review R3 M1: the row read the WEBSITE's age, so turning a monitor on on an established website forecast 0 and
+ * the settings warning and the autopilot reserve ignored it.)
+ */
+export function rowForecast(id: string, label: string, entries: readonly UsageEntry[], quote: number, t: number, fresh = false, siteAge = Infinity): ForecastRow {
   const rule = ROW_RULE[id] ?? ROW_RULE.other;
-  const inWindow = entries.filter((e) => Date.parse(e.at) >= t - rule.window * DAY && Date.parse(e.at) <= t);
+  const past = entries.filter((e) => Date.parse(e.at) <= t);
+  const firstCharge = past.reduce<number | null>((m, e) => (e.credits < 0 && (m == null || Date.parse(e.at) < m) ? Date.parse(e.at) : m), null);
+  const age = firstCharge == null ? 0 : Math.max(0, (t - firstCharge) / DAY);
+  const inWindow = past.filter((e) => Date.parse(e.at) >= t - rule.window * DAY);
   const sum = -inWindow.reduce((s, e) => s + e.credits, 0);
-  if (age >= rule.mature) {
-    const days = Math.min(rule.window, age);
+  if (!fresh && firstCharge != null && age >= rule.mature) {
+    // the days the row's charges cover: its own history plus the one interval its first run stands for (four weekly runs span 21 days
+    // but are four weeks of work), never more than the website's schedules have run or the window
+    const interval = rule.runs > 0 ? 30 / rule.runs : Infinity;
+    const days = Math.max(1, Math.min(rule.window, siteAge, age + interval));
     const credits = r2(Math.max(0, (sum * 30) / days));
     const runs = outcomesOf(inWindow).filter((o) => o.credits > 0).length;
     return {
@@ -314,7 +333,7 @@ function rowForecast(id: string, label: string, entries: readonly UsageEntry[], 
       detail: runs ? `${runs} run${runs === 1 ? '' : 's'} used ${Math.round(Math.max(0, sum))} credits in the last ${Math.round(days)} days` : `nothing charged in the last ${Math.round(days)} days`,
     };
   }
-  const per = spread(outcomesOf(entries).map((o) => o.credits));
+  const per = spread(outcomesOf(past).map((o) => o.credits));
   if (per.count && rule.runs > 0)
     return { id, label, credits: r2(per.median * rule.runs), basis: 'per_run', detail: `about ${Math.round(per.median)} credits a run, ${Math.round(rule.runs * 10) / 10} runs a month` };
   return { id, label, credits: quote, basis: 'estimate', detail: 'price list: not enough history yet' };

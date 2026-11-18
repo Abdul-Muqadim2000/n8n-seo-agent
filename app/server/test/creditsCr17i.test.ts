@@ -238,8 +238,79 @@ describe('F8: "Track my site" with an empty list clears it', () => {
     expect([200, 201, 202]).toContain(r.status);
     const after = (await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!;
     expect(after).toMatchObject({ keywords: [], competitors: [], brandNames: [] });
+    // FX-SERVER (review R3 M2): the engine is told the same: the lists as sent, and the ones emptied named so its stored copy is cleared too
+    const body = sa.track[sa.track.length - 1];
+    expect(body).toMatchObject({ mode: 'track', keywords: [], competitors: [], clear_lists: ['competitors', 'brand_names'] });
+    expect((body.monitors as Record<string, unknown>).brand_names).toBe('');
     const r2 = await c.post(`/api/orgs/${org.id}/runs`, { mode: 'track', siteId: site.id, country: 'United States', keywords: ['lms development'], competitors: [], monitors: { brandNames: [] } });
     expect([200, 201, 202]).toContain(r2.status);
     expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!.keywords).toEqual(['lms development']);
+  });
+
+  it('FX-SERVER (review R3 M2): an API / MCP track call that leaves a list out keeps it, in the app and in the engine; an explicit [] clears it', async () => {
+    const { c, org } = await company('api-kw@cr17i.test', 'Api Keyword Co');
+    const site = await trackedSite(org.id, 'api-kw.test', { keywords: ['open edx provider'], competitors: ['rival-co.com'], brandNames: ['AKW'] });
+    const key = (await c.post(`/api/orgs/${org.id}/api-keys`, { name: 'ci', scopes: ['read', 'run'] })).body;
+    const start = (payload: Record<string, unknown>) => app.inject({ method: 'POST', url: '/api/v1/runs', headers: { authorization: `Bearer ${key.token}` }, payload });
+    const r = await start({ mode: 'track', websiteId: site.id, country: 'United States', blogsPerWeek: 1 });
+    expect(r.statusCode, r.body).toBeLessThan(300);
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!).toMatchObject({ keywords: ['open edx provider'], competitors: ['rival-co.com'], brandNames: ['AKW'] });
+    const kept = sa.track[sa.track.length - 1];
+    expect(kept).toMatchObject({ keywords: ['open edx provider'], competitors: ['rival-co.com'] });
+    expect((kept.monitors as Record<string, unknown>).brand_names).toBe('AKW');
+    expect(kept.clear_lists).toBeUndefined();
+    const r2 = await start({ mode: 'track', websiteId: site.id, country: 'United States', competitors: [], monitors: { brandNames: [] } });
+    expect(r2.statusCode).toBeLessThan(300);
+    expect((await db.query.sites.findFirst({ where: eq(schema.sites.id, site.id) }))!).toMatchObject({ keywords: ['open edx provider'], competitors: [], brandNames: [] });
+    expect(sa.track[sa.track.length - 1]).toMatchObject({ keywords: ['open edx provider'], competitors: [], clear_lists: ['competitors', 'brand_names'] });
+  });
+});
+
+describe('FX-SERVER (review R3 M1): switching a monitor on is priced, never 0', () => {
+  it('the daily pulse switched on on a 60-day-old website raises the daily use the settings warning reads', async () => {
+    const client = await import('../src/n8n/client');
+    const { org } = await company('pulse-on@cr17i.test', 'Pulse On Co');
+    await db.update(schema.organizations).set({ creditsEnforced: true }).where(eq(schema.organizations.id, org.id));
+    const site = await trackedSite(org.id, 'pulse-on.test', { verifiedAt: new Date(Date.now() - 60 * DAY), trackingStartedAt: new Date(Date.now() - 60 * DAY) });
+    await addCreditEntry(db, { orgId: org.id, kind: 'grant', credits: 5000, note: 'start' });
+    // its weekly site report has charged for weeks: the website has history, the pulse (off) has none
+    for (const d of [3, 10, 17, 24, 31, 38])
+      await addCreditEntry(db, { orgId: org.id, kind: 'usage', credits: -5, note: 'report', at: new Date(Date.now() - d * DAY), ref: { origin: 'autopilot', mode: 'site_tracker', domain: 'pulse-on.test', engineRunId: `e-${d}` } as never });
+    vi.mocked(client.siteRows).mockImplementation((async (t: string) => (t === 'monitors' ? [{ site_id: 'site_pulse-on-test', domain: 'pulse-on.test', ai_pulse: false }] : [])) as never);
+    try {
+      const r = await billing.creditRunway(await orgRow(org.id), site, { monitors: { aiPulse: true } });
+      expect(r).not.toBeNull();
+      expect(r!.dailyAfter).toBeGreaterThan(r!.dailyBefore + 1);
+      const same = await billing.creditRunway(await orgRow(org.id), site, { monitors: { aiPulse: false } });
+      expect(same!.dailyAfter).toBeCloseTo(same!.dailyBefore, 5);
+    } finally {
+      vi.mocked(client.siteRows).mockImplementation((async () => []) as never);
+    }
+  });
+});
+
+describe('FX-SERVER (review R3 L4): the automatic top-up disarms and files in one transaction', () => {
+  it('a request that cannot be written leaves the company armed, so the next pass asks again', async () => {
+    const { c, org } = await company('auto-tx@cr17i.test', 'Auto Tx');
+    await db.update(schema.organizations).set({ creditsEnforced: true }).where(eq(schema.organizations.id, org.id));
+    await c.put(`/api/orgs/${org.id}/billing/auto-top-up`, { packId: 'starter' });
+    const o = await orgRow(org.id);
+    expect(o.autoTopUpArmed).toBe(true);
+    // the insert fails (a company row with no name): before, the disarm was already committed and nobody was ever asked again
+    await expect(billing.autoTopUpStep({ ...o, name: null as never }, 'low', 1, log)).rejects.toBeTruthy();
+    expect((await orgRow(org.id)).autoTopUpArmed).toBe(true);
+    expect(await db.query.creditPurchaseRequests.findMany({ where: eq(schema.creditPurchaseRequests.orgId, org.id) })).toEqual([]);
+    const filed = await billing.autoTopUpStep(o, 'low', 1, log);
+    expect(filed).toMatchObject({ auto: true, status: 'pending' });
+    expect((await orgRow(org.id)).autoTopUpArmed).toBe(false);
+  });
+});
+
+describe('FX-SERVER (review R3 L6): past the limit the newest usage entries are kept', () => {
+  it('usageEntries reads newest first', async () => {
+    const { org } = await company('order@cr17i.test', 'Order Co');
+    for (const d of [30, 20, 10]) await addCreditEntry(db, { orgId: org.id, kind: 'usage', credits: -1, note: 'x', at: new Date(Date.now() - d * DAY), ref: { origin: 'autopilot', mode: 'site_tracker', domain: 'order.test' } as never });
+    const e = await billing.usageEntries(db, org.id, new Date(Date.now() - 90 * DAY));
+    expect(e.map((x) => x.at)).toEqual([...e.map((x) => x.at)].sort().reverse());
   });
 });

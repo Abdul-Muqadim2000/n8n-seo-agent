@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { estimateMonitoringCost, MODE_IDS, MONITOR_COSTS } from './constants';
 import { cleanDomain, domainOk, n8nSiteId, parseDomainList, urlOnDomain } from './domain';
-import { buildN8nPayload, type SiteContext } from './payload';
+import { buildN8nPayload, keepTrackLists, type SiteContext } from './payload';
 import { auditInput, createSiteSchema, keywordInput, parseRunInput, RUN_SCHEMAS } from './schemas';
 
 const SITE_ID = '7a1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8';
@@ -202,5 +202,39 @@ describe('published: the draft it reports', () => {
     expect(RUN_SCHEMAS.published.safeParse({ ...base, contentRequestId: 'a b' }).success).toBe(false);
     expect(RUN_SCHEMAS.published.safeParse({ ...base, contentRequestId: '<x>' }).success).toBe(false);
     expect(RUN_SCHEMAS.published.parse(base).contentRequestId).toBe('');
+  });
+});
+
+// FX-SERVER (review R3 M2): Track my site's lists follow one rule in the app row and the engine payload: sent = stored (an empty list
+// clears, and the engine is told with clear_lists), left out (an API / MCP body) = kept (filled from the website before validation)
+describe('track: keep or clear the lists', () => {
+  const parse = (b: Record<string, unknown>) => RUN_SCHEMAS.track.parse({ mode: 'track', siteId: SITE_ID, country: 'United Arab Emirates', ...b });
+  it('an explicit empty list is sent empty and named in clear_lists; the stored list is never substituted', () => {
+    const body = buildN8nPayload(parse({ competitors: [], monitors: { brandNames: [] } }), site, delivery);
+    expect(body.competitors).toEqual([]);
+    expect((body.monitors as Record<string, unknown>).brand_names).toBe('');
+    expect(body.clear_lists).toEqual(['competitors', 'brand_names']);
+    expect(Object.keys(body).pop()).toBe('clear_lists');
+  });
+  it('lists given are sent as given, with no clear_lists', () => {
+    const body = buildN8nPayload(parse({ competitors: ['rival.ae'], monitors: { brandNames: ['NW'] } }), site, delivery);
+    expect(body).toMatchObject({ competitors: ['rival.ae'] });
+    expect((body.monitors as Record<string, unknown>).brand_names).toBe('NW');
+    expect(body.clear_lists).toBeUndefined();
+  });
+  it('an API body that leaves the lists out keeps the stored ones (only for track)', () => {
+    const stored = { keywords: ['erp dubai'], competitors: ['azentio.com'], brandNames: ['Northwind'] };
+    const filled = keepTrackLists({ mode: 'track', siteId: SITE_ID, country: 'United Arab Emirates' }, stored);
+    expect(filled).toMatchObject({ keywords: ['erp dubai'], competitors: ['azentio.com'], monitors: { brandNames: ['Northwind'] } });
+    const body = buildN8nPayload(parse(filled), site, delivery);
+    expect(body).toMatchObject({ keywords: ['erp dubai'], competitors: ['azentio.com'] });
+    expect(body.clear_lists).toBeUndefined();
+    // monitors given without brandNames keeps the brand names, the other settings as given
+    expect(keepTrackLists({ mode: 'track', monitors: { aiPulse: false } }, stored).monitors).toEqual({ aiPulse: false, brandNames: ['Northwind'] });
+    // an explicit [] is the caller's clear, never refilled
+    expect(keepTrackLists({ mode: 'track', competitors: [], keywords: [] }, stored)).toMatchObject({ competitors: [], keywords: [] });
+    // any other mode is untouched
+    const audit = { mode: 'audit', siteId: SITE_ID };
+    expect(keepTrackLists(audit, stored)).toBe(audit);
   });
 });

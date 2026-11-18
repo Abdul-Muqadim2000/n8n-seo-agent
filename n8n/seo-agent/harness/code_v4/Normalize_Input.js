@@ -530,6 +530,8 @@ return [{
     // F-L (2026-10-18): the Audit Scheduler's ran-late notice, kept for a scheduled request only (a caller cannot label its own run late)
     ran_late: (!!p2.scheduled && p2.ran_late && typeof p2.ran_late === 'object' && p2.ran_late.late === true) ? { late: true, via: String(p2.ran_late.via || ''), due: String(p2.ran_late.due || ''), started_at: String(p2.ran_late.started_at || ''), late_min: Number(p2.ran_late.late_min) || 0, kind: String(p2.ran_late.kind || ''), why: String(p2.ran_late.why || '').slice(0, 300), text: String(p2.ran_late.text || '').slice(0, 600) } : null,
     monitor_input,
+    // FX-SERVER (section 201): the lists the caller explicitly emptied (Track my site); anything else in the key is ignored
+    clear_lists: asArray(p2.clear_lists).map(x => String(x).trim().toLowerCase()).filter(x => x === 'competitors' || x === 'brand_names').filter((x, i, a) => a.indexOf(x) === i),
     panel_quote_dfs_usd, panel_quote_ai_usd, panel_quote_panel,
     topics,
     free_only: mode === 'backlinks' && /^(true|1|yes|on)$/i.test(String(p2.free_only ?? '')),

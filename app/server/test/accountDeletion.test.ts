@@ -155,6 +155,7 @@ describe('Delete my account', () => {
     expect((await c.get('/api/me')).body).toBeNull();
     // the verified website stopped in the engine and its history went, table by table; the unverified one was never in the engine
     expect(eng.adminCalls.map((b) => `${b.action}:${b.domain}`)).toEqual(['delete:devaicon-solo.test']);
+    expect(eng.adminCalls[0].purge_ids).toBe(true);   // FX-SERVER (R5 M5): no other domain holds the id: Site Admin purges the id-keyed rows too
     expect(new Set(eng.purged.map((p) => p.table))).toEqual(new Set(ENGINE_SITE_PURGE.map((t) => t.table)));
     expect(eng.purged.every((p) => p.filters.every((f) => ['devaicon-solo.test', 'www.devaicon-solo.test', 'site_devaicon-solo-test'].includes(f.value)))).toBe(true);
     // the platform's record of it
@@ -302,6 +303,8 @@ describe('the engine-history purge matches exactly', () => {
     eng.foreign = [{ domain: 'foo-co.uk' }];
     expect((await c.del(`/api/orgs/${org.id}/sites/${site.id}`)).status).toBe(200);
     expect(eng.adminCalls.map((b) => b.action)).toEqual(['delete']);
+    // FX-SERVER (review R5 M5): the engine's own delete is told too, so Site Admin keeps the id-keyed rows (it vouched for them by the slug alone)
+    expect(eng.adminCalls[0]).toMatchObject({ domain: 'foo.co.uk', site_id: 'site_foo-co-uk', purge_ids: false });
     const tables = new Set(eng.purged.map((p) => p.table));
     expect(tables.has('seo_profiles')).toBe(true);
     expect(tables.has('seo_pages')).toBe(false);

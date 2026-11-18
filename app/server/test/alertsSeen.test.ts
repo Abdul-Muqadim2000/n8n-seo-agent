@@ -31,14 +31,16 @@ describe('Mark as seen', () => {
     rows.mockResolvedValue([row({})]);
     updateRows.mockResolvedValue(true);
     const r = await markAlertSeen(access, req, { id: 'watch:site_example-agency-com:page_gone:abcd1234:2026-11-10' }, new Date('2026-11-17T09:00:00Z'));
-    expect(r).toEqual({ id: 'watch:site_example-agency-com:page_gone:abcd1234:2026-11-10', ackAt: '2026-11-17T09:00:00.000Z', ackBy: 'owner@example.com' });
+    expect(r).toEqual({ id: 'watch:site_example-agency-com:page_gone:abcd1234:2026-11-10', ackAt: '2026-11-17T09:00:00.000Z', ackBy: 'u1' });
     const [table, filters, data] = updateRows.mock.calls[0];
     expect(table).toBe('consoleAlerts');
     expect(filters).toEqual([
       { columnName: 'domain', condition: 'eq', value: 'example-agency.com' },
       { columnName: 'message_id', condition: 'eq', value: 'watch:site_example-agency-com:page_gone:abcd1234:2026-11-10' },
     ]);
-    expect(data).toEqual({ ack_by: 'owner@example.com', ack_at: '2026-11-17T09:00:00.000Z' });
+    // FX-SERVER (review R3 L7): the user id, never the e-mail (a deleted account leaves no personal data in the engine)
+    expect(data).toEqual({ ack_by: 'u1', ack_at: '2026-11-17T09:00:00.000Z' });
+    expect(JSON.stringify(updateRows.mock.calls)).not.toContain('@');
     expect(audit.mock.calls[0][2]).toMatchObject({ action: 'alerts.seen' });
   });
   it('an alert of another website (or none) is not found; a resolved one needs no mark; a seen one is not written twice', async () => {
