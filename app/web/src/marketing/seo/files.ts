@@ -16,7 +16,8 @@ export function sitemapXml(pages: SitePage[]): string {
 
 /** the signed-in app, share links and invitations are not for search engines; app.<domain> answers its own robots.txt (Disallow: /)
  *  from middleware.ts */
-export const ROBOTS_DISALLOW = ['/o/', '/admin', '/account', '/onboarding', '/share/', '/invite/', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/portal-handoff', '/api/'];
+// '/app': the app shell's own address (vercel.json rewrites the app's paths to it under cleanUrls); nothing public starts with it
+export const ROBOTS_DISALLOW = ['/app', '/o/', '/admin', '/account', '/onboarding', '/share/', '/invite/', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email', '/portal-handoff', '/api/'];
 
 export function robotsTxt(): string {
   return ['User-agent: *', 'Allow: /', ...ROBOTS_DISALLOW.map((p) => `Disallow: ${p}`), '', `Sitemap: ${absoluteUrl('/sitemap.xml')}`, ''].join('\n');

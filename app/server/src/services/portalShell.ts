@@ -35,6 +35,27 @@ export function appShellFile(dist: string): 'app.html' | 'index.html' {
   return existsSync(resolve(dist, 'app.html')) ? 'app.html' : 'index.html';
 }
 
+/** robots.txt on an agency portal host: a signed-in client portal has nothing for search engines (WHITE_LABEL.md §2) */
+export const PORTAL_ROBOTS_TXT = 'User-agent: *\nDisallow: /\n';
+
+/**
+ * Review R4 L1 (2026-11-18): the API serves the whole web build as static files, and since CR17 that build holds Alaventra's own
+ * public website (the prerendered pages as <page>.html, index.html, 404.html, app.html), its llms.txt, sitemap.xml, robots.txt and
+ * .well-known/security.txt. On an agency portal host none of them may answer: each names us, links us or describes our product.
+ * True for a request path (query and trailing slash ignored, percent-escapes decoded, any case) the portal host must refuse; the
+ * portal's own shell ("/", the app's routes) and the bundle under /assets/ stay served.
+ */
+export function portalRefusesPublicFile(url: string): boolean {
+  let path = url.split(/[?#]/, 1)[0] ?? '';
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    return true; // a malformed escape is nothing a portal serves
+  }
+  path = path.toLowerCase().replace(/\/+$/, '');
+  return /\.html?$/.test(path) || /^\/(llms(-full)?\.txt|sitemap[^/]*\.xml|robots\.txt|\.well-known\/security\.txt|security\.txt)$/.test(path);
+}
+
 export async function portalIndexHtml(dist: string, agencyId: string): Promise<string> {
   const path = resolve(dist, appShellFile(dist));
   if (!cached || cached.path !== path) cached = { path, html: await readFile(path, 'utf8') };

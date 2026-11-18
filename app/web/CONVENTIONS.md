@@ -151,7 +151,8 @@ Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + d
   and the browser hydrates it (`main.tsx`). So a public page must render the same on the server and on the first browser render: no
   `window` / `localStorage` / `matchMedia` / dates read during render or in `useState` initialisers (read them in an effect, as
   `useInView` and `ThemeProvider` do). A new public route goes in `routes.tsx` `marketingPages` AND `seo/paths.ts` `STATIC_PATHS`
-  (with its lastmod rule); a new app route prefix needs a rewrite to `/app.html` in `app/vercel.json` and a robots `Disallow`
+  (with its lastmod rule); a new app route prefix needs a rewrite to `/app` in `app/vercel.json` (never `/app.html`: under `cleanUrls` Vercel
+  serves dist/app.html at `/app`, and a rewrite to `/app.html` misses and answers the 404 page) and a robots `Disallow`
   (`test/routeCoverage.test.ts` fails otherwise). Unknown paths are a real 404 (`404.html`). sitemap.xml, robots.txt and llms.txt
   come from `seo/files.ts`.
 - Motion: `marketing.css` / `platform/platform.css` hold the reveal, draw-in and marquee classes (`mk-*`); each has a static

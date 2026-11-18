@@ -1,6 +1,7 @@
 // Prerenders the public website after `vite build` (CR17, 2026-11-17: crawlers, AI assistants and link previews read raw HTML; the
 // site used to answer one empty app shell on every address). Runs the server build of src/entry-server.tsx (dist-ssr/) and writes:
-//   dist/app.html              the untouched app shell: app/vercel.json rewrites the app's own paths to it; the API server and the
+//   dist/app.html              the untouched app shell: app/vercel.json rewrites the app's own paths to /app (cleanUrls serves this
+//                              file at /app; a destination of /app.html misses and answers the 404 page); the API server and the
 //                              agency portal shell use it too (app/server/src/services/portalShell.ts appShellFile)
 //   dist/index.html            the home page; dist/<path>.html for every other public page (served without .html: cleanUrls)
 //   dist/404.html              the not-found page, answered with status 404 for every unknown address

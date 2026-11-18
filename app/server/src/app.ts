@@ -19,7 +19,7 @@ import { siteTaskRoutes } from './routes/siteTasks';
 import { indexingRoutes } from './routes/indexing';
 import { agencyRoutes } from './routes/agency';
 import { hostGate } from './services/portalHosts';
-import { appShellFile, portalIndexHtml } from './services/portalShell';
+import { appShellFile, PORTAL_ROBOTS_TXT, portalIndexHtml, portalRefusesPublicFile } from './services/portalShell';
 import { triesBearer } from '@seo/shared';
 import { adminRoutes } from './routes/admin';
 import { billingRoutes } from './routes/billing';
@@ -103,6 +103,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     // the static plugin would answer "/" with the app's own shell: the portal's comes from here
     if (req.portal && req.method === 'GET' && /^\/(index\.html)?(\?|$)/.test(req.url) && config.webDist)
       return reply.header('cache-control', 'no-cache').header('content-type', 'text/html; charset=utf-8').send(await portalIndexHtml(resolve(config.webDist), req.portal.orgId));
+    // R4 L1: the portal's own robots.txt (nothing to index), and none of our public website's files (<page>.html, llms.txt, sitemap.xml,
+    // security.txt): the static plugin below would serve them at their own paths on every host
+    if (req.portal && /^\/robots\.txt(\?|$)/i.test(req.url))
+      return reply.header('cache-control', 'public, max-age=3600').header('content-type', 'text/plain; charset=utf-8').send(PORTAL_ROBOTS_TXT);
+    if (req.portal && portalRefusesPublicFile(req.url)) return reply.status(404).header('cache-control', 'no-store').send('');
   });
 
   // deploy/gcp: the front end on another host of the same site uploads here directly (lib/crossOrigin.ts); its preflight ends here

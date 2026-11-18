@@ -97,7 +97,7 @@ describe('the app host root', () => {
   it('serves the app shell at app.<domain>/ with the page CSP, and leaves www and other paths alone', () => {
     vi.stubEnv('API_ORIGIN', 'https://api.alaventra.com');
     const app = middleware(req('https://app.alaventra.com/'));
-    expect(app.headers.get('x-middleware-rewrite')).toBe('https://app.alaventra.com/app.html');
+    expect(app.headers.get('x-middleware-rewrite')).toBe('https://app.alaventra.com/app');
     expect(app.headers.get('content-security-policy')).toContain("script-src 'self'");
     for (const url of ['https://www.alaventra.com/', 'https://app.alaventra.com/pricing', 'https://app.alaventra.com/o/x']) {
       const r = middleware(req(url));

@@ -5,8 +5,9 @@
 //   /api/*                        -> API_ORIGIN (every host)
 //   any path on an agency portal  -> API_ORIGIN: the server builds the portal's page shell (title, icon) from the host, and must
 //                                    never answer with our own (app/docs/WHITE_LABEL.md §2), so a portal host is proxied whole
-//   "/" on app.<domain>           -> the plain app shell (app.html): signed-in people open the app there every day and must not
-//                                    see the prerendered marketing home first (www keeps it)
+//   "/" on app.<domain>           -> the plain app shell (dist/app.html, served at /app under cleanUrls: a rewrite to /app.html
+//                                    misses and falls to the 404 page): signed-in people open the app there every day and must
+//                                    not see the prerendered marketing home first (www keeps it)
 //   everything else               -> the static build: a prerendered public page (cleanUrls), the app shell for the app's own
 //                                    paths (vercel.json rewrites), or 404.html with status 404
 //
@@ -68,7 +69,7 @@ export default function middleware(request: Request): Response {
   }
   if (!isApi && ours) {
     const headers = { 'content-security-policy': csp(origin, process.env.VITE_TUTORIALS_VIDEO_BASE ?? '') };
-    if (url.pathname === '/' && host.startsWith('app.')) return rewrite(new URL('/app.html', url), { headers });
+    if (url.pathname === '/' && host.startsWith('app.')) return rewrite(new URL('/app', url), { headers });
     return next({ headers });
   }
 

@@ -10,7 +10,7 @@ import { solutions } from '@/marketing/content/solutions';
 import { tutorials } from '@/marketing/content/tutorials';
 
 // C2 (client report 2026-11-17): app/vercel.json no longer turns every address into the app shell. Each public page is a prerendered
-// file, the app's own paths are rewritten to app.html, and everything else is a real 404. This test keeps the three in step with
+// file, the app's own paths are rewritten to the app shell, and everything else is a real 404. This test keeps the three in step with
 // the route table: a new app route without a rewrite would 404 in production, a new public page without a prerendered file would too.
 
 interface Rewrite {
@@ -41,7 +41,16 @@ describe('route coverage (app/vercel.json, prerendered pages, route table)', () 
   it('serves files without .html, with no catch-all rewrite left', () => {
     expect(vercel.cleanUrls).toBe(true);
     expect(vercel.rewrites.some((r) => /\(\.\*\)|index\.html/.test(r.source + r.destination))).toBe(false);
-    for (const r of vercel.rewrites) expect(r.destination, r.source).toBe('/app.html');
+    // cleanUrls serves dist/app.html at /app (Vercel's Build Output `overrides`: {"app.html": {"path": "app"}}); a rewrite to
+    // /app.html has `check: true`, misses the filesystem and falls to the 404 page (review R4 H1, 2026-11-18)
+    for (const r of vercel.rewrites) expect(r.destination, r.source).toBe('/app');
+  });
+
+  it('marks the HTML entry points no-cache at the addresses visitors really request under cleanUrls', () => {
+    const rules = (vercel as unknown as { headers: { source: string; headers: { key: string; value: string }[] }[] }).headers;
+    const noCache = rules.filter((h) => h.headers.some((x) => x.key === 'Cache-Control' && x.value === 'no-cache')).map((h) => sourceRe(h.source));
+    for (const p of ['/', '/app', '/theme-init.js', '/site.webmanifest']) expect(noCache.some((re) => re.test(p)), p).toBe(true);
+    for (const p of ['/assets/index-abc.js', '/pricing']) expect(noCache.some((re) => re.test(p)), p).toBe(false);
   });
 
   it('every app route reaches the app shell, including deep links', () => {
