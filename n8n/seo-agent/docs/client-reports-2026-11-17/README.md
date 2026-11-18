@@ -35,7 +35,7 @@ combined app migration, marketing, docs, full tests). **Not deployed** (deploy s
 | Q3 AI visibility vs the write form | **Right** (a stale weekly target beat the live page) | one resolver, re-settled on publish |
 | Q4 recommendations not resolvable | **Right** | recommendation states + a rule per family + one card per issue |
 
-## Engine (built, not deployed)
+## Engine (deployed 2026-11-18)
 
 - **193 (C index: F2, F3, F6, Q1, C3)**: `_index_kit.js` freshness guard (a permanent redirect our read saw after Google's last crawl
   makes the address `redirect`; 404 / noindex over a non-soft reading needs two reads >= 20 h apart; a 302 / 307 is never a move);
@@ -80,7 +80,7 @@ combined app migration, marketing, docs, full tests). **Not deployed** (deploy s
   every day); `seo_link_outreach` anchor_text, reason_code; `seo_ai_visibility` software_json; `seo_ki_keywords` service;
   `seo_link_prospects` retired_at.
 
-## App (built, not deployed)
+## App (deployed 2026-11-18)
 
 - **A (C2, M1, C1 facts)**: the public site is prerendered at build time (`react-dom/static`, hydration guarded by an exact-path marker),
   Organization / WebSite / SoftwareApplication JSON-LD, sitemap lastmod, a real `/llms.txt`, real 404s (Vercel `cleanUrls`, app prefixes
@@ -185,7 +185,7 @@ suites), whole worktree mounted: the one failure of the parallel run, kiRoutes "
 files); web build with the prerender: 126 pages + 404. `smoke.py` not run (the dev stack was not started). Exact commands: `INTEGRATION.md`
 (private).
 
-## Data repairs (scripts ready, NOT run; dry run by default, each refuses on drift)
+## Data repairs (RUN 2026-11-18 after a dry run each; refuses / refunds / purge backfill not run)
 
 In order, after the engine deploy (the first two need the columns `sync_tables.py` adds):
 1. `repair_d.py`: resolves the stale Page Watch alerts (devaicon 2, 3, 4, 8, 13-16; techand 6, 7, 11, 12) with their reason, notes on 9
@@ -218,7 +218,7 @@ Owner decisions, not run: `repair_i_refunds.py` (our KI Trial runs: Devaicon 118
   then; an optional `seo_content_log.moved_from`.
 - Pre-existing: techand.ai's duplicate CRM guide; re-archive ladder `lad_mvpd7x01f657`.
 
-## Deploy (not done; the owner's go-ahead first)
+## Deploy plan (as written before the deploy)
 
 Engine first, then the API, then the web; never on a Monday 07:00-16:00 UTC. The exact commands are in `INTEGRATION.md`:
 1. Backup (`deploy/gcp/backup.sh` on the VM).
@@ -231,3 +231,23 @@ Engine first, then the API, then the web; never on a Monday 07:00-16:00 UTC. The
    shell, `/app.html` 308 to `/app`, `/nope` 404, `/llms.txt` text/plain), then the public-site checks of HANDOFF_A and the app-host root on
    app.alaventra.com after the merge.
 6. Repairs in the order above (dry run, then `--apply`).
+
+## Deployed 2026-11-18 (record)
+
+- Backup `gs://alaventra-prod-backups/pg/2026-11-18/{app,n8n}-2026-11-18T081447Z.dump`. Node diff production == main (0) before.
+- Engine: `deploy_engine.py --no-build --apply` from `fix/cr17-integration`: sync_tables added the 14 columns, 21 workflows updated, 29 published.
+  Keyword Intelligence was refused (HTTP 413, 17.5 MB > n8n's 16 MiB): fixed on `fix/cr17-ki-size` (4bd5d744, PR #72: kits inlined without
+  whole-line comments, `kit_inline.py`, gate_lint / state_lint cut that form; 13.8 MB; harness 20574 / 0) and deployed (12 updated incl. KI,
+  29 published). Node diff production == build (0) after.
+- API on the VM at a029c875 (main after PR #71), `up -d --build app`, migration 0028 applied (recommendation_states present), healthy, no error
+  in the log for the first hour; rollback image `alaventra-app:rollback-b4ae8c59` (the two oldest rollback images removed for disk). Caddy
+  validated and reloaded: HSTS 2 years + includeSubDomains and Permissions-Policy on www, api and hooks.
+- Web: PR #71 merged by the owner (before the API, minutes apart); production curl right after: every app route 200 with the app shell,
+  `/app.html` and `.html` pages 308, unknown 404, `/llms.txt` text/plain, `/platform` has its H1 in the raw HTML.
+- CodeQL: 14 new alert groups of the PR fixed before the deploy (38a44d6c, linear-text helpers, host lists label by label, tag filter).
+- Repairs applied (dry run first): repair_d (12 console alerts resolved, 9 ops alerts annotated, ladder 39 / content log 17 / AI target 36 /
+  AI page 69 moved, AI pages 73 75 51 dropped), repair_e (prospects 206 248 -> new, 242 -> low_value, impact 26 deleted, outreach 292 238 319
+  282 not_fit), repair_c (AIR L04 step refused, moved), repair_g (ladder 53 -> /services/ai-app-development), repair_f (24 prospects retired,
+  6 outreach rows relabelled), repair_i_keywords (devaicon app keywords -> []). The scripts' filter encoding was fixed (safe='') first.
+- Team verification page (private, owner shares): https://claude.ai/artifact/FrV6mEAKtiKgHZsuEStsdZ
+- Not done (owner): refunds (repair_i_refunds.py), purge backfill (repair_b_purge.py), `--target37`, legal texts, MX, status page, snapshots.
