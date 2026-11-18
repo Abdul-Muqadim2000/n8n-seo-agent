@@ -159,7 +159,6 @@ import {
   type AiScopeSummary,
   aiTargetView,
   aiAnsweredView,
-  aiNextCheck,
   aiPermanentMoves,
   aiQuestionPages,
   type AiQuestionInputs,
@@ -181,6 +180,8 @@ import { aiChargeEntries, bucketAiCharges } from './runCredits';
 import { callbackUrl, latestReport, reportsList } from './runs';
 import { healGa4 } from './engineSite';
 import { linkStatusOf } from './linkBuilder';   // CR17-E (F9): the one link-building status model
+import { aiScheduleNextCheck, trackingStateOf } from './aiSchedule';   // CR17 review R5 L7: the one next AI check
+import { cycleIntentOf, loadCycleRows } from './cycles';
 
 // Dashboards: the n8n Data Tables of one domain (filtered server-side by `domain`), shaped for the client. JSON columns are parsed
 // here; the richer weekly reports (daily series, the question grid, the engine's own actions) come from the latest callback stored
@@ -1453,7 +1454,7 @@ function sovBusinessesOnly(run: AiRun, ctx: CompetitorSiteContext): AiRun {
 export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspectsAll, logs, mons, aiRuns, ladderRows, watchRows, kiComps] = await Promise.all([
+  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspectsAll, logs, mons, aiRuns, ladderRows, watchRows, kiComps, engineSiteRow, cycleRows] = await Promise.all([
     // newest first, then put in date order: a domain with more than 300 runs shows its newest 300, never freezes on the oldest
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: AI_READ_LIMITS.runs }),
     // G6: up to 500 tracked + the switched-off and refused ones (every reword keeps the old row 'off'); stored order kept (the engine's cut)
@@ -1475,6 +1476,10 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     siteRows<PageWatchRow>('pageWatch', d, { max: 200 }).catch(() => [] as PageWatchRow[]),
     // CR17-F: the client's choices on the Competitors page (the one role rule reads them)
     kiCompetitorRows(d),
+    // CR17 review R5 L7: the tracking state and the website's cycle, so the next AI check is the Pipeline's own date (a failed read: the
+    // app's own tracking state and anchor, as the Pipeline degrades)
+    n8nSite(site).catch(() => null),
+    loadCycleRows(site).catch(() => ({ row: null, jobs: [] })),
   ]);
   // CR17-F: a prospect retired with its AI question is kept for the record, never offered
   const aiProspects = aiProspectsAll.filter((p) => !isRetiredProspect(p));
@@ -1491,7 +1496,15 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
   const monitorsNow = monitorsFromRow(mons[0]);
   // CR17 (Q3): ONE page list and one market for every AI-question decision of this page (badge, button, Recommendations), the list the
   // write form gets too (pipeline.ts aiPages)
-  const aiDecision = aiDecisionInputs({ logs, ladders: ladderRows, aiRuns, moves: watchRows, market: site.country ?? '', lastWeekly: s(last?.checked_at), lastDaily: s(days[0]?.checked_at), daily: monitorsNow?.aiPulse !== false });
+  const nextAiCheck = aiScheduleNextCheck({
+    verified: !!site.verifiedAt,
+    tracking: trackingStateOf(site, { tracked: !!engineSiteRow, status: engineSiteRow?.status ?? null }),
+    aiVisibility: monitorsNow?.aiVisibility,
+    aiPulse: monitorsNow?.aiPulse,
+    tz: config.n8nTimezone,
+    intent: cycleIntentOf(site, cycleRows.row),
+  });
+  const aiDecision = aiDecisionInputs({ logs, ladders: ladderRows, aiRuns, moves: watchRows, market: site.country ?? '', nextAiCheck });
   let latest: AiData['latest'] = null;
   if (last) {
     const engines = safeJson<Record<string, P>>(last.engines_json, {});
@@ -2070,23 +2083,23 @@ function earnedStatus(pr: ProspectRow | null, fallback: string): string {
 
 /** CR17 (Q3, client report 2026-11-17): what every AI-question decision of a website reads, built once (pure): the page list (content log,
  *  ladder pages, the client's permanent redirects followed), the ladder heads, the market and when AI answers are next checked. The AI
- *  visibility page (aiData) and the Pipeline's write form (pipeline.ts aiPages) both use it, so they decide on the same pages. */
+ *  visibility page (aiData) and the Pipeline's write form (pipeline.ts aiPages) both use it, so they decide on the same pages.
+ *  Review R5 L7: `nextAiCheck` is the schedule's date (aiSchedule.ts), worked out by the caller the same way on both screens. */
 export function aiDecisionInputs(o: {
   logs: readonly ContentLogRow[];
   ladders?: readonly LadderRow[];
   aiRuns?: { questions: ReadonlyMap<string, { targetId: string; question: string }>; failed: ReadonlySet<string> };
   moves?: readonly PageWatchRow[];
   market: string;
-  lastWeekly?: string;
-  lastDaily?: string;
-  daily?: boolean;
+  /** the next AI check from the schedule (aiSchedule.ts), '' when none is scheduled */
+  nextAiCheck?: string;
   now?: number;
 }): AiQuestionInputs & { written: AiWrittenPage[]; ladderHeads: string[]; nextAiCheck: string } {
   const now = o.now ?? Date.now();
   const ladders = (o.ladders ?? []).filter((l) => !['archived', 'deleted', 'removed'].includes(s(l.status)));
   const written = aiQuestionPages({ logs: o.logs, ladders, aiRuns: o.aiRuns?.questions, failed: o.aiRuns?.failed, moves: aiPermanentMoves(o.moves ?? []), now, inFlightHours: PAGE_IN_FLIGHT_HOURS });
   const ladderHeads = [...new Set(ladders.map((l) => s(l.head_keyword).toLowerCase().trim()).filter(Boolean))];
-  return { written, ladderHeads, market: o.market, nextAiCheck: aiNextCheck({ lastWeekly: o.lastWeekly, lastDaily: o.lastDaily, daily: o.daily, now }) };
+  return { written, ladderHeads, market: o.market, nextAiCheck: o.nextAiCheck ?? '' };
 }
 
 function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false, decision?: AiQuestionInputs): AiGrowth | null {

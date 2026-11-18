@@ -336,18 +336,6 @@ export function aiPermanentMoves(rows: readonly { url?: unknown; status?: unknow
   return out;
 }
 
-/** When AI answers are next checked (ISO): the day after the last check when the daily check is on, else a week after the last weekly
- *  check, never in the past; '' when the website has never been checked. */
-export function aiNextCheck(o: { lastWeekly?: string; lastDaily?: string; daily?: boolean; now?: number }): string {
-  const now = o.now ?? Date.now();
-  const step = (o.daily ? 1 : 7) * 864e5;
-  const last = Math.max(Date.parse(S(o.lastWeekly)) || 0, o.daily ? Date.parse(S(o.lastDaily)) || 0 : 0);
-  if (!last) return '';
-  let next = last + step;
-  if (next < now) next += Math.ceil((now - next) / step) * step;
-  return new Date(next).toISOString();
-}
-
 const isLivePage = (w: AiWrittenPage) => !!S(w.publishedUrl).trim();
 const sameQ = (keyword: string, w: AiWrittenPage) => !!keyword && (LRU.sameQuestion(keyword, S(w.keyword)) || LRU.sameSearch(low(w.keyword), keyword));
 

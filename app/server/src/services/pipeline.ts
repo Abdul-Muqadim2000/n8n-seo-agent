@@ -67,6 +67,7 @@ import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '..
 import { aiQuotaOf, chosenLadderWriting, competitorsOf, declaredServicesOf, levelOf, navPagesOf, servicesOf, type CadenceSiteRow } from './cadence';
 import { skipsOf } from './comingUp';
 import { contentCycleNote, cycleIntentOf, loadCycleRows, siteCycleView } from './cycles';
+import { nextAiCheckOf, trackingStateOf } from './aiSchedule';
 import { engineCostTable } from './engineCost';
 import { autopilotNeedsYou, nudgeDue } from './autopilot';
 import { schema } from '../db';
@@ -707,8 +708,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // site tasks (app/docs/SITE_TASKS.md): the steps on the website itself, done or to do (a failure to read them never fails the Pipeline)
   // undefined (not []) when they cannot be read: recommend() then keeps its own rules instead of reading "nothing left to do"
   const siteTasks: SiteTask[] | undefined = verified ? await siteTasksOf(org, site).catch(() => undefined) : undefined;
-  const engineTracked = x.settings.tracking.tracked && x.settings.tracking.status !== 'paused';
-  const status: PipelineData['tracking']['status'] = site.trackingStatus === 'paused' || x.settings.tracking.status === 'paused' ? 'paused' : site.trackingStatus === 'active' || engineTracked ? 'active' : 'not_started';
+  const status: PipelineData['tracking']['status'] = trackingStateOf(site, x.settings.tracking);   // one rule with the AI page's schedule (aiSchedule.ts)
   const active = status === 'active';
   const m = x.settings.monitors;
   const pagesPerWeek = x.content.cadence && x.content.cadence.status !== 'off' ? x.content.cadence.pagesPerWeek : 0;
@@ -1075,9 +1075,10 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     written: writtenPages(logs, ladders, Date.now(), failedReq, app.runs),
     // CR17 (Q3, client report 2026-11-17): the write form's AI notice decides on the AI visibility page's own pages and stored questions
     ...(() => {
-      const aiNext = (automations.find((a) => a.id === 'ai_pulse' && a.state === 'on') ?? automations.find((a) => a.id === 'ai_visibility' && a.state === 'on'))?.nextRunAt ?? '';
+      // CR17 review R5 L7: the one next AI check (aiSchedule.ts), the date the AI visibility page shows too
+      const aiNext = nextAiCheckOf(automations);
       const aiQ = new Map(app.runs.filter((r) => r.requestId && r.aiQuestion).map((r) => [String(r.requestId), { targetId: r.aiTargetId ?? '', question: r.aiQuestion ?? '' }]));
-      const dec = { ...aiDecisionInputs({ logs, ladders, aiRuns: { questions: aiQ, failed: failedReq }, moves: watchRows, market: site.country ?? '' }), nextAiCheck: aiNext };
+      const dec = aiDecisionInputs({ logs, ladders, aiRuns: { questions: aiQ, failed: failedReq }, moves: watchRows, market: site.country ?? '', nextAiCheck: aiNext });
       return { aiPages: dec.written, aiTargets: aiTargets.map((t) => targetStat(t, logs, false, dec)), ...(aiNext ? { nextAiCheck: aiNext } : {}) };
     })(),
     ladders: ladderSummaries(ladders),

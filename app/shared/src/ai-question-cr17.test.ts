@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PipelineData } from './data';
 import { aiTargetView } from './ai-target-status';
-import { aiAnsweredView, aiNextCheck, aiPermanentMoves, aiQuestionAction, aiQuestionPages, type AiQuestionInputs, type AiTargetForAction } from './ai-question-action';
+import { aiAnsweredView, aiPermanentMoves, aiQuestionAction, aiQuestionPages, type AiQuestionInputs, type AiTargetForAction } from './ai-question-action';
 import { pipelineNotices } from './pipeline-notices';
 
 // Client report 2026-11-17 (devaicon.com, Q3 / Q2): the AI visibility page said "Write the page" for a question while the write form said
@@ -179,9 +179,5 @@ describe('CR17 Q3: the one page list', () => {
     // a stored 404 / 5xx target never becomes a move: the engine writes moved_to only for a target that answers as a page of its own
     expect(aiPermanentMoves([{ url: 'https://a.test/x', status: 301, location: '/gone' }])).toEqual([]);
   });
-  it('the next AI check: the day after the last daily check, else a week after the weekly one, never in the past', () => {
-    expect(aiNextCheck({ lastWeekly: '2026-11-13T01:00:00Z', lastDaily: '2026-11-17T06:30:00Z', daily: true, now: NOW })).toBe('2026-11-18T06:30:00.000Z');
-    expect(aiNextCheck({ lastWeekly: '2026-11-13T01:00:00Z', daily: false, now: NOW })).toBe('2026-11-20T01:00:00.000Z');
-    expect(aiNextCheck({ now: NOW })).toBe('');
-  });
+  // the next AI check is the schedule's date (review R5 L7): app/server/test/aiSchedule.test.ts
 });
