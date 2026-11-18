@@ -49,6 +49,8 @@ import json
 import os
 import re
 
+import kit_inline
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 WF_DIR = os.path.join(HERE, 'workflows')
 V5_CODE = os.path.join(HERE, 'v5', 'code')
@@ -81,7 +83,7 @@ def _shared_sources():
                 continue
             s = open(os.path.join(V5_CODE, f), encoding='utf-8').read()
             if len(s) > 200:                      # a stub too short to matter would cut real code out of a node
-                out.extend([s, s.rstrip('\n')])
+                out.extend(kit_inline.forms(s))   # CR17 (2026-11-18): also the form build_ki.py inlines, without comment lines
         _SHARED = sorted(set(out), key=len, reverse=True)
     return _SHARED
 

@@ -3,6 +3,7 @@
 Enterprise SEO automation built as n8n workflows: keyword research, keyword verdicts, long-form content with QA, technical site audits, full SEO reports, AI-visibility checks. Everything lives in `n8n/seo-agent/`; the stack runs locally with Docker Compose from `n8n/`.
 
 ## Read first
+- **`n8n/seo-agent/docs/client-reports-2026-11-17/README.md` - devaicon "Platform Diagnosis" report 2026-11-17: 21 claims verified (14 right, 7 partly), 9 packages + 5 reviews + fixes, ALL DEPLOYED 2026-11-18 (web PR #71 merged, KI size fix PR #72); team verification page in the README.**
 - **`n8n/seo-agent/docs/client-reports-2026-11-16/README.md` - devaicon reports 2026-11-16: AI answer pages for the question's own search, live page grades that explain themselves (PR #68 merged); second report: Coming up follows each page after the weekly run (PR #69 merged); APPROVALS FIRST (owner decision: approvals before the autopilot's picks, carry-over; API + engine DEPLOYED, web PR pending).**
 - **`n8n/seo-agent/docs/readiness-2026-11-12/README.md` — readiness review 2026-11-12 (deployed fixes, writing slots not deployed, owner items).**
 - **`n8n/seo-agent/docs/indexing-2026-10-29/RESUME.md` — Index coverage (2026-10-30, branch `feature/indexing`, not deployed): finding clients' pages Google left out, why, and what to do.**
@@ -64,6 +65,14 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - The n8n public API activates a workflow (`POST /api/v1/workflows/<id>/activate`) without a restart (webhooks register within seconds) and manages Data Table rows (`/api/v1/data-tables/<id>/rows`, `…/rows/delete?filter=`).
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
+
+## Status (2026-11-18, client report 2026-11-17 (devaicon "Platform Diagnosis") - ALL DEPLOYED - latest)
+21 claims checked on prod first (14 right, 7 partly), fixed in 9 packages (site prerender + trust/legal facts; terms + delete account + engine
+purge; indexing truth + Technical health / Pages in Google; Page Watch severity + alert lifecycle + moves; link building won gate / one status;
+competitor roles + one list; folder-aware addresses + one AI-question decision; recommendation states; ledger forecast + top-up request).
+5 independent reviews (3 High, 16 Medium) all fixed; CodeQL new alerts fixed. Deployed 2026-11-18: backup *T081447Z, engine (14 columns,
+sections 193-201), API a029c875 + migration 0028 (rollback alaventra-app:rollback-b4ae8c59), Caddy reload, web PR #71; KI workflow needed
+PR #72 (4bd5d744, 16 MiB n8n limit). Repairs d/e/c/g/f/i applied. Harness 20574 / 0; app 1756 / 2315 / 441. Owner items in the README.
 
 ## Status (2026-11-16 evening, APPROVALS FIRST (owner: enterprise rule) - API + engine DEPLOYED, web PR pending - latest)
 A client's approved page is now written before the autopilot's own picks (earliest approval first; ladder pages, then other automatic
