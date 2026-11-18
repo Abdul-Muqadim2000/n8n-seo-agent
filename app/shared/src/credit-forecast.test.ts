@@ -27,10 +27,12 @@ describe('the fixture is the reported ledger', () => {
 });
 
 describe('measuredForecast', () => {
-  it('about 440 to 500 a month, not 1,404: the measured rows, and the pages the autopilot really writes', () => {
+  it('about 440 to 550 a month, not 1,404: the measured rows, and the pages the autopilot really writes', () => {
     const f = measuredForecast({ sites: [{ ...site, pagesLeft: 1 }], entries, rate: RATE, now: NOW });
     expect(f.autopilotMonthly).toBeGreaterThan(420);
-    expect(f.autopilotMonthly).toBeLessThan(520);
+    // FX-SERVER (R3 M1): each row reads its own history, so AI growth (first run 11 days ago) is its typical run x 4.3 weeks and the pulse
+    // its 2 charged days over its own 13 days, not over the website's 25: about 540, still a third of the price list
+    expect(f.autopilotMonthly).toBeLessThan(560);
     const page = f.sites[0].rows.find((r) => r.id === 'blog_posts')!;
     // one page was left on the ladders, but the autopilot wrote 4 in the last 30 days (approved suggestions too): about 4.8 a month
     // (its history is 25 days) at the typical charge of this website's automatic pages (52.9 to 75.3, typical about 54)
@@ -40,7 +42,8 @@ describe('measuredForecast', () => {
     // the pulse is forecast at what it was charged (two single-site days), not at the price list
     const pulse = f.sites[0].rows.find((r) => r.id === 'ai_pulse')!;
     expect(pulse.basis).toBe('measured');
-    expect(pulse.credits).toBeLessThan(20);
+    expect(pulse.credits).toBeLessThan(30);
+    expect(f.sites[0].rows.find((r) => r.id === 'ai_growth')).toMatchObject({ basis: 'per_run' });
   });
 
   it('pages follow the weekly pace when the ladders have more left, and nothing when none is left and none was written lately', () => {
@@ -80,6 +83,45 @@ describe('measuredForecast', () => {
       now: NOW,
     });
     expect(young.sites[0].rows.find((r) => r.id === 'ai_visibility')).toMatchObject({ basis: 'per_run', credits: 86.6 });
+  });
+});
+
+describe('a row reads its own history, not the website\'s (FX-SERVER, review R3 M1)', () => {
+  // a website tracked 60 days: the weekly site report charged 4 x 5 credits; the daily pulse was off until today
+  const since = '2026-09-18T00:00:00Z';
+  const reports: UsageEntry[] = [3, 10, 17, 24].map((d, i) => ({ at: new Date(NOW.getTime() - d * 86_400_000).toISOString(), credits: -5, origin: 'autopilot', mode: 'site_tracker', domain: 'client.example', runId: null, engineRunId: `e${i}` }));
+  const withPulse = (on: boolean) => autopilotRows(monitorSettingsSchema.parse({ aiPromptsMax: 10, aiPulse: on }), 0, { level: 2, writing: false, ranking: false });
+  const pulseOf = (f: ReturnType<typeof measuredForecast>) => f.sites[0].rows.find((r) => r.id === 'ai_pulse')!;
+
+  it('switching on the daily pulse on a 60-day-old website is priced, not 0', () => {
+    const off = measuredForecast({ sites: [{ domain: 'client.example', rows: withPulse(false), pagesPerWeek: 0, pagesLeft: 0, since }], entries: reports, rate: RATE, now: NOW });
+    expect(pulseOf(off)).toMatchObject({ credits: 0, basis: 'off' });
+    const rowsOn = withPulse(true);
+    const on = measuredForecast({ sites: [{ domain: 'client.example', rows: rowsOn, pagesPerWeek: 0, pagesLeft: 0, since }], entries: reports, rate: RATE, now: NOW });
+    const quote = Math.round(rowsOn.find((r) => r.id === 'ai_pulse')!.usd * RATE * 100) / 100;
+    expect(quote).toBeGreaterThan(0);
+    expect(pulseOf(on)).toMatchObject({ basis: 'estimate', credits: quote });
+    expect(on.autopilotMonthly).toBeGreaterThan(off.autopilotMonthly + quote - 1);
+    // the website's own report row stays measured: it has 24 days of its own history
+    expect(on.sites[0].rows.find((r) => r.id === 'site_report')).toMatchObject({ basis: 'measured' });
+  });
+
+  it('a row switched back on after weeks off uses its typical run, never the 0 its off weeks charged', () => {
+    const old: UsageEntry[] = [70, 64, 58].map((d, i) => ({ at: new Date(NOW.getTime() - d * 86_400_000).toISOString(), credits: -2, origin: 'autopilot', mode: 'ai_pulse', domain: 'client.example', runId: null, engineRunId: `p${i}` }));
+    const rowsOn = withPulse(true);
+    const stale = measuredForecast({ sites: [{ domain: 'client.example', rows: rowsOn, pagesPerWeek: 0, pagesLeft: 0, since }], entries: [...reports, ...old], rate: RATE, now: NOW });
+    // without the hint the old history is measured over a window it was off in: the steady state of a row that really charged nothing
+    expect(pulseOf(stale)).toMatchObject({ basis: 'measured', credits: 0 });
+    const fresh = measuredForecast({ sites: [{ domain: 'client.example', rows: rowsOn, pagesPerWeek: 0, pagesLeft: 0, since, switchedOn: ['ai_pulse'] }], entries: [...reports, ...old], rate: RATE, now: NOW });
+    expect(pulseOf(fresh)).toMatchObject({ basis: 'per_run' });
+    expect(pulseOf(fresh).credits).toBeCloseTo(2 * 6 * 4.33, 1);
+  });
+
+  it('a row with a few days of its own history on an old website uses its typical run', () => {
+    const young: UsageEntry[] = [{ at: new Date(NOW.getTime() - 3 * 86_400_000).toISOString(), credits: -20, origin: 'autopilot', mode: 'backlinks', domain: 'client.example', runId: null, engineRunId: 'b1' }];
+    const rowsOn = autopilotRows(monitorSettingsSchema.parse({ aiPromptsMax: 10, backlinks: true }), 0, { level: 2, writing: false, ranking: false });
+    const f = measuredForecast({ sites: [{ domain: 'client.example', rows: rowsOn, pagesPerWeek: 0, pagesLeft: 0, since }], entries: [...reports, ...young], rate: RATE, now: NOW });
+    expect(f.sites[0].rows.find((r) => r.id === 'backlinks')).toMatchObject({ basis: 'per_run', credits: 86.6 });
   });
 });
 

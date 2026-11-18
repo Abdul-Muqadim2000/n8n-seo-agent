@@ -14224,6 +14224,20 @@ assert code('AI Target Settle (Publish)').count('const AQ = (() => {') == 1 and 
 log('Client report 2026-11-17 (section 197, package G): a new page is planned in the folder where the website keeps that kind of page (LRU.folderFor: where the client published our pages and moved its own, else its live inventory; at least 3 pages and 60%, else the root as before) in Ladder Plan, Cadence Plan and Content QA, with the reason said; a rung planned at the root before this rule is written at the folder address; the package lists the questions the page was written to answer (meta.questions_answered)')
 
 # =============================================================================
+# 201. AN EMPTY LIST THE CLIENT SAVES IS CLEARED IN THE ENGINE TOO (FX-SERVER, review R3 M2 of CR17, 2026-11-18). Track my site stored the
+#      competitors and brand names only when the list was non-empty (Monitor Row (Track) kept the old ones on an empty list), so a client who
+#      removed every competitor or brand name in the app still had them watched by AI visibility, backlinks and the keyword checks. The app
+#      now sends `clear_lists` (exact key, after the fuzzy-matched head: no pick() word matches it) naming the lists the client emptied; a
+#      list it leaves out is kept. Harness CR17FXS1.
+# =============================================================================
+patch('Normalize Input', "    monitor_input,\n    panel_quote_dfs_usd,",
+      "    monitor_input,\n    // FX-SERVER (section 201): the lists the caller explicitly emptied (Track my site); anything else in the key is ignored\n"
+      "    clear_lists: asArray(p2.clear_lists).map(x => String(x).trim().toLowerCase()).filter(x => x === 'competitors' || x === 'brand_names').filter((x, i, a) => a.indexOf(x) === i),\n"
+      "    panel_quote_dfs_usd,")
+assert "cleared.has('competitors')" in code('Monitor Row (Track)') and "cleared.has('brand_names')" in code('Monitor Row (Track)'), 'section 201: Monitor Row (Track) does not honour clear_lists'
+log('An empty list the client saves is cleared in the engine too (section 201, FX-SERVER / review R3 M2): Track my site sends clear_lists for the competitors / brand names the client emptied, Monitor Row (Track) stores them empty; a list left out of the request keeps the stored one')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 # A-28 / B-8 (2026-10-18): the count bodies of sections 62 / 76 carry a placeholder where the agent's system message and parser tool go;
@@ -14751,7 +14765,7 @@ def _cr17b_purge():
     gate = 'Purge History? (Admin)'
     assert gate in by, 'CR17-B (section 200): the Site Admin purge gate is missing'
     want = {'domain': ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"],
-            'id': ["={{ $('Admin Action').first().json.site_id }}"]}
+            'id': ["={{ $('Admin Action').first().json.purge_id }}"]}   # FX-SERVER (review R5 M5): never the bare site id
     chain, cur = [], [t['node'] for t in conn[gate]['main'][0]]
     while cur and cur[0] != 'Delete Site':
         assert len(cur) == 1, 'CR17-B: the purge chain forks at %s' % chain[-1:]
@@ -14769,6 +14783,14 @@ def _cr17b_purge():
     expr = by[gate]['parameters']['conditions']['conditions'][0]['leftValue']
     assert "purge_domain !== ''" in expr and "action === 'delete'" in expr, 'CR17-B: the purge gate does not require a vouched domain'
     assert 'const purge_domain = ' in by['Admin Action']['parameters']['jsCode'], 'CR17-B: Admin Action does not vouch for the purge domain'
+    # FX-SERVER (review R5 M5): every id-keyed delete of the delete path honours the app's purge_ids (Admin Action's purge_id), the site row too
+    _aa = by['Admin Action']['parameters']['jsCode']
+    assert 'const purge_id = purge_ids ? site_id : ' in _aa and 'purge_ids, purge_id,' in _aa, 'FX-SERVER (section 200): Admin Action does not turn purge_ids into purge_id'
+    for _nm in ['Delete Cycle (Admin)', 'Delete Cycle Jobs (Admin)', 'Delete KI Runs (Admin)', 'Delete KI Competitors (Admin)', 'Delete KI Keywords (Admin)', 'Delete KI Gaps (Admin)', 'Delete KI Cache (Admin)', 'Delete Site']:
+        _cs = by[_nm]['parameters']['filters']['conditions']
+        _sid = [c for c in _cs if c['keyName'] == 'site_id']
+        assert _sid and all(c['keyValue'] == "={{ $('Admin Action').first().json.purge_id }}" for c in _sid), 'FX-SERVER (section 200): %s deletes by the bare site id' % _nm
+    assert 'json.site_id' not in _j200.dumps([by[n]['parameters'] for n in chain]), 'FX-SERVER (section 200): a purge node still names the bare site id'
     # the app's copy of the list (committed, like fit-gate.generated.js): the backstop and the account deletion read it
     app_ts = os.path.normpath(os.path.join(HERE0, '..', '..', 'app', 'shared', 'src', 'engine-purge.generated.ts'))
     rows = ',\n'.join('  { table: %s, keys: [%s] }' % (_j200.dumps(t), ', '.join('{ column: %s, kind: %s }' % (_j200.dumps(c), _j200.dumps(k)) for c, k in keys)) for t, keys in SITE_PURGE)

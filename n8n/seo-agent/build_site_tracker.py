@@ -477,7 +477,10 @@ N.append(switch('Admin Route', [('delete', "{{ $json.action === 'delete' }}"), (
 # site row so Admin Result still counts the site rows; every delete reads the site id from Admin Action and runs once. A domain that still
 # has ladders is adopted again by the dispatcher as a rank-tracking-only cycle, as the Monday Rank Tracker used to check every ladder.
 _adm_sid = "={{ $('Admin Action').first().json.site_id }}"
-_adm_del = lambda table: {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'site_id', 'condition': 'eq', 'keyValue': _adm_sid}]}, 'options': {}}
+# FX-SERVER (review R5 M5): every delete of the `delete` action keyed by the engine site id matches Admin Action's purge_id: the site id, or a
+# value no row holds when the app says another domain holds that id (purge_ids: false); the other website's rows are never touched
+_adm_pid = "={{ $('Admin Action').first().json.purge_id }}"
+_adm_del = lambda table: {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'site_id', 'condition': 'eq', 'keyValue': _adm_pid}]}, 'options': {}}
 N.append(node('Delete Cycle (Admin)', DT_TYPE, DT_VERSION, _adm_del(CYCLES_TABLE), [620, -400], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
 N.append(node('Delete Cycle Jobs (Admin)', DT_TYPE, DT_VERSION, _adm_del(CYCLE_JOBS_TABLE), [690, -320], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
 # KI E2 (2026-11-08, CONTRACTS.md §5): a deleted website takes its keyword-intelligence rows with it (runs, competitors, keywords, gaps), before the site row
@@ -487,7 +490,15 @@ for _i, (_nm, _t) in enumerate(_ADM_KI):
     _p = _adm_del(_t)
     if _t == CACHE_TABLE: _p['filters']['conditions'].append({'keyName': 'kind', 'condition': 'eq', 'keyValue': 'ki'})
     N.append(node(_nm, DT_TYPE, DT_VERSION, _p, [700 + _i * 20, -300 + _i * 15], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
-N.append(node('Delete Site', DT_TYPE, DT_VERSION, _adm_del(SITES_TABLE), [760, -240], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
+# FX-SERVER (R5 M5): the site row by its id (purge_id), or, for a vouched domain, by that domain (bare or www.): a website whose id another
+# domain also holds still loses its own row (its weekly runs stop), never the other one's. Without a vouched domain the domain conditions
+# match a value no row holds.
+_DS_NONE = "(no vouched domain)"
+_ds = _adm_del(SITES_TABLE)
+_ds['matchType'] = 'anyCondition'
+_ds['filters']['conditions'] += [{'keyName': 'domain', 'condition': 'eq', 'keyValue': "={{ $('Admin Action').first().json.purge_domain || '%s' }}" % _DS_NONE},
+                                 {'keyName': 'domain', 'condition': 'eq', 'keyValue': "={{ $('Admin Action').first().json.purge_domain ? 'www.' + $('Admin Action').first().json.purge_domain : '%s' }}" % _DS_NONE}]
+N.append(node('Delete Site', DT_TYPE, DT_VERSION, _ds, [760, -240], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
 # KI E2: the client's choice on one competitor (status_by user, at most ki_max_competitors chosen) and the state of one gap
 N.append(node('Load KI Competitors (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(KI_COMP_TABLE, 'site_id', 'eq', "={{ $('Admin Action').first().json.site_id }}"), [760, 1360], **ALOAD))
 N.append(node('Load KI Monitors (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(MONITORS_TABLE, 'site_id', 'eq', "={{ $('Admin Action').first().json.site_id }}"), [880, 1360], **ALOAD))
@@ -525,7 +536,7 @@ for _a, _b in zip([x[0] for x in _ADM_KI], [x[0] for x in _ADM_KI[1:]] + ['Purge
 # for the domain (purge_domain: named by the caller, and its id is this site id); otherwise the site row goes as before and nothing else.
 from ladder_common import SITE_PURGE as _SP200, purge_registry_check as _prc200
 _prc200()
-_v200 = {'domain': ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"], 'id': [_adm_sid]}
+_v200 = {'domain': ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"], 'id': [_adm_pid]}   # FX-SERVER (R5 M5): purge_id
 N.append(iff('Purge History? (Admin)', "{{ $('Admin Action').first().json.purge_domain !== '' && $('Admin Action').first().json.action === 'delete' }}", [880, -560]))
 _PURGE200 = []
 for _i, (_t, _keys) in enumerate([x for x in _SP200 if x[0] != SITES_TABLE]):   # the site row is the chain's last step (Delete Site), as before

@@ -4,12 +4,15 @@ const d = $('Normalize Input').first().json; const site_id = 'site_' + String(d.
 let old = {}; try { old = $('Load Monitors (Track)').all().map(i => i.json).find(x => x && x.site_id === site_id) || {}; } catch (e) {}
 const m = d.monitor_input || {}; const has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';
 const pick = (k, dflt) => has(k) ? m[k] : (old[k] !== undefined && old[k] !== null && old[k] !== '' ? old[k] : dflt);
-const comps = (d.competitors || []).length ? d.competitors.join(', ') : pick('competitors', '');
+// FX-SERVER (build section 201, review R3 M2): a list the client emptied in the app (`clear_lists`) is stored empty; an empty list without
+// it is a caller that sent nothing, and the stored list is kept
+const cleared = new Set(Array.isArray(d.clear_lists) ? d.clear_lists : []);
+const comps = (d.competitors || []).length ? d.competitors.join(', ') : cleared.has('competitors') ? '' : pick('competitors', '');
 const __row = { site_id, domain: d.domain, ai_visibility: !!pick('ai_visibility', true) && pick('ai_visibility', true) !== 'false', ai_engines: String(pick('ai_engines', '')), ai_prompts_max: Math.min(500, Math.max(3, Number(pick('ai_prompts_max', old.site_id ? 20 : 50)) || 20)),   /* G6: 3-500; a new site starts at 50, a stored row keeps its size */
   ai_personas: String(pick('ai_personas', '')), ai_markets: String(pick('ai_markets', '')), ai_pulse_mode: String(pick('ai_pulse_mode', '')), ai_pulse_per_week: pick('ai_pulse_per_week', '') === '' ? null : Math.min(6, Math.max(1, Number(pick('ai_pulse_per_week', 0)) || 1)), ai_pulse: pick('ai_pulse', true) !== false && pick('ai_pulse', true) !== 'false',
   ai_growth: pick('ai_growth', true) !== false && pick('ai_growth', true) !== 'false', ai_pages_month: pick('ai_pages_month', '') === '' ? null : Math.min(8, Math.max(0, Number(pick('ai_pages_month', 2)) || 0)),
   backlinks: !!pick('backlinks', true) && pick('backlinks', true) !== 'false', link_builder: pick('link_builder', true) !== false && pick('link_builder', true) !== 'false', audit_monthly: !!pick('audit_monthly', true) && pick('audit_monthly', true) !== 'false', audit_pages: Number(pick('audit_pages', 200)) || 200,
-  audit_js: pick('audit_js', false) === true || pick('audit_js', false) === 'true', competitors: String(comps), brand_names: String(pick('brand_names', '')),
+  audit_js: pick('audit_js', false) === true || pick('audit_js', false) === 'true', competitors: String(comps), brand_names: (cleared.has('brand_names') && !has('brand_names')) ? '' : String(pick('brand_names', '')).trim(),
   // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)
   stuck_weeks: pick('stuck_weeks', '') === '' ? null : Math.min(26, Math.max(2, Number(pick('stuck_weeks', 8)) || 8)),
   updated_at: new Date().toISOString(), request_id: d.request_id || '',

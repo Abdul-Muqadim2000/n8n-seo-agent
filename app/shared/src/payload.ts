@@ -115,6 +115,29 @@ export function factsBody(s: Pick<SiteContext, 'factAnswers'> | null | undefined
   return { business_facts_kv: f.business_facts_kv, stored_fact_keys: f.stored_fact_keys };
 }
 
+/**
+ * FX-SERVER (review R3 M2): Track my site's lists follow ONE rule in the app row and the engine: a list the caller sends is stored as
+ * sent (an empty list clears it), a list the caller leaves out is kept. The app's forms always send every list; an API / MCP body may
+ * leave one out, so before validation (the schema's default would turn an absent list into an empty one, i.e. a clear) the stored list
+ * is filled in. Only for `track`; any other body is returned as it is.
+ */
+export function keepTrackLists(body: Record<string, unknown>, stored: { keywords?: readonly string[] | null; competitors?: readonly string[] | null; brandNames?: readonly string[] | null }): Record<string, unknown> {
+  if (body.mode !== 'track') return body;
+  const out: Record<string, unknown> = { ...body };
+  if (out.keywords === undefined) out.keywords = [...(stored.keywords ?? [])];
+  if (out.competitors === undefined) out.competitors = [...(stored.competitors ?? [])];
+  const m = out.monitors;
+  if (m === undefined) out.monitors = { brandNames: [...(stored.brandNames ?? [])] };
+  else if (m && typeof m === 'object' && !Array.isArray(m) && (m as Record<string, unknown>).brandNames === undefined) out.monitors = { ...(m as Record<string, unknown>), brandNames: [...(stored.brandNames ?? [])] };
+  return out;
+}
+
+/** The `clear_lists` key of a Track my site body: the lists sent empty (engine build section 201). */
+export function trackClearLists(input: { competitors: readonly string[]; monitors: { brandNames: readonly string[] } }): Body {
+  const cleared = [...(input.competitors.length ? [] : ['competitors']), ...(input.monitors.brandNames.length ? [] : ['brand_names'])];
+  return cleared.length ? { clear_lists: cleared } : {};
+}
+
 /** The fixed head every body starts with (see the note above). */
 function head(mode: string, keyword: string, country: string, domain: string, d: Delivery, business = '', customers = ''): Body {
   return { mode, keyword, country, domain, email: d.email, callback_url: d.callbackUrl, business, customers };
@@ -226,8 +249,10 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         keywords: input.keywords,
         ga4_property_id: input.ga4PropertyId || s?.ga4PropertyId || '',
         blogs_per_week: input.blogsPerWeek,
-        competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
-        monitors: monitorsBody({ ...input.monitors, brandNames: input.monitors.brandNames.length ? input.monitors.brandNames : (s?.brandNames ?? []) }),
+        // FX-SERVER (review R3 M2): the lists as the client saved them, the same rule as the app's own row (runs.ts): an empty list clears.
+        // A caller that leaves a list out (API / MCP) had it filled from the website's stored list before validation (keepTrackLists)
+        competitors: input.competitors,
+        monitors: monitorsBody(input.monitors),
         // keyword-first (§14.5): the website's zone and what it sells (key present = replace the stored list); the server adds
         // `tracking_started_at` (the website's first tracking, kept on every re-save). Exact keys, after the fuzzy-matched head.
         ...(input.timezone || s?.timezone ? { timezone: input.timezone || s?.timezone || '' } : {}),
@@ -235,6 +260,9 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         // P1 (2026-10-20): the website's business facts, stored by Track my site on the engine's site row, which the Content Cadence's pages and
         // the readiness rule read (the app is their source; Website settings sends Site Admin `facts` when they change). Exact key, after the head.
         ...(s ? { business_facts: (s.businessFacts || '').slice(0, 2000) } : {}),
+        // FX-SERVER (R3 M2, engine section 201): the lists the client emptied, so the engine clears its copy too (it keeps a stored list on
+        // an empty one otherwise). Exact key, last.
+        ...trackClearLists(input),
       };
 
     case 'published':

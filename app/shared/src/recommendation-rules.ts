@@ -12,7 +12,7 @@
 //   source replace theirs with `registerRecVerifier`).
 // Pure: no I/O, no clock unless passed.
 import type { GuideId } from './guides';
-import type { Priority, Recommendation, RecommendationRuleView } from './data';
+import type { Priority, Recommendation, RecommendationBoard, RecommendationRuleView } from './data';
 import { priorityFromScore } from './queue';
 
 export type RecommendationState = 'open' | 'in_progress' | 'waiting_for_google' | 'resolved' | 'failed' | 'dismissed' | 'expired';
@@ -274,6 +274,21 @@ export interface RecStateRow {
 
 /** A dismissed item that is still reported comes back after this long (the client may have dismissed a problem that is still there). */
 export const DISMISS_DAYS = 90;
+
+/**
+ * FX-SERVER (review R3 L5, product decision): the note a person writes when dismissing an item is the agency's own working note, so an
+ * agency's client people (client viewer / approver on the portal) see THAT it was dismissed and why (the reason), never the free text.
+ * Pure; the item's state, date and reason stay.
+ */
+export function withoutDismissNote(r: Recommendation): Recommendation {
+  if (!r.dismissed) return r;
+  return { ...r, dismissed: { ...r.dismissed, note: '' }, ...(r.stateEvidence !== undefined ? { stateEvidence: `Dismissed: ${r.dismissed.reason}` } : {}) };
+}
+/** the same for a whole board (each tab) */
+export function boardWithoutDismissNotes(b: RecommendationBoard): RecommendationBoard {
+  const m = (xs: Recommendation[]) => xs.map(withoutDismissNote);
+  return { ...b, todo: m(b.todo), waiting: m(b.waiting), resolved: m(b.resolved), expired: m(b.expired), dismissed: m(b.dismissed) };
+}
 /** Resolved and expired items stay on their tab this long. */
 export const RESOLVED_SHOWN_DAYS = 90;
 

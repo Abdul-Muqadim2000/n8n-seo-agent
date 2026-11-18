@@ -19825,5 +19825,6 @@ await require('./scenarios_cr17_g')({ H, run, mock, store, guard, reset, begin }
 await require('./scenarios_cr17_c')({ H, run, mock, store, guard, reset, begin });   // CR17C1-CR17C17 (client report 2026-11-17, CR17-C, section 193): a move our read saw after Google's last visit is a redirect (freshness guard both ways, two reads for a 404), sitemap advice only on a direct 200, AI ranking follows a moved page and refuses its L04 step, Google-state audit findings do not change Technical health
 await require('./scenarios_cr17_i')({ H, run, mock, store, guard, reset, begin });   // CR17I1 (client report 2026-11-17, F8, package I): the weekly report counts the searches checked on Google once (ladder + your list) and the other written pages apart
 await require('./scenarios_cr17_f')({ H, run, mock, store, guard, reset, begin });   // CR17F1-CR17F8 (client report 2026-11-17 C5, section 196): one competitor role (CMP.role) for every path, one competitor list per site, KI service balance, retired prospects
+await require('./scenarios_cr17_fxs')({ H, run, mock, store, guard, reset, begin });   // CR17FXS1-CR17FXS2 (CR17 review fixes, FX-SERVER): Track my site clears an emptied competitor / brand list in the engine too (section 201); a delete never removes another website's rows keyed by a shared engine id (purge_ids, section 200)
 H.report();
 })();

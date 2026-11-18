@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, clientSafePayload, isClientRole, stripHookSecrets, type AiExportKind, type Role } from '@seo/shared';
+import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, boardWithoutDismissNotes, clientSafePayload, isClientRole, stripHookSecrets, withoutDismissNote, type AiExportKind, type Role } from '@seo/shared';
 import { and, eq } from 'drizzle-orm';
 import { isPlatformAdmin, isUuid, requireUser, requireVerified, siteAccess } from '../auth/access';
 import { db, schema } from '../db';
@@ -9,7 +9,7 @@ import { aiData, aiRankShadowData, alertsData, backlinksData, contentData, ranki
 import { requestRecheck } from '../services/pageWatch';
 import { markAlertSeen } from '../services/alerts';
 import { ladderDetailData, pipelineData } from '../services/pipeline';
-import { loadBundle, overviewData, recommend } from '../services/recommendations';
+import { loadBundle, overviewData, recommendQueue } from '../services/recommendations';
 import { checkRecommendation, dismissRecommendation, recommendationBoard, restoreRecommendation, todoRecommendations } from '../services/recommendationStates';
 
 type P = { orgId: string; siteId: string };
@@ -149,17 +149,21 @@ export async function dataRoutes(app: FastifyInstance) {
     const x = await loadBundle(a.org, a.site);
     // site tasks: a step done or skipped on the website is not recommended again; open ones carry their check button
     const tasks = a.site.verifiedAt ? await import('../services/siteTasks').then((m) => m.siteTasksOf(a.org, a.site, req.log)).catch(() => undefined) : undefined;
-    return { x, tasks, recs: recommend(a.site, x, tasks) };
+    // FX-SERVER (review R3 L2): the queue before one card per issue; the states are decided per item, then the tabs fold
+    return { x, tasks, recs: recommendQueue(a.site, x, tasks) };
   };
   app.get('/api/orgs/:orgId/sites/:siteId/recommendations', async (req) => {
     const a = await portal(req);
     const { x, tasks, recs } = await recInputs(req, a);
-    return shown(a.role, await todoRecommendations(a.org, a.site, x, tasks, recs));
+    const list = await todoRecommendations(a.org, a.site, x, tasks, recs);
+    // FX-SERVER (review R3 L5): an agency's client people see that an item was dismissed and why, never the staff's free-text note
+    return shown(a.role, isClientRole(a.role) ? list.map(withoutDismissNote) : list);
   });
   app.get('/api/orgs/:orgId/sites/:siteId/recommendations/board', async (req) => {
     const a = await portal(req);
     const { x, tasks, recs } = await recInputs(req, a);
-    return shown(a.role, await recommendationBoard(a.org, a.site, x, tasks, recs));
+    const board = await recommendationBoard(a.org, a.site, x, tasks, recs);
+    return shown(a.role, isClientRole(a.role) ? boardWithoutDismissNotes(board) : board);
   });
   const member = async (req: Parameters<typeof siteAccess>[0]) => {
     const p = req.params as P;

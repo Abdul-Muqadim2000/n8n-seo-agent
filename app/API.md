@@ -517,6 +517,10 @@ Keyword-first fields (§14.5): `track` takes `timezone` (IANA; 400 when unknown)
 itself; the app never calls the Site Kickoff). `ladder` takes `chosenBy` (`client_typed` default, `client_picked`; `system_announced` only
 from the server's announcement) and `ladderMode` (`auto` | `manual`; a Manual ladder writes nothing at start; admins only, defaults to
 the flow's `ladderPrefs.mode`). `discover` never asks for a page (`receiveContent` is accepted and stored false).
+`track` lists (FX-SERVER, CR17 review R3 M2): `keywords`, `competitors` and `monitors.brandNames` are stored as sent, in the app row and in
+the engine (an empty list clears it; the engine body names the emptied lists in `clear_lists`, engine build section 201). Through
+`POST /api/v1/runs` and MCP `start_run`, a list the caller LEAVES OUT keeps the website's stored list (`keepTrackLists`); only an explicit
+`[]` clears it.
 `profile` (F-29, 2026-11-12): an author or reviewer job title that is not a title ("User", "Admin", "Member", "N/A", "-", "Job title",
 `shared/src/profile.ts` `isPlaceholderJobTitle`) is refused with 400; "Owner", "Administrator" and "Tester" are titles. An empty job
 title keeps the stored one (the engine's rule: an empty field keeps what is stored), except with `clearEmptyTitles: true` (sent by the

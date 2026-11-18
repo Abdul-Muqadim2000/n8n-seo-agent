@@ -181,6 +181,15 @@ const TO_MONTH = 30 / 28;
  * the open ones carry their key (the "I've done it, check now" button) and a blocked AI search crawler is recommended too.
  */
 export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTask[]): Recommendation[] {
+  return foldByIssue(recommendQueue(site, x, tasks)).slice(0, 60);
+}
+
+/**
+ * FX-SERVER (review R3 L2): the queue BEFORE one card per issue: every item in queue order with its rule and issue. The states are decided
+ * per item on this list (recommendationStates.ts), and only then are the items still to do folded into one card per issue: a member folded
+ * under another card is never "gone from its source", and a resolved or dismissed card never hides an open sibling nothing checked.
+ */
+export function recommendQueue(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTask[]): Recommendation[] {
   const taskOpen = (key: string) => !tasks || tasks.some((t) => t.key === key && t.state === 'todo');
   const out: Recommendation[] = [];
   // REP 3.3: every item carries what it is worth. Where the caller measured a quantity it passes one; where it did not, the visible
@@ -399,7 +408,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       }
       add({
         // the id the item always had (the action's own keyword), so a ticket made from it is not made twice
-        id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
+        id: engineRecId(a),
         category: 'ai',
         priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
         // CR17-H (F1): a title never ends mid-sentence; what does not fit opens the detail
@@ -444,7 +453,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     if (!action && a.url) action = { label: 'Open', href: a.url };
     if (!action) action = a.source === 'ai_visibility' ? { label: 'Open AI visibility', page: 'ai' } : a.source === 'rank_tracker' ? { label: 'Open rankings', page: 'rankings' } : { label: 'Open search & traffic', page: 'search' };
     add({
-      id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
+      id: engineRecId(a),
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
       title: ownTitle || splitTitle(a.action).title,
@@ -596,7 +605,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   for (const { rec, score } of kiRecommendations(x.ki)) add(rec, score);
 
   // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
-  return finishQueue(out, x);
+  return rankQueue(out, x);
 }
 
 /**
@@ -611,9 +620,26 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
  * 4. One card per issue (a page, an AI question, a link, a search): the others become "Also reported by" (`foldByIssue`).
  */
 export function finishQueue(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
+  return foldByIssue(rankQueue(out, x)).slice(0, 60);
+}
+
+/** Steps 1 to 3 of finishQueue: the queue in order with rules and issues, not folded yet (bounded: at most 150 items). */
+export function rankQueue(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
   const folded = foldNotIndexed(out, x);
   const ruled = folded.map(withRule).filter((r): r is Recommendation => !!r).map(cleanCopy);
-  return foldByIssue(queueOrder(ruled)).slice(0, 60);
+  return queueOrder(ruled).slice(0, 150);
+}
+
+/**
+ * FX-SERVER (review R3 L3): the id of an item from a weekly report, stable across weeks. With its search: the search (as always, so tickets
+ * and states made from it keep their key). Without one: the page it is about, else its wording with the numbers taken out ("3 pages" next
+ * week is "4 pages"), so a new wording of the same item does not start a new row, and a dismissal sticks.
+ */
+export function engineRecId(a: { source: string; type: string; keyword?: string | null; url?: string | null; action: string }): string {
+  if (a.keyword) return `engine:${a.source}:${a.type}:${a.keyword}`;
+  const page = a.url ? pageKey(a.url) : '';
+  if (page) return `engine:${a.source}:${a.type}:page:${page}`;
+  return `engine:${a.source}:${a.type}:${a.action.toLowerCase().replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').trim().slice(0, 60)}`;
 }
 
 /** Every string a client reads on a card, through the client-copy guard (shared/src/client-copy.ts). */
@@ -887,7 +913,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
   const lastBl = [...bl].reverse().find((b) => b.mode !== 'free') ?? bl[bl.length - 1] ?? null;
   const ga4 = ga4Now(snap, x.settings.tracking);
   // CR17-H (Q4): the Overview's top recommendations are the To do tab's (a dismissed, resolved or waiting item leaves both at once)
-  const todo = await import('./recommendationStates').then((m) => m.todoRecommendations(org, site, x, tasks, recommend(site, x, tasks)));
+  const todo = await import('./recommendationStates').then((m) => m.todoRecommendations(org, site, x, tasks, recommendQueue(site, x, tasks)));
   return {
     site: { domain: site.domain, trackingStatus: site.trackingStatus, verified: !!site.verifiedAt },
     // 2026-10-28: what the weekly cycle runs on its own (the checklist offers it as scheduled, not as a manual run) and GA4 by the shared rule

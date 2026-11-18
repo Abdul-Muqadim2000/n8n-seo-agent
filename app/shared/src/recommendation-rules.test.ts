@@ -125,3 +125,19 @@ describe('the state machine (Search Console "Validate fix" shape)', () => {
     expect(nextRecState(row('open', '2026-11-10T00:00:00.000Z'), { present: true, verdict: v('unknown'), now }).stateAt).toBe('2026-11-10T00:00:00.000Z');
   });
 });
+
+// FX-SERVER (review R3 L5, product decision): an agency's client people see that an item was dismissed and why, never the staff's note
+describe('the dismissal note is the agency\'s own', () => {
+  it('withoutDismissNote keeps the state, the date and the reason, and drops the free text from the note and the evidence', async () => {
+    const { withoutDismissNote, boardWithoutDismissNotes } = await import('./recommendation-rules');
+    const r = { id: 'a', category: 'search' as const, priority: 'low' as const, title: 'T', detail: 'd', state: 'dismissed' as const, stateAt: '2026-11-18T00:00:00.000Z', stateEvidence: 'Dismissed: Another reason. The client fired that supplier', dismissed: { reason: 'Another reason', note: 'The client fired that supplier', at: '2026-11-18T00:00:00.000Z' } };
+    const out = withoutDismissNote(r);
+    expect(out).toMatchObject({ state: 'dismissed', stateAt: r.stateAt, stateEvidence: 'Dismissed: Another reason', dismissed: { reason: 'Another reason', note: '', at: r.stateAt } });
+    expect(JSON.stringify(out)).not.toContain('fired');
+    const open = { id: 'b', category: 'search' as const, priority: 'low' as const, title: 'T', detail: 'd', state: 'open' as const, stateEvidence: 'It came back on 2026-11-18.' };
+    expect(withoutDismissNote(open)).toBe(open);
+    const b = boardWithoutDismissNotes({ todo: [open], waiting: [], resolved: [], expired: [], dismissed: [r], dismissReasons: [] });
+    expect(JSON.stringify(b)).not.toContain('fired');
+    expect(b.todo[0]).toBe(open);
+  });
+});

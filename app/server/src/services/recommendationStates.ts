@@ -10,13 +10,15 @@
 // registered with `registerRecVerifier(kind, fn)`. `rec` is the item as computed now (present) or as last shown (gone from its source);
 // the verdict is { outcome: open | in_progress | waiting | failed | resolved | dismissed | unknown, evidence?, at? } (shared
 // recommendation-rules.ts). Today's verifiers below use what each source already exposes; a package with a better reading replaces its kind.
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, ne, notInArray, or } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import {
   DISMISS_REASONS,
   RESOLVED_SHOWN_DAYS,
   TODO_STATES,
+  DISMISS_DAYS,
   dismissReasonLabel,
+  foldByIssue,
   nextRecState,
   normKeyword,
   pageKey,
@@ -176,16 +178,60 @@ const snapshotOf = (r: Recommendation): Record<string, unknown> => {
 const recOf = (row: RecommendationStateRow): Recommendation => ({ ...(row.snapshot as unknown as Recommendation), id: row.recKey });
 /** lastSeenAt is refreshed at most this often for an unchanged item (a read is not a write) */
 const SEEN_EVERY_MS = 6 * 3600e3;
+/** the states a check may still move (an item gone from its source in one of them is checked again on every read) */
+const UNSETTLED: RecommendationState[] = ['open', 'in_progress', 'failed', 'waiting_for_google'];
+/**
+ * FX-SERVER (review R3 L3): bounded growth. A settled row (resolved, expired, dismissed) its source has not reported for this long is
+ * deleted (at most once a day per website, on a read); the board lists a gone waiting / dismissed item this long at most; a read loads only
+ * the rows it can show or move (unsettled, present now, or changed within the window).
+ */
+export const REC_ROWS_KEPT_DAYS = 180;
+export const REC_GONE_SHOWN_DAYS = 90;
+const pruned = new Map<string, number>();
+
+/** Deletes the website's settled rows nothing has reported or changed for REC_ROWS_KEPT_DAYS. Returns how many went. */
+export async function pruneRecommendationStates(siteId: string, now: Date, present: readonly string[] = []): Promise<number> {
+  const cut = new Date(now.getTime() - REC_ROWS_KEPT_DAYS * 864e5);
+  const T = schema.recommendationStates;
+  const gone = await db
+    .delete(T)
+    .where(and(eq(T.siteId, siteId), inArray(T.state, ['resolved', 'expired', 'dismissed']), lt(T.lastSeenAt, cut), lt(T.stateAt, cut), ...(present.length ? [notInArray(T.recKey, [...present])] : [])))
+    .returning({ id: T.id });
+  return gone.length;
+}
+
+/**
+ * FX-SERVER (review R3 L1): a state write that loses to a person's click. The row is written only while it is still in the state this read
+ * computed from; a dismissal or a restore made during the read wins, and the row as it now stands is returned.
+ */
+async function guardedSet(row: RecommendationStateRow, set: Partial<RecommendationStateRow>): Promise<RecommendationStateRow> {
+  const T = schema.recommendationStates;
+  const [done] = await db.update(T).set(set).where(and(eq(T.id, row.id), eq(T.state, row.state))).returning();
+  if (done) return done;
+  const [now] = await db.select().from(T).where(eq(T.id, row.id)).limit(1);
+  return now ?? row;
+}
 
 /**
  * Bring the stored states up to date with this read: every item present now, and every stored item that is not settled yet (open, in
- * progress, failed, waiting for Google) and went missing. Writes only what changed. Returns the rows by key.
+ * progress, failed, waiting for Google) and went missing. Writes only what changed, never over a person's click made meanwhile. Returns
+ * the rows by key. `recs` is the queue before one card per issue (recommendQueue), so every folded member has its own state.
  */
 export async function syncRecommendationStates(org: Pick<OrgRow, 'id'>, ctx: RecVerifyContext, recs: readonly Recommendation[]): Promise<Map<string, RecommendationStateRow>> {
   const now = new Date(ctx.now);
-  const stored = await db.select().from(schema.recommendationStates).where(eq(schema.recommendationStates.siteId, ctx.site.id));
+  const T = schema.recommendationStates;
+  const presentKeys = [...new Set(recs.map((r) => r.id))];
+  if (now.getTime() - (pruned.get(ctx.site.id) ?? 0) > 864e5) {
+    pruned.set(ctx.site.id, now.getTime());
+    await pruneRecommendationStates(ctx.site.id, now, presentKeys).catch(() => 0);
+  }
+  const shownSince = new Date(now.getTime() - REC_ROWS_KEPT_DAYS * 864e5);
+  const stored = await db
+    .select()
+    .from(T)
+    .where(and(eq(T.siteId, ctx.site.id), or(inArray(T.state, UNSETTLED), gte(T.stateAt, shownSince), ...(presentKeys.length ? [inArray(T.recKey, presentKeys)] : []))));
   const byKey = new Map(stored.map((r) => [r.recKey, r]));
-  const present = new Set(recs.map((r) => r.id));
+  const present = new Set(presentKeys);
   for (const rec of recs) {
     const row = byKey.get(rec.id);
     const verdict = await verdictFor({ rec: { ...rec, firstSeenAt: row ? iso(row.firstSeenAt) : ctx.now }, present: true }, ctx).catch(() => UNKNOWN);
@@ -203,17 +249,15 @@ export async function syncRecommendationStates(org: Pick<OrgRow, 'id'>, ctx: Rec
     const stale = now.getTime() - new Date(row.lastSeenAt).getTime() > SEEN_EVERY_MS || String((row.snapshot as { title?: unknown }).title ?? '') !== rec.title;
     if (!changed && !stale) continue;
     const set = { state: next.state, evidence: next.evidence, stateAt: new Date(next.stateAt), lastSeenAt: now, snapshot: snapshotOf(rec), issueKey: rec.issueKey ?? row.issueKey, updatedAt: now };
-    await db.update(schema.recommendationStates).set(set).where(eq(schema.recommendationStates.id, row.id));
-    byKey.set(rec.id, { ...row, ...set });
+    byKey.set(rec.id, await guardedSet(row, set));
   }
   for (const row of stored) {
-    if (present.has(row.recKey) || !['open', 'in_progress', 'failed', 'waiting_for_google'].includes(row.state)) continue;
+    if (present.has(row.recKey) || !UNSETTLED.includes(row.state)) continue;
     const verdict = await verdictFor({ rec: { ...recOf(row), firstSeenAt: iso(row.firstSeenAt) }, present: false }, ctx).catch(() => UNKNOWN);
     const next = nextRecState(pureOf(row), { present: false, verdict, now: ctx.now });
     if (next.state === row.state && next.evidence === row.evidence) continue;
     const set = { state: next.state, evidence: next.evidence, stateAt: new Date(next.stateAt), updatedAt: now };
-    await db.update(schema.recommendationStates).set(set).where(eq(schema.recommendationStates.id, row.id));
-    byKey.set(row.recKey, { ...row, ...set });
+    byKey.set(row.recKey, await guardedSet(row, set));
   }
   return byKey;
 }
@@ -231,19 +275,24 @@ export function decorate(rec: Recommendation, row: RecommendationStateRow | unde
   };
 }
 
-/** The four tabs from the computed list (queue order) and the stored rows. Pure. */
+/**
+ * The four tabs from the computed queue (queue order, before one card per issue) and the stored rows. Pure. Each item gets its OWN state
+ * first; then each tab folds its items into one card per issue (FX-SERVER, review R3 L2): an open sibling of a resolved or dismissed card
+ * stays in To do as its own card, and a folded member is never "gone from its source". Gone items are listed for a while only (L3).
+ */
 export function boardOf(recs: readonly Recommendation[], rows: ReadonlyMap<string, RecommendationStateRow>, now = Date.now()): RecommendationBoard {
-  const recent = (r: RecommendationStateRow) => now - new Date(r.stateAt).getTime() <= RESOLVED_SHOWN_DAYS * 864e5;
+  const within = (r: RecommendationStateRow, days: number) => now - new Date(r.stateAt).getTime() <= days * 864e5;
   const present = new Set(recs.map((r) => r.id));
   const shown = recs.map((r) => decorate(r, rows.get(r.id)));
   const gone = [...rows.values()].filter((r) => !present.has(r.recKey));
-  const goneIn = (st: RecommendationState) => gone.filter((r) => r.state === st).sort((a, b) => new Date(b.stateAt).getTime() - new Date(a.stateAt).getTime()).map((r) => decorate(recOf(r), r));
+  const goneIn = (st: RecommendationState, days: number) =>
+    gone.filter((r) => r.state === st && within(r, days)).sort((a, b) => new Date(b.stateAt).getTime() - new Date(a.stateAt).getTime()).map((r) => decorate(recOf(r), r));
   return {
-    todo: shown.filter((r) => !r.state || TODO_STATES.has(r.state)),
-    waiting: [...shown.filter((r) => r.state === 'waiting_for_google'), ...goneIn('waiting_for_google')],
-    resolved: [...shown.filter((r) => r.state === 'resolved'), ...goneIn('resolved').filter((r) => recent(rows.get(r.id)!))],
-    expired: goneIn('expired').filter((r) => recent(rows.get(r.id)!)),
-    dismissed: [...shown.filter((r) => r.state === 'dismissed'), ...goneIn('dismissed')],
+    todo: foldByIssue(shown.filter((r) => !r.state || TODO_STATES.has(r.state))).slice(0, 60),
+    waiting: foldByIssue([...shown.filter((r) => r.state === 'waiting_for_google'), ...goneIn('waiting_for_google', REC_GONE_SHOWN_DAYS)]),
+    resolved: foldByIssue([...shown.filter((r) => r.state === 'resolved'), ...goneIn('resolved', RESOLVED_SHOWN_DAYS)]),
+    expired: foldByIssue(goneIn('expired', RESOLVED_SHOWN_DAYS)),
+    dismissed: foldByIssue([...shown.filter((r) => r.state === 'dismissed'), ...goneIn('dismissed', Math.max(DISMISS_DAYS, REC_GONE_SHOWN_DAYS))]),
     dismissReasons: DISMISS_REASONS.map((r) => ({ ...r })),
   };
 }
@@ -282,13 +331,21 @@ export async function todoRecommendations(org: Pick<OrgRow, 'id'>, site: SiteRow
   try {
     return (await recommendationBoard(org, site, x, tasks, recs)).todo;
   } catch {
-    return [...recs];
+    return foldByIssue(recs).slice(0, 60);
   }
 }
 
 // ------------------------------------------------------------------------------------------------------------------- the client's buttons
 
 const keyOf = (body: unknown) => String((body as Record<string, unknown> | null)?.key ?? '').trim().slice(0, 600);
+
+/** the other rows of the same card (one issue: a page, an AI question, a link, a search); none when the item is its own issue */
+async function siblingsOf(row: RecommendationStateRow): Promise<string[]> {
+  if (!row.issueKey || row.issueKey === row.recKey) return [];
+  const T = schema.recommendationStates;
+  const rows = await db.select({ id: T.id }).from(T).where(and(eq(T.siteId, row.siteId), eq(T.issueKey, row.issueKey), ne(T.id, row.id)));
+  return rows.map((r) => r.id);
+}
 
 async function rowFor(siteId: string, key: string): Promise<RecommendationStateRow> {
   if (!key) throw badRequest('Which recommendation? (key is missing)');
@@ -309,6 +366,9 @@ export async function dismissRecommendation(a: SiteAccess, req: FastifyRequest, 
   const now = new Date();
   const set = { state: 'dismissed' as const, stateAt: now, evidence: `Dismissed: ${dismissReasonLabel(reason)}${note ? `. ${note}` : ''}`, dismissedReason: reason, dismissedNote: note, byUser: a.user.id, updatedAt: now };
   await db.update(schema.recommendationStates).set(set).where(eq(schema.recommendationStates.id, row.id));
+  // FX-SERVER (review R3 L2): the card a person dismisses is the whole issue: the other sources folded into it go with it (each its own row
+  // since the states are kept per item), and come back with it
+  await siblingsOf(row).then((ids) => (ids.length ? db.update(schema.recommendationStates).set(set).where(and(inArray(schema.recommendationStates.id, ids), ne(schema.recommendationStates.state, 'dismissed'))) : null));
   const taskKey = String((row.snapshot as { taskKey?: unknown }).taskKey ?? '');
   if (taskKey) await import('./siteTasks').then((m) => m.skipSiteTask(a, req, { key: taskKey }, true)).catch(() => undefined);
   await audit(req, a.org.id, { action: 'recommendation.dismissed', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { recommendation: key, reason, note } });
@@ -323,6 +383,8 @@ export async function restoreRecommendation(a: SiteAccess, req: FastifyRequest, 
   const now = new Date();
   const set = { state: 'open' as const, stateAt: now, evidence: 'Brought back by you.', dismissedReason: '', dismissedNote: '', byUser: a.user.id, updatedAt: now };
   await db.update(schema.recommendationStates).set(set).where(eq(schema.recommendationStates.id, row.id));
+  // FX-SERVER (R3 L2): the siblings dismissed with it come back too
+  await siblingsOf(row).then((ids) => (ids.length ? db.update(schema.recommendationStates).set(set).where(and(inArray(schema.recommendationStates.id, ids), eq(schema.recommendationStates.state, 'dismissed'))) : null));
   const taskKey = String((row.snapshot as { taskKey?: unknown }).taskKey ?? '');
   if (taskKey) await import('./siteTasks').then((m) => m.skipSiteTask(a, req, { key: taskKey }, false)).catch(() => undefined);
   await audit(req, a.org.id, { action: 'recommendation.restored', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { recommendation: key } });
@@ -339,17 +401,19 @@ export async function checkRecommendation(a: SiteAccess, req: FastifyRequest, bo
   const row = await rowFor(a.site.id, key);
   const snap = recOf(row);
   if (snap.taskKey) await import('./siteTasks').then((m) => m.checkSiteTask(a, req, { key: snap.taskKey }));
-  const { loadBundle, recommend } = await import('./recommendations');
+  const { loadBundle, recommendQueue } = await import('./recommendations');
   const x = await loadBundle(a.org, a.site);
   if (key.startsWith('tech:') && x.technical.selectedAuditId && !snap.taskKey) {
     const { requestRecheck } = await import('./pageWatch');
     await requestRecheck(a.site.domain, x.technical.selectedAuditId, key.slice('tech:'.length)).catch(() => undefined);
   }
   const tasks = a.site.verifiedAt ? await import('./siteTasks').then((m) => m.siteTasksOf(a.org, a.site, req.log)).catch(() => undefined) : undefined;
-  const recs = recommend(a.site, x, tasks);
-  const board = await recommendationBoard(a.org, a.site, x, tasks, recs);
-  const all = [...board.todo, ...board.waiting, ...board.resolved, ...board.expired, ...board.dismissed];
-  const found = all.find((r) => r.id === key);
+  // the item itself (a folded member too), with the state its own check gave it
+  const recs = recommendQueue(a.site, x, tasks);
+  const rows = await syncRecommendationStates(a.org, verifyContext(a.site, x, tasks), recs);
+  const now = rows.get(key);
+  const rec = recs.find((r) => r.id === key) ?? (now ? recOf(now) : null);
+  const found = rec ? decorate(rec, now) : undefined;
   await audit(req, a.org.id, { action: 'recommendation.checked', target: { type: 'site', id: a.site.id, label: a.site.domain }, details: { recommendation: key, state: found?.state ?? '' } });
   if (!found) throw notFound('This recommendation is not on the list for this website any more.');
   return found;

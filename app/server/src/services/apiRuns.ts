@@ -9,6 +9,7 @@ import {
   MODE_IDS,
   modeCostUsd,
   needsAcknowledge,
+  keepTrackLists,
   parseRunInput,
   RUN_SCHEMAS,
   roleAtLeast,
@@ -130,7 +131,9 @@ export async function startRunV1(ctx: V1Ctx, rawBody: unknown, idempotencyKey: s
     site = await siteOf(ctx, form.siteId);
     if (form.country === undefined && site.country) form.country = site.country;
   }
-  const parsed = parseRunInput(form);
+  // FX-SERVER (review R3 M2): Track my site through the API keeps a list the caller leaves out (keywords, competitors, brand names), the
+  // same rule the app row and the engine follow; only an explicit empty list clears one
+  const parsed = parseRunInput(site ? keepTrackLists(form, site) : form);
   if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
 
