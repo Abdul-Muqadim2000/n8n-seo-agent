@@ -454,7 +454,7 @@ module.exports = async (ctx) => {
     const ok1 = await aa({ action: 'ki_competitor', market: 'AE-en', comp_domain: 'www.Intwo.cloud', status: 'chosen' });
     const ok2 = await aa({ action: 'ki_gap', gap_id: 'g_abc123def456', status: 'dismissed' });
     const bad = [];
-    for (const [b, re] of [[{ action: 'ki_competitor', market: 'uae', comp_domain: 'intwo.cloud', status: 'chosen' }, /market/], [{ action: 'ki_competitor', market: 'AE-en', comp_domain: 'intwo.cloud', status: 'won' }, /chosen, watch or dismissed/],
+    for (const [b, re] of [[{ action: 'ki_competitor', market: 'uae', comp_domain: 'intwo.cloud', status: 'chosen' }, /market/], [{ action: 'ki_competitor', market: 'AE-en', comp_domain: 'intwo.cloud', status: 'won' }, /chosen, watch, dismissed or not_competitor/],
       [{ action: 'ki_gap', gap_id: 'nope', status: 'done' }, /gap_id/], [{ action: 'ki_gap', gap_id: 'g_abc123def456', status: 'closed' }, /open, started/]]) { reset(); bad.push((await H.expectError('Admin Action', { body: { domain: D, ...b } }, re)).ok); }
     check('KIE2-13 Site Admin validates the two KI actions (market key, host, the status words) and refuses a bad value with its reason',
       ok1.ki_market === 'AE-en' && ok1.ki_comp_domain === 'intwo.cloud' && ok1.ki_status === 'chosen' && ok2.ki_gap_id === 'g_abc123def456' && ok2.ki_status === 'dismissed' && bad.every(Boolean), J({ ok1: [ok1.ki_market, ok1.ki_comp_domain], bad }));
@@ -466,7 +466,7 @@ module.exports = async (ctx) => {
       k1.ok && k1.status_by === 'user' && k1.status === 'chosen' && !k2.ok && /at most 2/.test(k2.error) && k3.ok && k3.status === 'watch' && !k4.ok && /not in the competitor set/.test(k4.error), J([k1, k2, k3, k4]));
     const adm = JSON.parse(rd('workflows', 'SEO_Agent_Site_Admin.json'))[0]; const aout = (n) => ((adm.connections[n] || {}).main || []).flat().map(t => t.node);
     check('KIE2-13 a deleted website takes its KI rows (runs, competitors, keywords, gaps) before the site row; the two actions are routed, and a gap update touches only seo_ki_gaps',
-      J(aout('Delete Cycle Jobs (Admin)')) === J(['Delete KI Runs (Admin)']) && J(aout('Delete KI Gaps (Admin)')) === J(['Delete KI Cache (Admin)']) && J(aout('Delete KI Cache (Admin)')) === J(['Delete Site']) && aout('Admin Route').includes('Load KI Competitors (Admin)') && aout('Admin Route').includes('Set KI Gap')
+      J(aout('Delete Cycle Jobs (Admin)')) === J(['Delete KI Runs (Admin)']) && J(aout('Delete KI Gaps (Admin)')) === J(['Delete KI Cache (Admin)']) && J(aout('Delete KI Cache (Admin)')) === J(['Purge History? (Admin)']) /* CR17-B (2026-11-17): the engine-history purge (CR17B2) runs between the KI rows and the site row */ && aout('Admin Route').includes('Load KI Competitors (Admin)') && aout('Admin Route').includes('Set KI Gap')
       && adm.nodes.find(n => n.name === 'Set KI Gap').parameters.dataTableId.value === 'seo_ki_gaps' && adm.nodes.find(n => n.name === 'Set KI Competitor').parameters.columns.value.status_by === 'user', J(aout('Admin Route')));
     check('KIE2-13 (FX-L perf M2) a deleted website also takes its ki:* cache rows (seo_cache, kind ki, its site_id), and nothing else of seo_cache',
       (() => { const n = adm.nodes.find(x => x.name === 'Delete KI Cache (Admin)'); const cs = n && n.parameters.filters.conditions; return n && n.parameters.dataTableId.value === 'seo_cache' && cs.some(c => c.keyName === 'kind' && c.keyValue === 'ki') && cs.some(c => c.keyName === 'site_id'); })(), '');

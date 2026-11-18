@@ -51,24 +51,72 @@ const OK = (() => {
   // our page to point to and the link text to ask for (LINK_BUILDER_SPEC.md §5). pages: [{ url, title, keyword, kind, page_type, position,
   // rds, kw_share, pitched }] (kind: home | hub | guide | answer | article | case | money); p: the prospect { type, text, dead_text, to_url }
   const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'digest', 'podcast', 'ai_list']);   // L5: an answer in the press and a guest appearance name the business, so they point at the homepage
-  function pickTarget(p, pages, df, nDocs, home) {
-    if (p.type === 'lost' && p.to_url) return { url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 };
-    if (HOME_TYPES.has(p.type)) return { url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 };
+  // CR17-E (client report 2026-11-17, C4; build section 195): the link text is REAL text, never a kind. Live every card read "Link text: Your
+  // brand name" (a label for the kind `brand`) although "Devaicon" was on file. Brand = the business name; title = our page's own title
+  // without the brand suffixes ("Open edX Services | Devaicon" -> "Open edX Services"); url = the bare address. Never a search keyword.
+  const normName = (s) => String(s || '').toLowerCase().replace(/&amp;/g, '&').replace(/[^a-z0-9&]+/g, '');
+  function stripBrand(title, brand, domain) {
+    const segs = String(title || '').replace(/\s+/g, ' ').trim().split(/\s+[|–—-]\s+|\s*\|\s*/).map(x => x.trim()).filter(Boolean);
+    const b = normName(brand), lab = normName(String(domain || '').replace(/^www\./, '').split('.')[0]);
+    const keep = segs.filter(x => { const n = normName(x); return n && n !== b && n !== lab && n !== normName(domain); });
+    return (keep[0] || '').slice(0, 90);
+  }
+  const bareUrl = (u) => String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+  // -> { kind: brand | title | url | as before, text }: the text an editor would write anyway (Google's link spam policy names optimised
+  // anchor text in requested links); with no title on record the brand stands in, with no brand on file the bare address does
+  function anchorText(kind, page, brand, domain) {
+    const k = String(kind || 'brand');
+    if (k === 'as before') return { kind: k, text: '' };
+    if (k === 'url') return { kind: 'url', text: bareUrl((page && page.url) || '') || bareUrl(domain) };
+    if (k === 'title') { const t = stripBrand(page && page.title, brand, domain); if (t) return { kind: 'title', text: t }; }
+    const b = String(brand || '').trim();
+    return b && normName(b) !== normName(domain) ? { kind: 'brand', text: b.slice(0, 80) } : { kind: 'url', text: bareUrl((page && page.url) || '') || bareUrl(domain) };
+  }
+  // an editorial "top / best X companies" article (an ai_source or list page) asks for the page that sells X; a directory profile, a mention
+  // or a journalist answer names the business (the homepage)
+  const EDITORIAL_LIST = /\b(top\s*\d+|top ten|best|leading|companies|firms|agencies|providers|vendors|alternatives?|vs\.?|versus|compar(?:e|ed|ison))\b/i;
+  const NO_PAGE = 'no_matching_page';
+  // a page of ours aimed at ANOTHER market than their page (a Pakistan list pitched our UAE page): half the score
+  const PLACES = /\b(uae|u\.a\.e|dubai|abu dhabi|sharjah|emirates|pakistan|lahore|karachi|islamabad|saudi|ksa|riyadh|jeddah|qatar|doha|kuwait|bahrain|oman|egypt|cairo|india|uk|london|usa|canada|australia|singapore|gcc)\b/gi;
+  const placesOf = (t) => new Set((String(t || '').toLowerCase().match(PLACES) || []).map(x => x.replace(/\./g, '')));
+  const otherMarket = (probe, x) => { const a = placesOf(probe), b = placesOf([x.title, String(x.url || '').replace(/[\/_.-]+/g, ' ')].join(' ')); return a.size > 0 && b.size > 0 && ![...b].some(w => a.has(w)); };
+  function pickTarget(p, pages, df, nDocs, home, brand, domain) {
+    const done = (r) => { const pg = r.url ? (pages.find(x => x.url === r.url) || { url: r.url, title: r.title || '' }) : null; const a = r.url ? anchorText(r.anchor, pg, brand, domain || '') : { kind: '', text: '' }; return { ...r, anchor: a.kind || r.anchor, anchor_text: a.text }; };
+    if (p.type === 'lost' && p.to_url) return done({ url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 });
+    const inner = (pages || []).filter(x => x.url && x.kind !== 'home');
+    const fitOf = (probe, x) => fit(probe, [x.title, x.keyword, String(x.url || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[\/_.-]+/g, ' ')].join(' '), df, nDocs);   // the URL's words too: titles come from Search Console queries (live 2026-10-11)
+    if ((p.type === 'list' || p.type === 'ai_list') && EDITORIAL_LIST.test(String(p.text || ''))) {
+      const best = inner.filter(x => (x.kind === 'money' || x.kind === 'service') && !otherMarket(p.text, x)).map(x => ({ x, f: fitOf(p.text, x) })).filter(s => s.f >= 0.4).sort((a, b) => b.f - a.f)[0];
+      if (best) return done({ url: best.x.url, reason: 'their article lists providers of what this page sells (topic match ' + Math.round(best.f * 100) + '%)', anchor: 'brand', fit: best.f, title: best.x.title });
+    }
+    if (HOME_TYPES.has(p.type)) return done({ url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 });
     const probe = p.type === 'broken' ? (p.dead_text || p.text) : ['gap', 'comp_new'].includes(p.type) ? p.text + ' ' + (p.topics || '') : p.text;   // they link to competitors for OUR topics: aim at our page on them
-    const scored = pages.filter(x => x.url && x.kind !== 'home').map(x => {
+    const scored = inner.map(x => {
       const f = fit(probe, [x.title, x.keyword, String(x.url || '').replace(/^https?:\/\/[^\/]+/, '').replace(/[\/_.-]+/g, ' ')].join(' '), df, nDocs);   // the URL's words too: titles come from Search Console queries (live 2026-10-11)
       const pos = Number(x.position) || 0; const band = pos >= 4 && pos <= 15 ? 1 : pos >= 16 && pos <= 30 ? 0.6 : pos >= 1 && pos <= 3 ? 0.3 : 0.4;
       const rds = Number(x.rds) || 0; const need = rds === 0 ? 1 : rds <= 5 ? 0.9 : rds <= 20 ? 0.7 : 0.5;
       const type = x.kind === 'money' ? 0.6 : 1;   // publishers link to guides; the guide links on to the service page
       const paced = (Number(x.pitched) || 0) >= (rds < 20 ? 4 : Math.max(4, Math.round(rds * 0.2)));
-      return { x, f, score: paced ? 0 : f * band * need * type, band, pos, rds, paced };
+      return { x, f, score: paced ? 0 : f * band * need * type * (otherMarket(probe, x) ? 0.5 : 1), band, pos, rds, paced };
     }).filter(s => s.f >= 0.2 && s.score > 0).sort((a, b) => b.score - a.score);
-    if (!scored.length) return { url: home, reason: 'no page of ours matches their topic closely: the homepage', anchor: 'brand', fit: 0 };
+    if (!scored.length) {
+      // CR17-E: no silent homepage. Live 7 of devaicon's 20 open pitches went to the homepage "because no page matched" (an "Open edX vs
+      // Moodle" article while /capabilities/open-edx-services exists). The homepage stays only when it really is about their topic.
+      const hp = (pages || []).find(x => x.kind === 'home') || { url: home, title: '' };
+      const hf = fit(probe, [hp.title, brand, ...(pages || []).filter(x => x.kind === 'home').map(x => x.keyword)].join(' '), df, nDocs);
+      if (hf >= 0.4) return done({ url: home, reason: 'your homepage is about their topic (topic match ' + Math.round(hf * 100) + '%)', anchor: 'brand', fit: hf });
+      const topic = String(probe || '').replace(/\s+/g, ' ').trim().slice(0, 70);
+      return { url: '', hold: NO_PAGE, reason: 'no page of yours covers their topic' + (topic ? ' ("' + topic + '")' : '') + ': publish one first, then this pitch can go out', anchor: '', anchor_text: '', fit: 0 };
+    }
     const s = scored[0]; const why = [s.pos >= 4 && s.pos <= 15 ? 'ranks #' + s.pos + ' (close to the top)' : s.pos ? 'ranks #' + s.pos : 'not ranking yet', s.rds ? s.rds + ' linking sites' : 'no links yet', 'topic match ' + Math.round(s.f * 100) + '%'];
-    return { url: s.x.url, reason: why.join(' · '), anchor: (Number(s.x.kw_share) || 0) > 0.15 ? 'brand' : 'title', fit: s.f, title: s.x.title };
+    return done({ url: s.x.url, reason: why.join(' · '), anchor: (Number(s.x.kw_share) || 0) > 0.15 ? 'brand' : 'title', fit: s.f, title: s.x.title });
   }
-  // government sites list providers through accreditation or an application, never through a pitch (the listings checklist covers them)
-  const isGov = (d) => /(^|\.)(gov|gouv|gob|govt|mil)(\.[a-z]{2})?$/i.test(String(d || '').toLowerCase());
+  // government sites list providers through accreditation or an application, never through a pitch (the listings checklist covers them).
+  // CR17-E (195): the fit gate's own government list (v5/code/_fit_gate.js fitGovHost; build section 195 asserts these four patterns are
+  // the fit gate's, character for character). This kit had a shorter rule of its own, so u.ae (the UAE government portal) was a pitch.
+  const GOV_RE = [/(^|\.)gov(\.[a-z]{2,3})?$/, /(^|\.)(gouv|gob|go|gv)\.[a-z]{2}$/, /(^|\.)mil(\.[a-z]{2})?$/, /(^|\.)(u\.ae|government\.ae|dubai\.ae|abudhabi\.ae|sharjah\.ae|ajman\.ae|rak\.ae|tax\.gov\.ae|europa\.eu)$/];
+  const isGov = (d) => { const h = String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '').replace(/^(www|m|app|en|ar)\./, '');
+    return GOV_RE.some(re => re.test(h)) || /(^|\.)govt(\.[a-z]{2})?$/.test(h); };
   // ---- who is never worth a pitch (D13, live 2026-10-11) ----
   // a mailbox provider, a generated contact / company database, a CDN or a statistics page: they turn up in link data as hosts, but there is
   // nobody there who could add a link (outlook.com and zoominfo.com were listed as broken-link prospects)
@@ -81,6 +129,7 @@ const OK = (() => {
     if (DATABROKER.test(d)) return 'a contact / company database (' + d + '): its pages are generated, nobody there edits them';
     if (LK.isInfra(d)) return 'infrastructure (' + d + ': a CDN, a hosting platform or a link shortener), not a site to write to';
     if (LK.isScraper(d)) return 'an automatically generated statistics page (' + d + '), not a site to write to';
+    if (LK.isJobBoard(d, '')) return 'a job board (' + d + '): its pages are job listings, nobody there adds a link';   // CR17-E: bebee.com was drafted a pitch
     return '';
   }
   // a bare homepage is no place for a link to add: only a listing, a list, a mention or a journalist request is pitched on the front page
@@ -133,6 +182,10 @@ const OK = (() => {
     // LIVE1 (2026-11-07): a social or professional network is never a competitor (linkedin.com, where any author posts, was refused as "a site
     // that outranks you" because a LinkedIn article ranked #3 for one of the client's keywords); what its pages say is judged by the other rules
     if (d && LK.domainKind(d) === 'social') return null;
+    // CR17-F (2026-11-17, client report C5, section 196): only a COMPETITOR (CMP.role, the one classifier) is a rival. clutch.co, edx.org,
+    // github.com, brandmentions.pk's agency list, openedx.org and Microsoft (for a Microsoft partner) outranked the client or were named by
+    // AI, and were left out as "a competing site of yours". What they really are is said by competitorCheck below.
+    if (d && !isRivalRole(o, d)) return null;
     const hit = (list, label, kind) => {
       for (const c of (list || [])) { const x = domOf(c); if (!x || !d) continue;
         if (LK.sameSite(d, x) || LK.sameSite(x, d) || (dr && dr === LK.regDomain(x))) { const e = rivalEntry(c, (c && typeof c === 'object' && c.why) || label); return e ? { ...e, kind } : null; }
@@ -145,7 +198,8 @@ const OK = (() => {
   // a rival's "best X" list is still fair game - but only when the page really IS such a list. A mention, a resource page or the rival's
   // own front page is not: "add us to your list" has somewhere to go, "link to our guide" has not.
   const ROUNDUP_RE = /\b(best|top\s*\d+|top ten|alternatives?|round-?up|shortlist|directory|listing|list of|compar(?:e|ed|ison)|vs)\b/i;
-  const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '));
+  const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '))
+    || (typeof CMP === 'object' && !!CMP && !!CMP.listPage && CMP.listPage(o.title, o.url || o.page_url));   // CR17-F: "AI / Automation Agencies in Pakistan", /agencies/...
   // ---- R86 (2026-10-16, re-rating defect C-10): the competitor test judged only the prospect PAGE. daxin-global.ae (whose own pages
   // sell Odoo, Dynamics 365, Business Central and e-invoicing in Dubai) and qzinfomatics.com ("Microsoft Dynamics 365 Partner in Dubai")
   // reached `ready` because their blog article named too few of the customer's 30 services to reach the 45% bar — a bar over a
@@ -172,7 +226,34 @@ const OK = (() => {
     const local = !re ? true : re.test(text) || (TLD_OF[iso] ? d.endsWith('.' + TLD_OF[iso]) : false);
     return { offered, signals, local, pages: (o.site_pages || []).slice(0, 3) };
   }
-  function sellsSame(o) {
+  // CR17-F: the one role of a prospect's site, with the client's own services (the platform it builds on) and choices
+  const roleCtxOf = (o) => ({ services: [...(o.terms || []), ...(o.services || [])], topics: o.topics || [], declared: (o.competitors || []).map(domOf).filter(Boolean),
+    not_competitors: o.not_competitors || [], principals: o.principals || [], url: o.url || o.page_url || '' });
+  const roleOfSite = (o, d) => (typeof CMP === 'object' && CMP && CMP.role) ? CMP.role(d, roleCtxOf(o)) : null;
+  const isRivalRole = (o, d) => { const r = roleOfSite(o, d); return !r || r.role === 'competitor'; };
+  /** OK.competitorCheck(o) -> { code, role, reason }: why the competitor gate leaves a prospect out ('' when it does not). `code` is one of
+   *  CMP.LEFT_OUT's keys (competitor, competitor_list, listing, your_platform, software), stored by the Link Builder as reason_code; `reason` is
+   *  the sentence sellsSame always returned (a competitor's wording is unchanged). */
+  function competitorCheck(o) {
+    const type = String(o.type || '');
+    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
+    const r = d ? roleOfSite(o, d) : null;
+    const LO = (typeof CMP === 'object' && CMP && CMP.LEFT_OUT) || {};
+    // a directory, the partner directory of the platform you build on, that platform's maker or a software maker: never "a competing site";
+    // a list, a mention, a journalist request, a show or a lost link on them is still asked (the ask there is "add us" / "put it back")
+    if (r && !SELL_EXEMPT.has(type)) {
+      const pd = typeof CMP === 'object' && CMP.partnerDirectory && CMP.partnerDirectory(o.url || o.page_url || '');
+      if (r.role === 'listing' || (pd && ['your_platform', 'software'].includes(r.role))) return { code: 'listing', role: r.role, reason: LO.listing || 'a directory: add yourself to it instead' };
+      if (r.role === 'your_platform') return { code: 'your_platform', role: r.role, reason: LO.your_platform || 'the platform you work with, not a competitor' };
+      if (r.role === 'software') return { code: 'software', role: r.role, reason: LO.software || 'a software maker, not a competitor' };
+    }
+    // a platform, a publisher, an authority or a site the client marked not a competitor: the other rules judge its page, never this one
+    if (r && r.role !== 'competitor') return { code: '', role: r.role, reason: '' };
+    const why = sellsSameBiz(o);
+    return { code: why ? (/its own list ranks itself/.test(why) ? 'competitor_list' : 'competitor') : '', role: r ? r.role : '', reason: why };
+  }
+  function sellsSame(o) { return competitorCheck(o).reason; }
+  function sellsSameBiz(o) {
     const type = String(o.type || '');
     const rival = rivalOf(o);
     // a SERP rival's "best X" list is fair game (a publisher that outranks you); a business rival's own list is not - it ranks itself first
@@ -289,6 +370,67 @@ const OK = (() => {
     const form = email ? '' : (String(x.contact_url || '').trim() || outs.map(r => String(r.contact_form_url || '')).find(Boolean) || pros.map(r => String(r.contact_url || '')).find(Boolean) || '');
     return { refused: '', contact: email ? 'email' : form ? 'form' : '', email, form };
   }
-  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+  // ---- CR17-E (client report 2026-11-17, C4e; build section 195): one verdict per WEBSITE, kept across runs ----
+  // Live, abstract-technology.de was "Ready to send" (its blog post, type ai_source) and "Checked and left out: a competing provider" (its
+  // free-trial page, type resource) on the same screen: each (site, type) row was judged alone. A reason that is about the WEBSITE (a
+  // competitor, a government portal, a platform, a job board, a site that sells links, too little authority) now applies to every row and
+  // type of that registrable domain, this run and every later run (stored verdicts are re-read each run with a code), and stored rows are
+  // re-judged under the current rules without fetching anything, so a row qualified before a rule existed heals by itself.
+  const REASON_CODES = [
+    ['client_declined', /marked (in the app|not a fit)|not a fit \(marked/i],
+    ['government', /government site/i],
+    ['platform', /a platform page|a code host on|a profile on|a channel page on/i],
+    ['job_board', /job board|job listing/i],
+    ['not_a_site', /mailbox provider|contact \/ company database|infrastructure \(|statistics page|not a website/i],
+    ['competitor_list', /its own list ranks itself/i],
+    ['competitor', /competing (site|provider)|competitor of yours|recommends instead of you/i],
+    ['listing', /a directory or list where companies are listed/i],
+    ['your_platform', /the maker of the platform you work with/i],
+    ['software', /a software maker, not a competitor/i],
+    ['sells_links', /sells posts or links|paid guest posts|offers links|link-farm|spam score|gambling|essay-mill|press-release wire|different sites linked from one page/i],
+    ['low_authority', /too little authority/i],
+    ['accreditation', /accredited \/ approved providers/i],
+    ['no_matching_page', /no page of yours covers their topic/i],
+    ['off_topic', /off topic|off your topics/i],
+    ['language', /another language/i],
+    ['page_gone', /answers 4\d\d|does not answer|page itself is gone/i],
+    ['homepage_only', /only their homepage/i],
+    ['page_changed', /no longer carr|dead link is no longer/i],
+    ['writer_skip', /^writer:/i],
+  ];
+  const reasonCode = (why) => { const t = String(why || ''); if (!t.trim()) return ''; for (const [c, re] of REASON_CODES) if (re.test(t)) return c; return 'other'; };
+  const DOMAIN_CODES = new Set(['government', 'platform', 'job_board', 'not_a_site', 'competitor', 'competitor_list', 'sells_links', 'low_authority']);
+  // the topic floor for pitches that ask "link to our page" (0.25 let course listings, a stock exchange and accounting bodies through at 30-33%)
+  const TOPIC_FLOOR = 0.4, TOPIC_FLOOR_TYPES = new Set(['resource', 'ai_source', 'gap', 'comp_new']);
+  // the link index's own authority (DataForSEO domain rank 0-1000; 0 = unknown, never a refusal)
+  const MIN_RANK = 40;
+  const lowAuthority = (rank) => { const r = Number(rank) || 0; return r > 0 && r < MIN_RANK ? 'too little authority to pass anything on (rank ' + Math.round(r) + ' of 1,000 in the link index)' : ''; };
+  const PLATFORM_WHY = (d) => 'a platform page (' + d + '): a post there belongs to whoever wrote it, nobody edits it for a pitch';
+  // a stored row judged again under today's rules, with nothing fetched: '' when it still passes. row: { prospect_domain, type, page_url,
+  // page_title }; c: { competitors, serp_rivals, ai_rivals, topics, terms, accredited, spam, rank }
+  const NO_REQUALIFY = new Set(['press', 'digest', 'podcast', 'redirect', 'reclaim']);
+  function requalify(row, c) {
+    const x = row || {}; const o = c || {}; const d = domOf(x.prospect_domain); const type = String(x.type || '');
+    if (!d || !/\./.test(d) || NO_REQUALIFY.has(type)) return '';
+    if (isGov(d)) return 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)';
+    const bad = badHost(d); if (bad) return bad;
+    const host = LK.hostOf(x.page_url) || d;
+    if (PLATFORM.test(d) || PLATFORM.test(host)) return PLATFORM_WHY(LK.regDomain(d) || d);
+    if (LK.isJobBoard(x.page_url || d, x.page_title)) return 'a job listing (' + d + '): nobody there adds a link';
+    const np = noPitch(d, { title: x.page_title, spam: o.spam, accredited: !!o.accredited }); if (np) return np;
+    const la = lowAuthority(o.rank); if (la) return la;
+    return sellsSame({ type, domain: d, competitors: o.competitors || [], serp_rivals: o.serp_rivals || [], ai_rivals: o.ai_rivals || [], topics: o.topics || [], title: x.page_title || '', url: x.page_url || '', terms: o.terms || [] });
+  }
+  // rows: every outreach row of a site (this run's and the stored ones) -> Map registrable domain -> { why, code, type } for the domain-level
+  // verdicts; the newest verdict wins, a verdict the client gave on one pitch stays on that pitch
+  function domainVerdicts(rows) {
+    const m = new Map();
+    for (const r of [...(rows || [])].sort((a, b) => String(a.checked_at || '').localeCompare(String(b.checked_at || '')))) {
+      if (String(r.status || '') !== 'not_fit') continue; const code = String(r.reason_code || '') || reasonCode(r.fit_reason); if (!DOMAIN_CODES.has(code)) continue;
+      const d = LK.regDomain(domOf(r.prospect_domain)); if (d) m.set(d, { why: String(r.fit_reason || ''), code, type: String(r.type || '') });
+    }
+    return m;
+  }
+  return { OFF_TOPIC, TOPIC_FLOOR, TOPIC_FLOOR_TYPES, MIN_RANK, lowAuthority, reasonCode, DOMAIN_CODES, requalify, domainVerdicts, PLATFORM_WHY, NO_PAGE, anchorText, stripBrand, isGov, words, stem, fit, contactsIn, placementVet, PLATFORM, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, competitorCheck, siteOffer, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();

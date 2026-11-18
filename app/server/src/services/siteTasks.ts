@@ -401,6 +401,9 @@ export interface CheckOutcome {
   needsAddress?: boolean;
   /** prod 2026-11-10 (`index_merge`): each pair's own result, stored with the reading (the Content page says "Moved" for the done ones) */
   pairs?: SiteTaskPairCheck[];
+  /** CR17-C (client report 2026-11-17 F3): with ok, the step closed because it is not needed any more (every address now redirects
+   *  permanently to another page), not because the client did it; the step reads "Not needed any more" */
+  notNeeded?: boolean;
 }
 
 const hostOf = (url: string) => cleanDomain(url.match(/^https?:\/\/([^/?#:]+)/i)?.[1] ?? '');
@@ -671,6 +674,10 @@ async function checkIndexing(domain: string, payload: Record<string, unknown>, o
   if (unsure.length) return { ok: false, reached: false, unsure: true, message: `We could not tell for ${unsure.length} of ${urls.length}: ${unsure[0].why}` };
   // N-app-7: the step is done only when every page it lists was checked; otherwise it says how far we got and stays as it is
   if (listedTotal > urls.length) return partialOutcome(urls.length, listedTotal, `The first ${urls.length} pages of ${listedTotal} are fixed.`);
+  // CR17-C (F3): every address of a sitemap step now redirects permanently to another page: not needed any more (never "fixed by you")
+  const notNeeded = results.filter((r) => r.notNeeded);
+  if (notNeeded.length === results.length) return { ok: true, reached: true, notNeeded: true, message: notNeeded.slice(0, 3).map((r) => r.why).join(' ') + (notNeeded.length > 3 ? ` And ${notNeeded.length - 3} more.` : '') };
+  if (notNeeded.length) return { ok: true, reached: true, message: `All ${urls.length} pages are done. ${notNeeded.slice(0, 2).map((r) => r.why).join(' ')}` };
   return { ok: true, reached: true, message: urls.length === 1 ? results[0].why : `All ${urls.length} pages are fixed.` };
 }
 
@@ -924,7 +931,7 @@ export function runSiteTaskCheck(domain: string, kind: SiteTaskKind, payload: Re
 
 async function recordCheck(row: Pick<SiteTaskRow, 'id'>, out: CheckOutcome, by: SiteTaskCheckBy, who?: string): Promise<void> {
   const now = new Date();
-  const check: SiteTaskCheck = { at: now.toISOString(), ok: out.ok, message: out.message, by, ...(who ? { who } : {}), ...(out.pairs ? { pairs: out.pairs } : {}) };
+  const check: SiteTaskCheck = { at: now.toISOString(), ok: out.ok, message: out.message, by, ...(who ? { who } : {}), ...(out.pairs ? { pairs: out.pairs } : {}), ...(out.ok && out.notNeeded ? { notNeeded: true } : {}) };
   await db
     .update(schema.siteTasks)
     // `done_at` keeps its stored value on a miss (never a stale copy read before the check started)

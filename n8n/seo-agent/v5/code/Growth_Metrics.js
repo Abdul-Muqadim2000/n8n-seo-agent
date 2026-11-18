@@ -93,7 +93,7 @@ for (const p of plans) {
   const corrections = (em.corrections || []).map(c => { const job = c.job_n ? em.outreach_jobs.find(j => j.n === c.job_n && j.kind === 'correction') : null; const d = job ? draftFor(job) : null;
     return { ...c, draft: d && d.body ? { subject: String(d.subject || ''), body: String(d.body) } : null, status: c.status === 'draft_requested' ? (d && d.body ? 'drafted' : 'draft_failed') : c.status }; });
   const drafts_written = wroteNow.size, handed_over = p.link_builder ? em.prospect_rows.filter(r => /Link Builder/.test(String(r.note || ''))).length : 0;
-  const newlyWon = prospect_rows.filter(r => r.status === 'won' && r.won_at === now);
+  const newlyWon = em.named_now || prospect_rows.filter(r => r.status === 'won' && r.won_at === now);   // CR17-E (195): a page that names you is an AI-visibility result, not a won link (Earned Media lists them apart)
   // ---- targets ----
   const targets = p.targets; const queued = targets.filter(t => t.status === 'queued').sort((a, b) => b.value - a.value); const wonT = targets.filter(t => t.status === 'won' && t.won_at === now);
   // ---- entity (Wikidata) ----

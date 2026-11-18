@@ -20,6 +20,12 @@ const HEAD_RULE = 'f08';
 // alert rule. A pulse morning stored under another entity rule still counts for "named in" and "cited", but its competitors are left out (the
 // share of voice counts only answers whose businesses were recorded under this rule). Read after the AI_ENTITIES kit is inlined (AIE.RULE).
 const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
+// FX-LINKS (review R2 L6, 2026-11-18): the "new baseline" sentence says what changed between the earlier week's rule and this one, rule by rule
+// (F-53, then CR17-F's c17f); a rule this file does not know yet keeps the latest sentence
+const ENT_RULES = [['f53', 'a competitor is now a business an answer names, not a heading, a price, a place or a regulator'], ['c17f', 'software makers and the platform you build on are no longer counted as competitors']];
+const entRuleWhy = (prevRule) => { const ids = ENT_RULES.map(r => r[0]); const now = ids.indexOf(entRuleOf()); const was = ids.indexOf(String(prevRule || ''));
+  const upto = now < 0 ? ENT_RULES.length - 1 : now; const from = was < 0 || was > upto ? 0 : was + 1;
+  const said = ENT_RULES.slice(from, upto + 1).map(r => r[1]); return (said.length ? said : [ENT_RULES[upto][1]]).join('; '); };
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 /*__AI_ENTITIES__*/
 /*__AI_QUESTION__*/
@@ -165,6 +171,11 @@ return plans.map(p => {
       const x = by.get(h) || { list: 0, other: 0 }; if (LIST_TITLE.test(String(c.t))) x.list++; else x.other++; by.set(h, x); } }
     return new Set([...by.entries()].filter(([, x]) => x.list > 0 && x.other === 0).map(([h]) => h)); })();
   const notList = (d) => !listSites.has(String(d || '').toLowerCase().replace(/^www\./, '')) || (p.configured_competitors || []).includes(d);
+  // CR17-F (2026-11-17, client report C5, section 196): only a COMPETITOR by the one classifier (CMP.role) is counted as a business AI recommends
+  // instead of you, kept as a rival source or fed back as next week's competitor; a software maker or the platform you build on goes to its own
+  // list ("Software and platforms AI names"), a directory / authority / publisher stays a source. A name with no known site keeps the entity rule.
+  const roleCtx = { own_domain: p.domain, services: p.services || [], topics: p.topics || [], declared: p.configured_competitors || [], not_competitors: p.not_competitors || [] };
+  const roleOk = (d) => { const x = String(d || '').toLowerCase(); return !/\./.test(x) || (p.configured_competitors || []).includes(x) || CMP.role(x, roleCtx).role === 'competitor'; };
   // ---- F1b (2026-10-23): the week's answers, ONE unit each: this run's answers (every engine; the headline leaves the monthly ones out) and
   // the pooled pulse answers, each with the business's reading (named / cited / place) and the competitors it named, one key per business
   // ("ClearTax" and cleartax.com are one). The headline, every engine, every segment and every competitor are measured from these units.
@@ -176,7 +187,7 @@ return plans.map(p => {
         rivals: !entSame ? null : Array.isArray(a[5]) ? a[5].map(x => ({ id: String(ents[(x || [])[0]] || ''), position: Number((x || [])[1]) > 0 ? Number(x[1]) : null, cited: !!(x || [])[2] })).filter(x => x.id && notList(x.id)) : null }); } }
   if (entOld.readings && pulse_basis) { pulse_basis.entity_old = { readings: entOld.readings, answers: entOld.answers };
     pulse_basis.note += ' ' + entOld.answers + ' of those pulse answers (' + entOld.readings + ' reading(s)) recorded their competitors under the earlier rule: they count for "named in" and "cited", not for share of voice.'; }
-  const weekRaw = R.filter(r => AVM.tb(r.answered)).map(r => ({ prompt_id: r.prompt_id, engine: r.engine, topic: r.topic, pulse: false, answered: true, named: AVM.named(r), cited: AVM.tb(r.cited), position: AVM.position(r), rivals: AVM.rivals(r, { keep: notList }) }));
+  const weekRaw = R.filter(r => AVM.tb(r.answered)).map(r => ({ prompt_id: r.prompt_id, engine: r.engine, topic: r.topic, pulse: false, answered: true, named: AVM.named(r), cited: AVM.tb(r.cited), position: AVM.position(r), rivals: AVM.rivals(r, { keep: (d) => notList(d) && roleOk(d) }) }));
   const rivDoms = [...new Set([...(p.configured_competitors || []), ...[...weekRaw, ...pulseRaw].flatMap(u => (u.rivals || []).map(x => x.id))].filter(k => /\./.test(String(k))).map(k => String(k).toLowerCase()))];
   // F1b + F1a (2026-10-23): two ids met in separate answers that are one business (cleartax.com / cleartax.in, a subdomain) are counted
   // as one; the configured competitors are the keys they fold into first
@@ -192,6 +203,7 @@ return plans.map(p => {
   // competitors: configured ones always; plus businesses AI names in at least 2 answers (domains, or brand names without a known website)
   const counts = new Map(); for (const u of U) for (const x of (u.rivals || [])) counts.set(x.id, (counts.get(x.id) || 0) + 1);
   const comp = [...new Set([...p.configured_competitors, ...[...counts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([d]) => d)])].slice(0, 8)
+    .filter(d => roleOk(d))   // CR17-F: a software maker never fills a competitor row
     .map(d => ({ domain: d, mentions: counts.get(d) || 0, auto: !p.configured_competitors.includes(d), named_only: !/\./.test(d) }));
   // ---- R83 (2026-10-16, re-rating defect C-7): the businesses AI recommends INSTEAD of you are never a place to "get featured".
   // `comp` above is the 8-row display table ("Who AI recommends instead"); exec 623 kept cleartax … sap there, and wafeq.com — named
@@ -205,7 +217,7 @@ return plans.map(p => {
     const sl = parts.slice(-2).join('.'); return /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil)\.[a-z]{2}$/.test(sl) ? parts.slice(-3).join('.') : sl; };
   const learned = {}; ajobs.forEach((j, i) => { if (j.site_id !== p.site_id) return; const o = aouts[i] && !aouts[i].error ? parseJ(aouts[i].output) : null; for (const a of ((o && o.answers) || [])) for (const b of ((a && a.brands) || [])) { if (/^(platform|source)$/i.test(String((b && b.role) || '').trim())) continue; const nm = String((b && b.name) || '').trim(), d = normD(b && b.domain); if (nm.length >= 3 && nm.length <= 60 && brandish(nm) && /\./.test(d) && d !== p.domain && !d.endsWith('.' + p.domain) && !p.brand_names.some(x => String(x).toLowerCase() === nm.toLowerCase())) learned[nm] = d; } });   // D19: only a name that reads like a business name is learned
   const ownReg = regD(p.domain); const rivalSet = new Set();
-  const addRival = (d) => { const x = regD(d); if (x && /\./.test(x) && x !== ownReg && kindOf(x) === 'site') rivalSet.add(x); };
+  const addRival = (d) => { const x = regD(d); if (x && /\./.test(x) && x !== ownReg && kindOf(x) === 'site' && roleOk(x)) rivalSet.add(x); };   // CR17-F: the one role
   for (const d of (p.configured_competitors || [])) addRival(d);
   for (const [d, n] of counts.entries()) if (n >= 2) addRival(d);
   for (const d of [...Object.values(p.aliases || {}), ...Object.values(learned)]) addRival(d);
@@ -470,7 +482,7 @@ return plans.map(p => {
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
       ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
       : !(prev.stats && prev.stats.entity_rule === entRuleOf())   // FX-B RB-1: F-53's entity rule
-        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (a competitor is now a business an answer names, not a heading, a price, a place or a regulator, so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
+        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (' + entRuleWhy(prev.stats && prev.stats.entity_rule) + ', so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
       : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks
@@ -765,6 +777,15 @@ return plans.map(p => {
   stats.deff = { named_rate: W2CI.headline.named_rate.deff, cited_rate: W2CI.headline.cited_rate.deff };   // the next run's clustered change test reads them
   // R-E12 (2026-10-23, REVIEW_ENGINE.md): a figure that could not be measured is stored as null, never 0 (share of voice when no business was named
   // in any answer, the named rate when no answer came back): the contract says an absent figure must not read as 0, and 0 would be compared next week
+  // CR17-F: the software makers and platforms AI names in this run's answers (CMP.role software / your_platform, or the entity rule's platform),
+  // with the answers naming each: shown apart from the competitors, never in the share of voice
+  const software_named = (() => { const by = new Map();
+    for (const r of R.filter(x => AVM.tb(x.answered))) { const seen = new Set();
+      for (const e of AIE.entitiesOf(r)) { if (!e || !e.id || seen.has(String(e.id).toLowerCase())) continue; const id = String(e.id).toLowerCase();
+        const cr = /\./.test(id) ? CMP.role(id, roleCtx) : null; const soft = cr ? ['software', 'your_platform'].includes(cr.role) : e.role === 'platform';
+        if (!soft || (cr && cr.role === 'competitor')) continue; seen.add(id);
+        const x = by.get(id) || { domain: id, name: String(e.name || id).slice(0, 60), answers: 0, role: cr ? cr.role : 'software' }; x.answers++; by.set(id, x); } }
+    return [...by.values()].sort((a, b) => b.answers - a.answers || a.domain.localeCompare(b.domain)).slice(0, 12); })();
   const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: samples, mention_rate, citation_rate, share_of_voice: H.sov == null ? null : share_of_voice, avg_rank: H.avg_position || 0,
     aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt_id: g.prompt_id, prompt: g.prompt, kind: g.kind, topic: g.topic, keyword: g.keyword, target_status: g.target_status || '', page_url: g.page_url || '', competitors: g.competitors, sources: g.sources, volume: g.volume, stage: g.stage, cluster: g.cluster, fanout: g.fanout, cited_urls: g.cited_urls, engines: g.engines }))), market_json: market ? J(market) : '',
     market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(exec_cost + ((p.chunk && p.chunk.going && p.spent_before) ? Number(p.spent_before.dfs) || 0 : 0)).toFixed(4),   // G6: the whole run, every execution of it
@@ -773,6 +794,7 @@ return plans.map(p => {
     index_sov: index && index.sov != null ? index.sov : null, ai_impressions: ai_impressions || null, perception_json: J(perception), traffic_json: traffic ? J(traffic) : '', access_json: acc ? J({ checked_at: acc.checked_at, robots: acc.robots, llms_txt: acc.llms_txt, bots: acc.bots.map(b => ({ bot: b.bot, owner: b.owner, group: b.group, allowed: b.allowed_root, rule: b.rule, blocked_paths: b.blocked_paths })), fetch: acc.fetch, issues: acc.issues, ok: acc.ok }) : '',
     index_json: index ? J({ ...index, suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }) : J({ suggestions: sugg, fanout, demand: { total: demand_total, named: ai_impressions, lost: lost_demand } }), clusters_json: J(clusters),
     rival_sources_json: J(rival_store),   // wave 3 (W3-F): AI Growth reads the rival businesses AI cites from the latest row
+    software_json: J(software_named),   // CR17-F (section 196): the software makers and platforms AI names, apart from the competitors
     // G6: the segments and the panel (filled in below) and how many executions the run took
     // compact, so a year of weekly rows stays small: one array per segment (the columns are named once); the report and the callback carry the full rows
     segments_json: J({ v: 1, rule_version: AVM.RULE_VERSION, cols: ['dim', 'key', 'questions', 'n', 'k', 'cited', 'sov', 'leader', 'pulse_n', 'delta', 'significant', 'sov_answers', 'sov_self', 'sov_mentions', 'avg_position', 'position_answers', 'first_rate', 'pos_visibility', 'rate_28d', 'lo_28d', 'hi_28d', 'n_28d', 'k_28d', 'q_28d', 'deff_28d'],   // W2-E2: + the 28-day window
@@ -804,7 +826,15 @@ return plans.map(p => {
       status: old.status || 'new', first_seen: old.first_seen || now, last_seen: now, won_at: old.won_at || '', outreach_subject: kept.outreach_subject, outreach_body: kept.outreach_body, drafted_at: kept.drafted_at, note: (kept.superseded ? DRAFTS.reason : '') || old.note || ({ official: 'official source: ask to be listed', media: 'news site: pitch a story or expert comment', directory: 'directory / review site: get listed' }[s.kind] || ''),
       // v4.10 columns kept as stored (the Backlink Monitor scores, finds contacts and writes follow-ups for these rows)
       score: old.score === '' || old.score == null ? null : Number(old.score), origin: old.origin || 'ai_visibility', contact_email: old.contact_email || '', contact_url: old.contact_url || '', contacted_at: old.contacted_at || '',
-      followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' }; });
+      followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '', retired_at: '' }; });   // CR17-F: cited again, so not retired
+  // CR17-F (2026-11-17, client report C5, section 196): a prospect that came from an AI question the panel has since RETIRED, and was never pitched,
+  // is retired with it (retired_at set; the row and its status stay, nothing is deleted): devaicon's 25 Open edX prospects outlived their 12
+  // retired questions by three weeks. RV.retiredSource decides; the Link Builder and the app read retired_at.
+  { const PCOLS = ["site_id", "domain", "prospect_domain", "type", "rank", "spam_score", "detail", "source_url", "target_url", "status", "first_seen", "last_seen", "won_at", "outreach_subject", "outreach_body", "note", "score", "origin", "contact_email", "contact_url", "contacted_at", "followup_step", "followup_subject", "followup_body", "verified_at", "drafted_at", "retired_at"];
+    const promptsAll = (() => { try { return $('Load AI Prompts').all().map(i => i.json).filter(r => r && r.prompt); } catch (e) { return []; } })();
+    for (const old of prospects.filter(x => x.site_id === p.site_id && x.type === 'ai_source' && !prospect_rows.some(y => y.prospect_domain === x.prospect_domain))) {
+      if (!RV.retiredSource(old, promptsAll)) continue;
+      prospect_rows.push({ ...Object.fromEntries(PCOLS.map(c => [c, old[c] === undefined ? null : old[c]])), retired_at: now }); } }
   // brand names AI uses for businesses, with their website (Answer Analyst): the parser finds them next time even without a link
   // C-9: the period the headline rates were counted over, as counted — this run plus the pulse readings *AI Plan* took since the last
   // stored run (`since = previous.checked_at`), not a fixed "7 days" (exec 776 counted ONE pulse day and printed "the 7 days to …").
@@ -835,5 +865,5 @@ return plans.map(p => {
     engine_changes, min_engine_samples: MIN_ENGINE_SAMPLES, multiple_tests: { method: multiple_tests.method, alpha: multiple_tests.alpha, tests: multiple_tests.tests, threshold_p: multiple_tests.threshold_p, threshold_z: multiple_tests.threshold_z, rejected: multiple_tests.rejected, results: multiple_tests.results, note: multiple_tests.note },
       sentiment_score, accuracy_issues: fact_check === 'checked' ? issues.length : null, fact_check, index_sov: vis_row.index_sov, ai_impressions, demand_total, lost_demand },
     ci: W2CI, sov: W2.sov, sentiment: W2S, impact: W2.impact, alert_rules: W2.alert_rules, window_28d: W2.window28, measure_ms: W2CI.ms + W2.ms,   // W2-E2
-    engines, competitors: comp, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, answer_data, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
+    engines, competitors: comp, software_named, sources, rival_sources, our_pages, gone_cited, questions, gaps, undecided, clusters, fanout, perception, traffic, access: acc, index, suggestions: sugg, market, alerts, actions: actions.slice(0, 10), vis_row, answer_data, prospect_rows, cache_rows, cost_usd: exec_cost, run_cost_usd: vis_row.cost_usd, run_split, segments, panel: { ...panel_info, ids: undefined }, form_url: FORM_URL, api_url: API_URL } };
 });

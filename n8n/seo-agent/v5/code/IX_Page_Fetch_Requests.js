@@ -32,8 +32,15 @@ for (const v of inv) {
     const alt = /^alternate page with proper canonical/i.test(S((r || {}).coverage) || S(p.coverage)) || S(p.cause) === 'alternate';
     const unseen = S(p.state) === 'unknown' || /unknown to google/i.test(S((r || {}).coverage) || S(p.coverage)) || S(p.cause) === 'unknown_to_google';
     const first = linked && (alt || unseen) && S(p.state) !== 'indexed' && !(r && !notIdx(r)) && age > IX.CFG.fetch_refresh_days * IX.DAY;
-    if (first || (r ? notIdx(r) : siteFix ? age > 20 * 3600e3 : ((S(p.state) === 'not_indexed' || S(p.state) === 'excluded') && age > IX.CFG.fetch_refresh_days * IX.DAY)))
-      cands.push({ p, url, rank: first ? 0 : r ? 1 : siteFix ? 2 : 3 });
+    // CR17-C (build section 193, F3): an address Google has that the sitemap does not list is advised on only after our read shows a direct
+    // 200 (IX.direct200): read it when that read is missing or a week old; a 404 / 410 or a noindex we saw on a page Google has is read again
+    // the next day (two reads before it overrules Google)
+    const smDone = (v.sitemap || {}).complete === true;
+    const gHas = r ? !notIdx(r) : S(p.state) === 'indexed';
+    const outside = gHas && smDone && !p.in_sitemap && age > IX.CFG.fetch_refresh_days * IX.DAY;
+    const confirm = gHas && (Number(p.http_status) === 404 || Number(p.http_status) === 410 || !!S(p.noindex)) && age > 20 * 3600e3 && age < 8 * IX.DAY;
+    if (first || (r ? notIdx(r) : siteFix ? age > 20 * 3600e3 : ((S(p.state) === 'not_indexed' || S(p.state) === 'excluded') && age > IX.CFG.fetch_refresh_days * IX.DAY)) || outside || confirm)
+      cands.push({ p, url, rank: first ? 0 : (r && notIdx(r)) ? 1 : (siteFix || confirm) ? 2 : 3 });
   }
   cands.sort((a, b) => (a.rank - b.rank) || ((b.p.lane === 'new') - (a.p.lane === 'new')) || ((!!b.p.in_sitemap) - (!!a.p.in_sitemap)) || S(a.p.url).localeCompare(S(b.p.url)));
   for (const c of cands.slice(0, IX.CFG.fetch_cap)) out.push({ json: { site_id: v.site_id, url: c.url, page_url: c.p.url } });

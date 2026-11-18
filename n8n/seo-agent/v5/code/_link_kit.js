@@ -262,5 +262,115 @@ const LK = (() => {
     let src = r.sources; if (typeof src === 'string') { try { src = JSON.parse(src); } catch (e) { src = src.split(/[,\s]+/); } }
     const onlyIndex = Array.isArray(src) && src.length > 0 && src.every(x => String(x) === 'dfs');
     return AR_CHEAP_TLD.has(d.slice(dot + 1)) && AR_TOOL_WORD.test(d.slice(0, dot)) && onlyIndex && r.verify !== 'found' && !(Number(r.visits) > 0); };
-  return { text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
+  // ---- CR17-E (client report 2026-11-17, devaicon.com C4; build section 195): what a WON link is ----
+  // Live, three "links won this month" were domain collisions: a bebee.com job listing that names the client (a Search Console sample row,
+  // no address of ours, never read by us), another bebee page, and github.com/hassan1818 (a developer's profile, nofollow) matched to a
+  // github.com prospect about an Open edX theme. Nobody had been written to. The rule now, one for every path (Backlink Monitor, Link
+  // Builder, Reply Reader, the app): a link counts as WON only when (1) we contacted that site (contacted_at: our sender, or "I sent it
+  // myself" in the app), (2) our own reading found a link to the client's host on a page of that site, and (3) that page passes the junk
+  // gates below. A clean link nobody asked for is "already links to you" (the Backlinks page's business, never a link-building result);
+  // a link on a junk page is "found, low value". A won link turns lost when its ledger row is lost (two misses).
+  // Job boards and job pages: a scraped listing names the employer, nobody there adds a link (bebee "Machine Learning Engineer - DEVAICON").
+  const JOB_HOST = /(^|\.)(bebee|indeed|glassdoor|rozee|naukri|naukrigulf|bayt|monster|ziprecruiter|jooble|careerjet|simplyhired|wuzzuf|gulftalent|mustakbil|jobstreet|seek|reed|totaljobs|stepstone|dice|jobrapido|adzuna|neuvoo|careerbuilder|jobsdb|laimoon|workable|recruitee|smartrecruiters|greenhouse|lever|wellfound)\.[a-z.]+$|^(jobs|careers)\.[a-z0-9-]+\.[a-z.]+$/;
+  const JOB_PATH = /(^|\/)(jobs?|job-listings?|vacanc(?:y|ies)|careers?\/jobs?)(\/|$)/i;
+  const JOB_TITLE = /\b\d+\+?\s+[^|]{0,60}\bjobs?\b|\bjobs? in\b|\bhiring\b|\bvacanc(?:y|ies)\b|\bapply now\b|\|\s*bebee\b/i;
+  const pathOf = (u) => String(u || '').replace(/^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '');
+  const isJobBoard = (u, title) => { const h = hostOf(u) || String(u || '').toLowerCase().replace(/^www\./, '').replace(/[\/?#].*$/, ''); if (!h) return false;
+    if (JOB_HOST.test(h)) return true;
+    const path = /^[a-z][a-z0-9+.-]*:\/\//i.test(String(u || '')) ? pathOf(u) : '';
+    return (/(^|\.)linkedin\.[a-z.]+$/.test(h) && /^\/jobs(\/|$)/i.test(path)) || (JOB_PATH.test(path) && JOB_TITLE.test(String(title || ''))); };
+  // A profile on a platform (a person's or a company's own page there) or anything on a code host: the page belongs to whoever posted it,
+  // so a link there is theirs to keep, not a placement anyone won (github.com/hassan1818, linkedin.com/in/..., medium.com/@...).
+  const PROFILE = [
+    [/(^|\.)(github\.com|gitlab\.com|bitbucket\.org|sourceforge\.net)$/, /./, 'a code host'],
+    [/(^|\.)linkedin\.[a-z.]+$/, /^\/(in|pub|company|school|showcase)\//i, 'a profile'],
+    [/(^|\.)(x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|threads\.net|pinterest\.[a-z.]+|behance\.net|dribbble\.com|about\.me|linktr\.ee|producthunt\.com)$/, /^\/[^\/]+\/?$|^\/@/, 'a profile'],
+    [/(^|\.)medium\.com$/, /^\/@/, 'a profile'], [/(^|\.)youtube\.com$/, /^\/(@|channel\/|c\/|user\/)/i, 'a channel page'],
+    [/(^|\.)reddit\.com$/, /^\/(u|user)\//i, 'a profile'], [/(^|\.)quora\.com$/, /^\/profile\//i, 'a profile'], [/(^|\.)stackoverflow\.com$/, /^\/users\//i, 'a profile'],
+    [/(^|\.)crunchbase\.com$/, /^\/person\//i, 'a profile'], [/(^|\.)dev\.to$/, /^\/[^\/]+\/?$/, 'a profile'],
+  ];
+  const profilePage = (u) => { const h = hostOf(u); if (!h) return ''; const path = pathOf(u) || '/';
+    for (const [hr, pr, what] of PROFILE) if (hr.test(h) && pr.test(path)) return what + ' on ' + regDomain(h);
+    return ''; };
+  // the one junk gate for a page that links to the client (o: a ledger row or a fresh reading: ref_domain, from_url, page_title, link_type,
+  // noindex, canonical_elsewhere, sources, verify, visits; opts.farms: LK.footprints' map) -> '' or the reason in plain words
+  function junkLink(o, opts = {}) {
+    const r = o || {}; const url = String(r.from_url || r.url || ''); const d = String(r.ref_domain || refKey(hostOf(url)) || '').toLowerCase();
+    if (r.link_type === 'spam' || (opts.farms && opts.farms.has && opts.farms.has(d))) return 'a link-farm or spam page';
+    if (r.link_type === 'scraper' || isScraper(d) || isAutoReport(d, r)) return 'an automatic report page';
+    if (isGambling(d)) return 'a gambling site';
+    if (isWire(d)) return 'a press-release wire';
+    if (isInfra(d)) return 'a hosting or link-shortener page';
+    const kind = domainKind(d); if (['search', 'ai', 'mail', 'tool'].includes(kind)) return 'not a website page';
+    if (isJobBoard(url || d, r.page_title || r.title)) return 'a job listing';
+    const prof = profilePage(url); if (prof) return prof;
+    if (isSearchPage(url)) return "a search-results page of someone else's site";
+    if (r.noindex === true || r.noindex === 'true') return 'a page search engines are told not to index';
+    if (r.canonical_elsewhere === true || r.canonical_elsewhere === 'true') return 'a page that points search engines to another address';
+    return '';
+  }
+  // o: { prospect: { prospect_domain, status, contacted_at, won_at, verified_at, type, source_url }, rows: ledger rows (any site; filtered here),
+  //      site: the client's domain, reading: a fresh LK.verify result with its url (optional), contacted: true when the caller knows we wrote
+  //      (optional), won_url: the page the won link was found on (the Link Builder's checks.won.url; else the prospect's source_url), farms, now,
+  //      max_age_days (a ledger reading older than this is not evidence, default 35) }
+  // -> { state: won | already_links | low_value | lost | not_found, won, contacted, reason, url, rel, gone, before_contact }
+  // FX-LINKS (review R2, 2026-11-18):
+  //  * M1: a won link is `lost` only when the ledger row of THE WON PAGE is lost (the Backlink Monitor's own two-miss rule on that page) and it
+  //    was lost AFTER the win; a lost row of another page of the domain, or one lost before the win (the reason we pitched "restore the
+  //    link"), is not about this link. A link never confirmed by our check (a person's claim, verified_at empty) cannot be lost either.
+  //  * L3: a link the ledger saw before anyone wrote to them is `already_links` (not a result), except for a pitch to restore a link (type
+  //    lost) and for a prospect that was already won or lost (its win stands while the link is there; a lost one comes back when found).
+  //  * L1: `gone` says every ledger row of the domain to us is lost: a stale reading (older than max_age_days) is "read again", never "gone".
+  function wonCheck(o) {
+    const x = o || {}; const p = x.prospect || {}; const site = String(x.site || '').toLowerCase().replace(/^www\./, '');
+    const pd = String(p.prospect_domain || '').toLowerCase().replace(/^www\./, ''); const key = refKey(pd), reg = regDomain(pd);
+    const contacted = !!x.contacted || !!String(p.contacted_at || '').trim();
+    const now = x.now ? new Date(x.now).getTime() : Date.now(); const maxAge = (Number(x.max_age_days) || 35) * 864e5;
+    const ofSite = (r) => { const rd = String(r.ref_domain || '').toLowerCase(); const h = hostOf(r.from_url || r.url); return !!pd && (rd === key || (!!reg && regDomain(rd) === reg) || (!!h && (sameSite(h, reg) || refKey(h) === key))); };
+    const mine = (x.rows || []).filter(r => r && ofSite(r));
+    const toUs = (u) => !!site && sameSite(hostOf(u), site);
+    const fresh = (r) => { const t = Date.parse(r.verified_at || r.last_seen || ''); return !Number.isFinite(t) || now - t <= maxAge; };
+    const was = String(p.status || '');
+    const ct = Date.parse(String(p.contacted_at || ''));
+    // L3: when the ledger first saw this page link to us (a fresh reading takes the ledger row of the same page)
+    const firstSeen = (e) => { const own = Date.parse(String(e.first_seen || '')); if (Number.isFinite(own)) return own;
+      const u = normUrl(e.from_url || e.url || ''); const r = u ? mine.find(m => normUrl(m.from_url) === u && m.status !== 'lost') : null; return r ? Date.parse(String(r.first_seen || '')) : NaN; };
+    const beforeContact = (e) => { if (!Number.isFinite(ct) || ['won', 'lost'].includes(was) || String(p.type || '') === 'lost') return false; const f = firstSeen(e); return Number.isFinite(f) && f < ct - 864e5; };
+    const ev = [];
+    if (x.reading && x.reading.verify === 'found') ev.push({ ...x.reading, from_url: x.reading.url || x.reading.from_url || '', ref_domain: key, page_title: x.reading.title || x.reading.page_title || '' });
+    for (const r of mine) if (r.status !== 'lost' && r.verify === 'found' && toUs(r.to_url) && fresh(r)) ev.push(r);
+    const judged = ev.map(e => ({ e, junk: junkLink(e, { farms: x.farms }) }));
+    const clean = judged.find(j => !j.junk);
+    const toUsRows = mine.filter(r => !r.to_url || toUs(r.to_url));
+    const gone = toUsRows.length > 0 && toUsRows.every(r => r.status === 'lost');
+    if (clean) {
+      const early = contacted && beforeContact(clean.e);
+      const won = contacted && !early;
+      return { state: won ? 'won' : 'already_links', won, contacted, gone: false, before_contact: early,
+        reason: won ? 'our check found your link on their page' : early ? 'they linked to you before anyone wrote to them: not a link-building result' : 'they link to you, but nobody was written to: not a link-building result',
+        url: String(clean.e.from_url || ''), rel: String(clean.e.rel || '') };
+    }
+    if (judged.length) return { state: 'low_value', won: false, contacted, gone: false, before_contact: false, reason: 'a link to you is there, but on ' + judged[0].junk + ': it does not count', url: String(judged[0].e.from_url || ''), rel: String(judged[0].e.rel || '') };
+    if (was === 'won' && String(p.verified_at || '').trim()) {
+      const wonUrl = normUrl(x.won_url || p.source_url || ''); const wonT = Date.parse(String(p.won_at || p.verified_at || ''));
+      const lostT = (r) => Date.parse(String(r.lost_at || r.verified_at || r.last_seen || ''));
+      const about = mine.filter(r => r.status === 'lost' && (!r.to_url || toUs(r.to_url)) && (wonUrl ? normUrl(r.from_url) === wonUrl : gone) && (!Number.isFinite(wonT) || (Number.isFinite(lostT(r)) && lostT(r) > wonT)));
+      const lost = about[0];
+      if (lost) return { state: 'lost', won: false, contacted, gone, before_contact: false, reason: 'the link is gone (' + String(lost.lost_reason || 'missing twice').replace(/_/g, ' ') + ')', url: String(lost.from_url || ''), rel: '' };
+    }
+    return { state: 'not_found', won: false, contacted, gone, before_contact: false, reason: 'no link to you was found on their pages', url: '', rel: '' };
+  }
+  // FX-LINKS (review R2 M2, 2026-11-18): a note a PERSON wrote on a prospect ("who you contacted, replies, follow-up dates") is never
+  // overwritten by the engine or the app: our own line goes after it, behind "Our check: ", and replaces only our earlier line. A note that is
+  // ours (empty, or one of the sentences the engine / the app write) is replaced as before.
+  const NOTE_MARK = '\nOur check: ';
+  const SYS_NOTE = /^(not a won link:|won \d{4}-\d\d-\d\d|won again \d{4}|they link(ed)? to you|a link to you is there|no link to you|our check found|sent by you from your own e-mail|you said the link is live|not a fit \(marked|the AI question|the draft written for them earlier was withdrawn|the link builder writes to them|set aside:|found again)/i;
+  const personNote = (n) => { const t = String(n || '').split(NOTE_MARK)[0].trim(); return !!t && !SYS_NOTE.test(t); };
+  const noteWith = (old, add, max = 300) => {
+    const own = String(old || '').split(NOTE_MARK)[0].trim(); const a = String(add || '').trim();
+    if (!personNote(own)) return a.slice(0, max);
+    if (!a) return own.slice(0, Math.max(max, own.length));
+    return own.length + NOTE_MARK.length + a.length <= max ? own + NOTE_MARK + a : own.length + NOTE_MARK.length + 20 <= max ? own + NOTE_MARK + a.slice(0, max - own.length - NOTE_MARK.length) : own;   // the person's text is never cut
+  };
+  return { isJobBoard, profilePage, junkLink, wonCheck, noteWith, personNote, text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();

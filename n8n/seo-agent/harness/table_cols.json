@@ -118,7 +118,8 @@
   "followup_subject",
   "followup_body",
   "verified_at",
-  "drafted_at"
+  "drafted_at",
+  "retired_at"
  ],
  "CACHE": [
   "key",
@@ -308,7 +309,8 @@
   "imports_json",
   "exec_ids",
   "notes_json",
-  "persona_effect_json"
+  "persona_effect_json",
+  "software_json"
  ],
  "AI_IMPORTS": [
   "site_id",
@@ -355,7 +357,9 @@
   "deadline",
   "drafted_at",
   "checked_at",
-  "request_id"
+  "request_id",
+  "anchor_text",
+  "reason_code"
  ],
  "LISTINGS": [
   "site_id",
@@ -651,7 +655,9 @@
   "last_crawl",
   "mobile",
   "rich_results",
-  "inspect_error"
+  "inspect_error",
+  "moved_to",
+  "redirect_verdict"
  ],
  "CONSOLE_ALERTS": [
   "site_id",
@@ -663,7 +669,14 @@
   "received_at",
   "message_id",
   "status",
-  "source"
+  "source",
+  "condition_key",
+  "last_seen_at",
+  "count",
+  "resolved_at",
+  "resolution",
+  "ack_by",
+  "ack_at"
  ],
  "PROFILE": [
   "site_id",
@@ -931,7 +944,8 @@
   "striking",
   "run_id",
   "fetched_at",
-  "updated_at"
+  "updated_at",
+  "service"
  ],
  "KI_GAPS": [
   "gap_id",

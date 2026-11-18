@@ -1,4 +1,4 @@
-import type { CreditPack, FactAnswers, PageAnswer, PageCheck, PageLiveGrade, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
+import type { CreditPack, FactAnswers, PageAnswer, PageCheck, PageLiveGrade, RecommendationState, SiteTaskCheck, SiteTaskKind } from '@seo/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -43,6 +43,9 @@ export const users = pgTable(
     mfaTotpLastStep: integer('mfa_totp_last_step'),
     /** admin panel (0014): a platform administrator suspended the account, no sign-in by any method, every session refused */
     suspendedAt: ts('suspended_at'),
+    /** CR17-B (2026-11-17): the Terms / Privacy version agreed at sign-up (shared LEGAL_VERSION) and when; null = never asked */
+    termsVersion: text('terms_version'),
+    termsAcceptedAt: ts('terms_accepted_at'),
   },
   (t) => [uniqueIndex('users_email_idx').on(t.email), uniqueIndex('users_google_sub_idx').on(t.googleSub)],
 );
@@ -342,6 +345,11 @@ export const organizations = pgTable(
     /** the last low-balance notice sent (ok | low | critical | empty | paused) and when, so a level is announced once */
     creditAlertLevel: text('credit_alert_level').notNull().default('ok'),
     creditAlertAt: ts('credit_alert_at'),
+    /** CR17-I (2026-11-17): "when credits run low, ask for a top-up": the pack the guard asks for by itself (null = off), who switched it on,
+     *  and whether this low-balance episode may still file one (set false when it files, true again once the balance is back to ok) */
+    autoTopUpPackId: text('auto_top_up_pack_id'),
+    autoTopUpBy: uuid('auto_top_up_by').references(() => users.id, { onDelete: 'set null' }),
+    autoTopUpArmed: boolean('auto_top_up_armed').notNull().default(true),
   },
   (t) => [uniqueIndex('organizations_slug_idx').on(t.slug), uniqueIndex('organizations_hook_idx').on(t.hookToken), index('organizations_parent_idx').on(t.parentOrgId)],
 );
@@ -774,6 +782,8 @@ export const outreachSequences = pgTable(
     oooUntil: ts('ooo_until'),
     wonAt: ts('won_at'),
     error: text('error').notNull().default(''),
+    /** CR17-E (2026-11-17): sent by a person from their own mail ("I sent it myself"; no mailbox): the sender never sends in it */
+    manual: boolean('manual').notNull().default(false),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },
@@ -1444,6 +1454,8 @@ export const creditPurchaseRequests = pgTable(
     resolvedAt: ts('resolved_at'),
     resolvedBy: text('resolved_by'),
     ledgerId: uuid('ledger_id'),
+    /** CR17-I: filed by the company's automatic top-up setting (the credit guard), not by a person */
+    auto: boolean('auto').notNull().default(false),
     createdAt: created(),
   },
   (t) => [index('credit_purchase_requests_org_idx').on(t.orgId, t.createdAt), index('credit_purchase_requests_status_idx').on(t.status)],
@@ -1676,6 +1688,44 @@ export const siteTasks = pgTable(
   },
   (t) => [uniqueIndex('site_tasks_site_key_idx').on(t.siteId, t.taskKey), index('site_tasks_org_idx').on(t.orgId), index('site_tasks_due_idx').on(t.lastCheckAt)],
 );
+
+/**
+ * CR17-H (client report 2026-11-17, Q4): where each recommendation stands. One row per website and recommendation id (`rec_key`, the id
+ * recommend() always gave it), with the issue it is about (one card per page / AI question / link), its state and the evidence that set it
+ * (a check of ours: "Google indexed /about on 20 Nov"), when it was first and last reported, and a dismissal with its reason. The list
+ * itself is still computed from the website's data on every read; this table only remembers what happened to each item, so a fixed item
+ * moves to Resolved with its proof instead of vanishing. Additive: nothing else reads or writes it.
+ */
+export const recommendationStates = pgTable(
+  'recommendation_states',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id')
+      .notNull()
+      .references(() => sites.id, { onDelete: 'cascade' }),
+    recKey: text('rec_key').notNull(),
+    issueKey: text('issue_key').notNull().default(''),
+    /** open | in_progress | waiting_for_google | resolved | failed | dismissed | expired (shared/src/recommendation-rules.ts) */
+    state: text('state').$type<RecommendationState>().notNull().default('open'),
+    /** the item as last shown (title, detail, action...), so a resolved or dismissed item can still be listed after its source drops it */
+    snapshot: jsonb('snapshot').$type<Record<string, unknown>>().notNull().default({}),
+    /** the line that set the state, in plain words ('' = none) */
+    evidence: text('evidence').notNull().default(''),
+    firstSeenAt: ts('first_seen_at').defaultNow().notNull(),
+    lastSeenAt: ts('last_seen_at').defaultNow().notNull(),
+    stateAt: ts('state_at').defaultNow().notNull(),
+    dismissedReason: text('dismissed_reason').notNull().default(''),
+    dismissedNote: text('dismissed_note').notNull().default(''),
+    /** the person who dismissed or restored it (null: set by a check) */
+    byUser: uuid('by_user').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('recommendation_states_site_key_idx').on(t.siteId, t.recKey), index('recommendation_states_org_idx').on(t.orgId), index('recommendation_states_state_idx').on(t.siteId, t.state)],
+);
+export type RecommendationStateRow = typeof recommendationStates.$inferSelect;
 
 /**
  * D3: the one free keyword research of a website at setup. Keyed by the DOMAIN, not the website row: deleting a website and adding it

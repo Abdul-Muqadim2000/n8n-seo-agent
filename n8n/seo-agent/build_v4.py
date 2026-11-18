@@ -8574,8 +8574,8 @@ def _b83_checks():
             if (_n83.get('parameters') or {}).get('jsCode'):
                 _code83[_n83['name']] = _n83['parameters']['jsCode']
     _want83 = {
-        'LB Page Requests': ('B11-2', ("const wonQueue = [];", "String(y.status || '') === 'won'", "if (!key || linking.has(key)) continue;",
-                                       "wonQueue.sort((a, b) => (b.misses - a.misses) || (b.age - a.age));", "LB_WON_MAX")),
+        'LB Page Requests': ('B11-2', ("const wonQueue = [];", "const won = stx === 'won' && !!String(x.verified_at || '').trim()", "if (!key || (!lost && linking.has(key) && ledgerPages.has(LK.normUrl(url)))) continue;",   # CR17-E (section 195): only the page the ledger carries is skipped; FX-LINKS: a claim (never confirmed) and a lost link are read as `claim`
+                                       "(b.misses - a.misses) || (b.age - a.age)", "LB_WON_MAX")),
         'LB Assemble': ('B11-2', ("const won_checks = [];", "o.r.kind === 'won'", "LK.verify(x, p.domain", "won_live:", "won_unchecked:")),
         'LB Report': ('B11-2', ("const WON_STATE = {", 'Links you won', 'missing twice running', '865,000 links tracked by Linkody',
                                 "Whether the links you won are still on the page", 'won_checks: wonChecks.map')),
@@ -14158,6 +14158,85 @@ for _f191, _k191 in (('Finalize_Live_Body.js', 'kept_pct: Math.round('), ('Final
 assert 'delivered_images,' in code('Normalize Input'), 'section 191: Normalize Input does not pass delivered_images'
 log('Client reports 2026-11-16 (section 191): the live page grade says how much of the delivered text is on the live page (kept_pct), part by part why points were lost (live_parts, the longest sentences) and that the next step is on the website; on a live page a direct answer without the label, the template questions section, a flattened table and the site name in the title cost nothing; every run: an FAQ word inside a heading is no second FAQ, an image is no source; the publish check reads the article images (decorative apart, one "no images" check, borrowed images, a background hero, the images we delivered) and records the article tables')
 
+# ---------- section 193 (client report 2026-11-17, CR17-C C3: the audit score is Technical health) ----------
+# The score answered "can our crawl find faults on the site" while the app called it "Health score" and the client read it as "is the site
+# healthy in Google" (90/100 Excellent beside 15 of 23 inspected pages out of Google). Two honest numbers, as Semrush / Ahrefs / Screaming
+# Frog do: Technical health (this score) and Pages in Google (the daily Index coverage, app/shared/src/site-health.ts). The findings that
+# measure Google's decision (GSC_Audit_Findings.js marks them google_state) stay listed and ranked but no longer deduct (no double count),
+# and "All crawled pages are indexable" says what it means.
+patch('Build Site Issues', "// ===== 7. Scoring =====\n", """// CR17-C (build section 193, client report 2026-11-17 C3): a finding that measures Google's decision (google_state: not indexed, a canonical
+// Google chose, rare crawls, impressions without clicks) is listed and ranked but does not change Technical health: it is counted under Pages in
+// Google (the daily Index coverage), once. Marked here, after the merge of duplicate findings, so it also leaves the caps.
+for (const f of findings) if (f && f.google_state === true && f.scoring !== false) { f.scoring = false; f.score_note = 'Google\\'s view, counted under Pages in Google'; }
+// ===== 7. Scoring =====
+""")
+patch('Build Site Issues', "ok(pm.non_indexable === 0, 'All crawled pages are indexable');",
+      "const __gsOut193 = (((input.search_console || {}).not_indexed) || []).length; const __gsOk193 = (((input.search_console || {}).inspections) || []).filter(i => i && !i.error).length;   // CR17-C (section 193)\n"
+      "ok(pm.non_indexable === 0, 'No crawled page blocks indexing (no noindex, no canonical to another page)' + (__gsOut193 ? '. Google has still left ' + __gsOut193 + ' of the ' + __gsOk193 + ' pages it was asked about out of its index: see Indexing' : ''));")
+patch('Build Site Issues', "(isFull ? 'Full SEO health. ' : 'Technical site health only. ') + 'Each category starts at 100. ",
+      "(isFull ? 'Full SEO health. ' : 'Technical health: what our crawl can verify on the site. ') + 'Each category starts at 100. Findings that measure Google\\'s own decision (pages left out of its index, a canonical Google chose, rare crawls, impressions without clicks) are listed but counted under Pages in Google, not in this score. ")
+assert "f.google_state === true && f.scoring !== false" in code('Build Site Issues'), 'section 193: Build Site Issues does not unscore the Google-state findings'
+assert 'f.google_state = true' in code('GSC Audit Findings'), 'section 193: GSC Audit Findings does not mark the Google-state findings'
+_bsi193 = code('Build Site Issues')
+assert _bsi193.index('f.google_state === true && f.scoring !== false') < _bsi193.index('// ===== 7. Scoring ====='), 'section 193: the Google-state findings are unscored after the scoring'
+# F3 / F2: the index kit and the AI ranking kits carry the moved-page rules (inlined by build_index_coverage.py / build_monitors.py; checked here at the source)
+for _f193, _k193 in (('code/_index_kit.js', 'const direct200 = '), ('code/_index_kit.js', 'movedByUs(p, r.last_crawl, c.site)'), ('code/_index_kit.js', 'redirect_status: rs1'),
+                     ('code/Not_Crawled_Check.js', 'const movedKeys = '), ('code/_ai_rank_diag.js', 'const movedTo = '), ('code/_ai_rank_learn.js', "refused: 'moved: '"),
+                     ('code/AI_Rank_Plan.js', "S0(a.status) !== 'verified') ? 'refused'"), ('code/IX_Page_Fetch_Requests.js', 'const outside = ')):
+    assert _k193 in _rd0(_f193), 'section 193: ' + _f193 + ' lacks ' + _k193
+log('Client report 2026-11-17 (section 193, CR17-C): the audit score is Technical health (Google-state findings listed, not scored; "No crawled page blocks indexing"); Index coverage files an address our read saw redirect permanently after Google\'s last visit as moved (never "add it to the sitemap"), a 404 / noindex over Google\'s word needs two reads, "missing from the sitemap" only for a direct 200 that names itself; the audit sends redirected addresses out of the sitemap finding; AI ranking follows a moved page and never counts a page left out on purpose as not in Google, and refuses an index step whose page moved')
+
+# =============================================================================
+# 197. CLIENT REPORT 2026-11-17 (devaicon.com, package G "ladder": F4 / Q2 / Q3; private: ~/seo-agent-secrets/client-reports-2026-11-17/INV_7_ladder_ai.md).
+#      F4: every address our ladders planned for devaicon.com was at the root while its service pages live under /services/ and its articles
+#      under /insights/ (the client published 5 of 6 elsewhere and moved its own pages with 301s). One rule, LRU.folderFor (_ladder_rules.js,
+#      shared with the app's cadence mirror): a new page goes where the site puts that kind of page (where the client published our pages,
+#      where it moved its own, else its live inventory; >= 3 pages and 60%, else the root as before). Ladder Plan, Cadence Plan (addressOf, and a
+#      rung planned at the root before this rule), Content QA's page address (a page no ladder placed) and the package's "publish it at" line.
+#      Q2: the package says which questions the page was written to answer (meta.questions_answered: the AI question the run carried and the
+#      page's own question headings), shown in the app's content report.
+# =============================================================================
+patch('Build Word File', "qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],\n",
+      "qa_page_url: qa.page_url || '', ladder_links: d.ladder_links || [],\n"
+      "    qa_page_url_why: qa.page_url_why || '',   // F4 (section 197): why the page's address sits in the site's folder\n")
+patch('Blog Package', "if (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned'",
+      "if (!plannedPageUrl && d.qa_page_url && d.qa_page_url_why) extra.push('Publish it at ' + ownUrl(d.qa_page_url) + ': ' + d.qa_page_url_why);   // F4 (section 197)\n"
+      "if (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned'")
+assert 'LRU.folderFor(' in code('Ladder Plan') and "plannedUrl(p.keyword, ptype)" in code('Ladder Plan') and 'folders: planned ?' in code('Ladder Plan'), 'F4: Ladder Plan does not plan addresses in the site\'s folder'
+assert code('Content QA').count('const LRU = (() => {') == 1 and 'LRU.folderFor(prev.page_type' in code('Content QA') and 'page_url_why: pageUrlWhy' in code('Content QA'), 'F4: Content QA does not place a new page in the site\'s folder'
+assert 'questions_answered' in code('Blog Package') and "qa_page_url_why" in code('Blog Package'), 'Q2 / F4: the package does not say which questions the page answers or why its address'
+assert 'folderFor' in _rd0('code/_ladder_rules.js') and 'folderC(' in _rd0('code/Cadence_Plan.js'), 'F4: the folder rule is missing from the kit or the cadence'
+# Q3: "I published a page" settles the AI questions the page answers at once ($0, AQ.settleOnPublish; publish detection does the same in the
+# Site Tracker): a branch after the delivery chain of Publish Check (n8n runs the first connection's chain first)
+from ladder_common import AI_TARGETS_TABLE as _AIT197, AI_TARGETS_COLS as _AITC197
+_pc197 = pos('Publish Check')
+add_node('Load AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_get_all_params(_AIT197), [_pc197[0] + 220, _pc197[1] + 520], LOAD13)
+add_node('AI Target Settle (Publish)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/AI_Target_Publish_Settle.js').replace('/*__AI_QUESTION__*/', _rd0('code/_ai_question.js').rstrip('\n'))}, [_pc197[0] + 440, _pc197[1] + 520], {'onError': 'continueRegularOutput'})
+if_node('Any AI Settles (Publish)?', "{{ !$json.skip && !!$json.target_id }}", [_pc197[0] + 660, _pc197[1] + 520])
+add_node('Settle AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_update_params(_AIT197, _AITC197, [('target_id', '={{ $json.target_id }}')],
+    {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}', 'reason_code': '={{ $json.reason_code }}', 'reason_args': '={{ $json.reason_args }}', 'request_id': '={{ $json.request_id }}'}),
+    [_pc197[0] + 880, _pc197[1] + 520], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for _a197, _b197 in [('Publish Check', 'Load AI Targets (Publish)'), ('Load AI Targets (Publish)', 'AI Target Settle (Publish)'), ('AI Target Settle (Publish)', 'Any AI Settles (Publish)?')]:
+    connect(_a197, _b197)
+connect('Any AI Settles (Publish)?', 'Settle AI Targets (Publish)', 0)
+assert [t['node'] for t in conns['Publish Check']['main'][0]] == ['Published Log Row', 'Load AI Targets (Publish)'], 'CR17 Q3: the publish settle must hang after the delivery chain'
+assert code('AI Target Settle (Publish)').count('const AQ = (() => {') == 1 and code('AI Target Settle (Publish)').count('const LRU = (() => {') == 1, 'CR17 Q3: the publish settle lacks its kits'
+log('Client report 2026-11-17 (section 197, package G): a new page is planned in the folder where the website keeps that kind of page (LRU.folderFor: where the client published our pages and moved its own, else its live inventory; at least 3 pages and 60%, else the root as before) in Ladder Plan, Cadence Plan and Content QA, with the reason said; a rung planned at the root before this rule is written at the folder address; the package lists the questions the page was written to answer (meta.questions_answered)')
+
+# =============================================================================
+# 201. AN EMPTY LIST THE CLIENT SAVES IS CLEARED IN THE ENGINE TOO (FX-SERVER, review R3 M2 of CR17, 2026-11-18). Track my site stored the
+#      competitors and brand names only when the list was non-empty (Monitor Row (Track) kept the old ones on an empty list), so a client who
+#      removed every competitor or brand name in the app still had them watched by AI visibility, backlinks and the keyword checks. The app
+#      now sends `clear_lists` (exact key, after the fuzzy-matched head: no pick() word matches it) naming the lists the client emptied; a
+#      list it leaves out is kept. Harness CR17FXS1.
+# =============================================================================
+patch('Normalize Input', "    monitor_input,\n    panel_quote_dfs_usd,",
+      "    monitor_input,\n    // FX-SERVER (section 201): the lists the caller explicitly emptied (Track my site); anything else in the key is ignored\n"
+      "    clear_lists: asArray(p2.clear_lists).map(x => String(x).trim().toLowerCase()).filter(x => x === 'competitors' || x === 'brand_names').filter((x, i, a) => a.indexOf(x) === i),\n"
+      "    panel_quote_dfs_usd,")
+assert "cleared.has('competitors')" in code('Monitor Row (Track)') and "cleared.has('brand_names')" in code('Monitor Row (Track)'), 'section 201: Monitor Row (Track) does not honour clear_lists'
+log('An empty list the client saves is cleared in the engine too (section 201, FX-SERVER / review R3 M2): Track my site sends clear_lists for the competitors / brand names the client emptied, Monitor Row (Track) stores them empty; a list left out of the request keeps the stored one')
+
 # =============================================================================
 # 9. WRITE
 # =============================================================================
@@ -14665,3 +14744,224 @@ def _cr16_checks():
     assert all((c, 'string') in _lc for c in ('planned_slug', 'planned_title', 'planned_h1')), 'INV1 F4: seo_content_log.planned_* missing (sync_tables.py adds them on deploy)'
     print('INV1 (section 192): AI pages judged on their own search (no blanket exemption), AQ inlined in 6 nodes, idle settle wired, 5 new columns declared')
 _cr16_checks()
+
+# =============================================================================
+# 200. A DELETED WEBSITE TAKES ITS WHOLE ENGINE HISTORY WITH IT (CR17-B, client report 2026-11-17 C1, devaicon.com; INV_1 C1 "Kept for ever,
+#      with no deletion path: about 30 tables"). One list, ladder_common.SITE_PURGE (+ SITE_KEEP with a reason per kept table), read by:
+#        - Site Admin `delete` (build_site_tracker.py): one delete node per table, exact matches on the domain (bare and www.) or the site id
+#        - the app's backstop (app/server/src/services/enginePurge.ts) through app/shared/src/engine-purge.generated.ts, written HERE
+#        - the private backfill script ~/seo-agent-secrets/client-reports-2026-11-17/tools/repair_b_purge.py (dry run by default)
+#      Checked on the GENERATED Site Admin workflow: every purged table has its node with exactly the list's conditions, nothing else is
+#      deleted, the chain runs only behind the vouched-domain gate and ends with the site row. Harness CR17B1-CR17B4.
+# =============================================================================
+def _cr17b_purge():
+    import json as _j200
+    from ladder_common import SITE_PURGE, SITE_KEEP, SITES_TABLE, purge_registry_check
+    counts = purge_registry_check()
+    d = _j200.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Site_Admin.json'), encoding='utf-8'))
+    wf = d[0] if isinstance(d, list) else d
+    by = {n['name']: n for n in wf['nodes']}
+    conn = wf.get('connections') or {}
+    gate = 'Purge History? (Admin)'
+    assert gate in by, 'CR17-B (section 200): the Site Admin purge gate is missing'
+    want = {'domain': ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"],
+            'id': ["={{ $('Admin Action').first().json.purge_id }}"]}   # FX-SERVER (review R5 M5): never the bare site id
+    chain, cur = [], [t['node'] for t in conn[gate]['main'][0]]
+    while cur and cur[0] != 'Delete Site':
+        assert len(cur) == 1, 'CR17-B: the purge chain forks at %s' % chain[-1:]
+        chain.append(cur[0]); cur = [t['node'] for t in (conn.get(cur[0]) or {}).get('main', [[]])[0]]
+    assert cur == ['Delete Site'], 'CR17-B: the purge chain does not end at Delete Site'
+    seen = {}
+    for nm in chain:
+        p = by[nm]['parameters']
+        assert p['operation'] == 'deleteRows' and p['matchType'] == 'anyCondition' and by[nm].get('executeOnce') and by[nm].get('onError') == 'continueRegularOutput', 'CR17-B: %s is not a once-only, never-failing delete' % nm
+        seen[p['dataTableId']['value']] = sorted((c['keyName'], c['condition'], c['keyValue']) for c in p['filters']['conditions'])
+    expect = {t: sorted((c, 'eq', v) for c, k in keys for v in want[k]) for t, keys in SITE_PURGE if t != SITES_TABLE}
+    assert seen == expect, 'CR17-B: the Site Admin purge differs from ladder_common.SITE_PURGE: missing %s, extra %s, differing %s' % (
+        sorted(set(expect) - set(seen)), sorted(set(seen) - set(expect)), sorted(t for t in set(seen) & set(expect) if seen[t] != expect[t]))
+    assert not (set(seen) & set(SITE_KEEP)), 'CR17-B: a kept table is purged'
+    expr = by[gate]['parameters']['conditions']['conditions'][0]['leftValue']
+    assert "purge_domain !== ''" in expr and "action === 'delete'" in expr, 'CR17-B: the purge gate does not require a vouched domain'
+    assert 'const purge_domain = ' in by['Admin Action']['parameters']['jsCode'], 'CR17-B: Admin Action does not vouch for the purge domain'
+    # FX-SERVER (review R5 M5): every id-keyed delete of the delete path honours the app's purge_ids (Admin Action's purge_id), the site row too
+    _aa = by['Admin Action']['parameters']['jsCode']
+    assert 'const purge_id = purge_ids ? site_id : ' in _aa and 'purge_ids, purge_id,' in _aa, 'FX-SERVER (section 200): Admin Action does not turn purge_ids into purge_id'
+    for _nm in ['Delete Cycle (Admin)', 'Delete Cycle Jobs (Admin)', 'Delete KI Runs (Admin)', 'Delete KI Competitors (Admin)', 'Delete KI Keywords (Admin)', 'Delete KI Gaps (Admin)', 'Delete KI Cache (Admin)', 'Delete Site']:
+        _cs = by[_nm]['parameters']['filters']['conditions']
+        _sid = [c for c in _cs if c['keyName'] == 'site_id']
+        assert _sid and all(c['keyValue'] == "={{ $('Admin Action').first().json.purge_id }}" for c in _sid), 'FX-SERVER (section 200): %s deletes by the bare site id' % _nm
+    assert 'json.site_id' not in _j200.dumps([by[n]['parameters'] for n in chain]), 'FX-SERVER (section 200): a purge node still names the bare site id'
+    # the app's copy of the list (committed, like fit-gate.generated.js): the backstop and the account deletion read it
+    app_ts = os.path.normpath(os.path.join(HERE0, '..', '..', 'app', 'shared', 'src', 'engine-purge.generated.ts'))
+    rows = ',\n'.join('  { table: %s, keys: [%s] }' % (_j200.dumps(t), ', '.join('{ column: %s, kind: %s }' % (_j200.dumps(c), _j200.dumps(k)) for c, k in keys)) for t, keys in SITE_PURGE)
+    keep = ',\n'.join('  %s: %s' % (_j200.dumps(t), _j200.dumps(r)) for t, r in sorted(SITE_KEEP.items()))
+    src = ("// GENERATED by n8n/seo-agent/build_v4.py section 200 from ladder_common.SITE_PURGE / SITE_KEEP, do not edit by hand.\n"
+           "// CR17-B (client report 2026-11-17, C1): the engine tables that hold a website's history and how a row is known to be that website's\n"
+           "// (exact equality: 'domain' = the domain or its www. form, 'id' = the engine site id). Change the list in ladder_common.py and rebuild.\n\n"
+           "export type EnginePurgeKind = 'domain' | 'id';\n"
+           "export interface EnginePurgeTable {\n  table: string;\n  keys: readonly { column: string; kind: EnginePurgeKind }[];\n}\n\n"
+           "export const ENGINE_SITE_PURGE: readonly EnginePurgeTable[] = [\n" + rows + ",\n];\n\n"
+           "/** kept when a website is deleted, with the reason (nothing in them is one website's history) */\n"
+           "export const ENGINE_SITE_KEEP: Readonly<Record<string, string>> = {\n" + keep + ",\n};\n")
+    old = open(app_ts, encoding='utf-8').read() if os.path.exists(app_ts) else ''
+    if old != src:
+        open(app_ts, 'w', encoding='utf-8').write(src)
+    print('CR17-B (section 200): a deleted website takes %d engine tables of history with it (%d kept with a reason), %d purge nodes in Site Admin behind the vouched-domain gate; app list %s' % (
+        counts['purged'], counts['kept'], len(chain), 'written' if old != src else 'current'))
+_cr17b_purge()
+# 194. PAGE WATCH SEVERITY FOLLOWS WHAT GOOGLE DOES, ONE ALERT PER CONDITION, AND OUR ROWS FOLLOW A PAGE THAT MOVED
+#      (client report 2026-11-17, devaicon.com F5 / F10; package CR17-D). robots.txt is a state (ok / missing / unreachable / a web page)
+#      compared as parsed rules (v5/code/_page_watch.js robotsRead / robotsChange); a redirect is judged by where it lands (Watch Hop Plan +
+#      Fetch Watch Hop, PW.redirectVerdict): a permanent move to a working page of the site is Info and, seen on two reads, a confirmed move
+#      (seo_page_watch.moved_to; the watch reads the new address next, and the ladder / content log / AI question / AI readiness rows follow
+#      it: v5/code/_moves.js MV.plan, Watch Moves); one open alert per condition with last_seen_at / count, resolved with the reason when the
+#      condition is gone (PW.lifecycle), "Mark as seen" kept (ack_by / ack_at); the Rank Tracker treats an address and its permanent move as one
+#      page; the publish check names the live address when the reported one differs only in capital letters. Checked on the GENERATED files.
+# =============================================================================
+def _cr17d_checks():
+    import json as _j194
+    def _wf(f):
+        d = _j194.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        w = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in w['nodes']}, w.get('connections') or {}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    nxt = lambda cn, a, i=0: [t['node'] for t in (((cn.get(a) or {}).get('main') or [[]] * (i + 1))[i] or [])]
+    pw, pwc = _wf('SEO_Agent_Page_Watch.json')
+    for n in ('Watch Hop Plan', 'Any Watch Hops?', 'Fetch Watch Hop', 'Load Console Alerts (Watch)', 'Load Index Pages (Watch)', 'Load Content Log (Watch)', 'Load AI Targets (Watch)',
+              'Load AI Pages (Watch)', 'Watch Moves', 'Save Ladder Moves', 'Save Content Log Moves', 'Save AI Target Moves', 'Save AI Page Moves', 'Delete Old AI Page Moves'):
+        assert n in pw, 'section 194: Page Watch lacks ' + n
+    hop = pw['Fetch Watch Hop']['parameters']['options']['redirect']['redirect']
+    assert hop == {'followRedirects': True, 'maxRedirects': 5}, 'section 194: the hop must follow redirects as Google does (5 hops)'
+    assert pw['Fetch Watch Page']['parameters']['options']['redirect']['redirect'] == {'followRedirects': False}, 'section 194: the key-page fetch must NOT follow redirects'
+    assert nxt(pwc, 'Watch Read') == ['Watch Hop Plan'] and nxt(pwc, 'Any Watch Hops?', 0) == ['Fetch Watch Hop'] and nxt(pwc, 'Any Watch Hops?', 1) == ['Watch Compare'] and nxt(pwc, 'Fetch Watch Hop') == ['Watch Compare'], 'section 194: the hop is not between Watch Read and Watch Compare'
+    assert nxt(pwc, 'Save Watch Cache') == ['Watch Moves'] and 'Watch Recheck Rows' in nxt(pwc, 'Save Old AI Page Moves') + nxt(pwc, 'Delete Old AI Page Moves') + nxt(pwc, 'Any Moves (Old AI Page)?', 1), 'section 194: the moves chain does not end in Watch Recheck Rows'
+    assert "$('Watch Read')" in js(pw, 'Watch Compare') and "$('Fetch Watch Hop')" in js(pw, 'Watch Compare') and 'MV.confirm(' in js(pw, 'Watch Compare') and 'PW.redirectVerdict(' in js(pw, 'Watch Compare'), 'section 194: Watch Compare does not judge redirects or confirm moves'
+    assert 'PW.lifecycle(' in js(pw, 'Watch Alerts') and 'ack_by' in js(pw, 'Watch Alerts'), 'section 194: Watch Alerts does not run the alert lifecycle'
+    assert 'MV.plan(' in js(pw, 'Watch Moves') and 'open_alerts' in js(pw, 'Watch Plan') and 'MV.finalOf(' in js(pw, 'Watch Plan'), 'section 194: the moves are not planned, or the watch keeps reading a moved address'
+    for n in ('Watch Plan', 'Watch Compare', 'Watch Moves'):
+        assert js(pw, n).count('const MV = (() => {') == 1, 'section 194: MV not inlined once in ' + n
+    upd = pw['Save Ladder Moves']['parameters']
+    assert [c['keyName'] for c in upd['filters']['conditions']] == ['ladder_id', 'keyword', 'target_url'] and list(upd['columns']['value']) == ['target_url'], 'section 194: a ladder move must match the old address and write only target_url'
+    assert list(pw['Save Content Log Moves']['parameters']['columns']['value']) == ['published_url'], 'section 194: a content-log move writes only published_url (publish_note stays)'
+    from ladder_common import PAGE_WATCH_COLS as _pwc194, ALERTS_COLS as _alc194
+    assert ('moved_to', 'string') in _pwc194, 'section 194: seo_page_watch.moved_to missing'
+    assert [c for c, _ in _alc194][-7:] == ['condition_key', 'last_seen_at', 'count', 'resolved_at', 'resolution', 'ack_by', 'ack_at'], 'section 194: seo_console_alerts lifecycle columns missing'
+    rt, _ = _wf('SEO_Agent_Rank_Tracker.json')
+    assert 'MV.samePage(ru' in js(rt, 'Tracker Report') and 'Load Page Watch (Tracker)' in rt, 'section 194: the Rank Tracker report reads no moves'
+    main, _ = _wf('SEO_Agent_v4.json')
+    assert 'const caseHint = ' in js(main, 'Publish Check') and 'treats capital letters as different' in js(main, 'Publish Check'), 'section 194: the publish check does not name the live address of a case-variant 404'
+    # harness shims: the moves kit and the new page-watch rules, one item in, one answer out
+    open(os.path.join(OUT_CODE, '_moves.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 194): the moves kit - { fn: 'confirm' | 'plan' | 'abs', args } or { fn: 'samePage' | 'finalOf', a, b, watch } -> { r }\n"
+        + rd('code/_moves.js').rstrip('\n') +
+        "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+        "  const moves = MV.fromWatch(j.watch || []);\n"
+        "  const r = j.fn === 'samePage' ? MV.samePage(j.a, j.b, moves) : j.fn === 'finalOf' ? MV.finalOf(j.a, moves) : MV[j.fn](...(j.args || []));\n"
+        "  return { json: { r } }; });\n")
+    open(os.path.join(OUT_CODE, '_pw194.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 194): the page-watch rules of section 194 - { robots_res?, prev?, newly_blocked?, redirect?, lifecycle?, compare? }\n"
+        + rd('code/_page_watch.js').rstrip('\n') +
+        "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+        "  const rb = j.robots_res === undefined ? null : PW.robotsRead(j.robots_res);\n"
+        "  const plain = rb ? (({ blocks, ...x }) => x)(rb) : null;\n"
+        "  return { json: { robots: plain ? { ...plain, blocked: (j.block_urls || []).map(u => rb.blocks(u)) } : null,\n"
+        "    robots_change: j.prev === undefined ? null : PW.robotsChange(j.prev, rb, { newly_blocked: j.newly_blocked || [] }),\n"
+        "    verdict: j.redirect === undefined ? null : PW.redirectVerdict(j.redirect),\n"
+        "    changes: j.compare === undefined ? null : PW.compare(j.compare.prev, j.compare.now, j.compare.opts || {}),\n"
+        "    lifecycle: j.lifecycle === undefined ? null : PW.lifecycle(j.lifecycle),\n"
+        "    condition: j.condition_of === undefined ? null : PW.conditionOf(j.condition_of) } }; });\n")
+    print('CR17-D (section 194): Page Watch judges robots.txt as a state and a redirect by where it lands, keeps one alert per condition and resolves it, follows confirmed moves into 4 tables; the Rank Tracker and the publish check know a moved / case-variant address')
+_cr17d_checks()
+# CR17-FX-INDEX (review R1 of the CR17 integration; sections 193 / 194): ONE locale rule in three kits (a language / country redirect for our
+# server's location is never a move: Index coverage's readFetch, Page Watch's redirect verdict, the moves kit's confirm), checked byte for byte;
+# Index coverage counts a redirect as a move only when its target works (landsWell); the alert lifecycle never writes "Mark as seen".
+def _fx_index_checks():
+    import re as _re_fx
+    def _loc(f):
+        t = _rd0('code/' + f); m = _re_fx.search(r'  // >>> LOCALE RULE.*?  // <<< LOCALE RULE\n', t, _re_fx.S)
+        assert m, 'CR17-FX-INDEX: ' + f + ' lacks the LOCALE RULE block'
+        return m.group(0)
+    _l = [_loc(f) for f in ('_index_kit.js', '_page_watch.js', '_moves.js')]
+    assert _l[0] == _l[1] == _l[2], 'CR17-FX-INDEX: the LOCALE RULE differs between _index_kit.js, _page_watch.js and _moves.js (one rule, three copies: keep them identical)'
+    _ix = _rd0('code/_index_kit.js')
+    assert "sameSite(f.final_url) && landsWell(p.url, f)" in _ix and 'if (!landsWell(x.url, x)) return false;' in _ix, 'CR17-FX-INDEX (H1): a redirect into a broken page would be filed as a move'
+    _pwk = _rd0('code/_page_watch.js')
+    assert "ack_by: S(r.ack_by)" not in _pwk, 'CR17-FX-INDEX (L6): the alert lifecycle must not write ack_by / ack_at on rows it updates'
+    from ladder_common import PAGE_WATCH_COLS as _pwc_fx
+    assert ('redirect_verdict', 'string') in _pwc_fx, 'CR17-FX-INDEX (M1): seo_page_watch.redirect_verdict missing'
+    print('CR17-FX-INDEX: one locale rule in three kits; Index coverage files a move only onto a working page; Page Watch re-judges standing redirects, keeps a robots.txt block it could not read, re-checks moves weekly; "Mark as seen" is never overwritten')
+_fx_index_checks()
+# 198. WHAT A CLIENT READS FROM THE ENGINE (CR17-H, client report 2026-11-17 F1, devaicon.com; harness CR17H1-CR17H5).
+#      devaicon.com's Pipeline, Steps on your website and the AI growth report read "Get the page indexed in Google: 6 cell(s), expected gain
+#      0.0082 over (client time at an hour), typical 21 days": ARL.score wrote its arithmetic into `why`, AI Rank Plan merged the score over the
+#      candidate, and every reader took `why` as the client's reason. Now: ARL.score's `why` is the lever's sentence (ARL.LEVERS[].client =
+#      AIRC.WHY = the app's AI_RANK_CLIENT_WHY), the arithmetic travels as `score_note`, the candidate's own reason as `reason_note`; Growth
+#      Report reads AIRC.whyPlain (older stored lines become the sentence); a prospect note names no lever code; the research nodes write a
+#      sentence for a provider's raw answer; the site report's index action is a sentence that fits a title, with no arrow. The app renders
+#      everything through the same guard (app/shared/src/client-copy.ts). This lint fails the build if any of it comes back.
+#      Checked on the GENERATED workflows (after the sub-builds), so a kit that was not inlined fails here too.
+# =============================================================================
+def _cr17h_checks():
+    import json as _j198
+    import re as _re198
+    def _nodes(f):
+        d = _j198.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        wf = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in wf['nodes']}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    bad = []
+    for f in sorted(os.listdir(os.path.join(HERE0, 'workflows'))):
+        if not f.endswith('.json') or 'v3_original' in f:
+            continue
+        for name, nd in _nodes(f).items():
+            c = ((nd.get('parameters') or {}).get('jsCode')) or ''
+            # the arithmetic may exist only as score_note; written into `why` it is what the client read
+            if _re198.search(r"why: L\.label \+ ': ' \+ pc\.length \+ ' cell\(s\)", c):
+                bad.append('%s / %s: the AI-ranking scoring line is written into why' % (f, name))
+            if "'AI ranking placement (' + a.lever" in c:
+                bad.append('%s / %s: a prospect note carries the lever code' % (f, name))
+            if 'URL inspection → Request indexing' in c:
+                bad.append('%s / %s: an arrow in an action title' % (f, name))
+    assert not bad, 'CR17-H (section 198): ' + '; '.join(bad)
+    gro = _nodes('SEO_Agent_AI_Growth.json')
+    assert 'AIRC.whyPlain(a.why, a.lever)' in js(gro, 'Growth Report') and 'const whyPlain = ' in js(gro, 'Growth Report'), 'CR17-H (section 198): Growth Report does not read the AI-ranking reason through AIRC.whyPlain'
+    assert 'reason_note: S0(c.why)' in js(gro, 'AI Rank Plan') and 'score_note: L.label' in js(gro, 'AI Rank Plan'), 'CR17-H (section 198): AI Rank Plan lost score_note / reason_note (the arithmetic would become the reason again)'
+    main = _nodes('SEO_Agent_v4.json')
+    for n in ('Collect Research', 'Ladder Pool', 'Build Keyword Strategy'):
+        assert 'const providerError = ' in js(main, n), 'CR17-H (section 198): %s writes a provider\'s raw answer into research_failures' % n
+    print('CR17-H (section 198): AI-ranking reasons in the client\'s words (score_note apart), no lever-coded note, no provider dump, no arrow in the index action')
+_cr17h_checks()
+
+# =============================================================================
+# CR17-F (2026-11-17, client report C5, build section 196): ONE role per site (CMP.role, v5/code/_competitors.js) for every path that says
+# "competitor": the Link Builder's gate (rivalOf / competitorCheck, serp_rivals), RV (set / aiRivals / providerOf), AI visibility (AIE's entity
+# role, rule c17f; AI Metrics' rival sources and its "software and platforms AI names" list), AI Plan's auto competitors, Earned Media, and ONE
+# competitor list per site (CMP.oneList: Site settings + the Competitors page - not a competitor) read by every monitor. The app runs the same kit
+# (competitor_roles_app.py -> app/shared/src/competitor-roles.generated.js, parity test). Keyword research tags each kept search with its service.
+# =============================================================================
+def _cr17f_checks():
+    import json as _j196
+    import competitor_roles_app
+    competitor_roles_app.write_app_files(_rd0('code/_competitors.js'))
+    def _nodes(f):
+        d = _j196.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))
+        wf = d[0] if isinstance(d, list) else d
+        return {n['name']: n for n in wf['nodes']}, wf.get('connections') or {}
+    js = lambda nd, n: ((nd.get(n) or {}).get('parameters') or {}).get('jsCode') or ''
+    want = {'SEO_Agent_Link_Builder.json': ['LB Plan', 'LB Assemble'], 'SEO_Agent_AI_Visibility.json': ['AI Plan', 'AI Metrics', 'Parse AI Answers'],
+            'SEO_Agent_AI_Growth.json': ['Growth Plan', 'Earned Media'], 'SEO_Agent_Backlink_Monitor.json': ['BL Plan'], 'SEO_Agent_AI_Pulse.json': ['AI Plan']}
+    for f, names in want.items():
+        nd, _ = _nodes(f)
+        for n in names:
+            c = js(nd, n)
+            assert c, 'section 196: %s has no node %s' % (f, n)
+            assert c.count('const CMP = (() => {') == 1 and '/*__COMPETITORS__*/' not in c, 'section 196: CMP must be inlined exactly once in %s / %s' % (f, n)
+        assert 'Load KI Competitors (Mon)' in nd, 'section 196: %s does not read the Competitors page choices' % f
+    lb, _ = _nodes('SEO_Agent_Link_Builder.json')
+    assert "CMP.role(host, roleCtx).role !== 'competitor'" in js(lb, 'LB Plan') and 'function competitorCheck(' in js(lb, 'LB Assemble'), 'section 196: the Link Builder gate does not use the one role'
+    adm, aconn = _nodes('SEO_Agent_Site_Admin.json')
+    assert 'Save KI Choice (Admin)' in adm and "'not_competitor'" in js(adm, 'Admin Action') and '__KI_COMP_COLS__' not in js(adm, 'KI Competitor (Admin)'), 'section 196: Site Admin cannot store a choice outside the KI set'
+    from ladder_common import MONITORS_COLS as _mc, KI_KW_COLS as _kk, PROSPECT_COLS as _pc, AI_VIS_COLS as _av
+    assert ('not_competitors', 'string') not in _mc and ('service', 'string') in _kk and ('retired_at', 'string') in _pc and ('software_json', 'string') in _av, 'section 196: columns missing (sync_tables.py adds them on deploy)'
+    print('CR17-F (section 196): one competitor role (CMP.role) in the Link Builder, AI visibility, AI Growth, backlinks and the pulse; one competitor list (KI choices + Site settings - not a competitor); app copy written; 3 new columns declared')
+_cr17f_checks()

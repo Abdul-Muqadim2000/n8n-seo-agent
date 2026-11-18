@@ -39,6 +39,7 @@ FORM_URL, API_URL = BASE_URL + '/form/' + FORM_PATH, BASE_URL + '/webhook/seo-ke
 _NI = next(n for n in MAIN_WF['nodes'] if n['name'] == 'Normalize Input')['parameters']['jsCode']
 _COUNTRIES = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); assert _COUNTRIES, 'Normalize Input: COUNTRIES not found'
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits
+from ladder_common import KI_COMP_TABLE   # CR17-F (section 196): every monitor reads the Competitors page's choices (CMP.oneList in _monitor_sites.js)
 def src(p):   # a Code node source with the shared snippets inlined
     s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
@@ -71,6 +72,12 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__AI_RANK_CLIENT__*/', rd('code/_ai_rank_client.js').rstrip('\n'))   # FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (AIRC), inlined into Growth Report
     s = s.replace('/*__RIVALS__*/', rd('code/_rivals.js').rstrip('\n'))   # C-2 / C-8 (2026-10-17): the one rival set and the category-provider rule (inside the outreach kit, and in AI Metrics)
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
+    # CR17-F (2026-11-17, client report C5, build section 196): the one role classifier (CMP, v5/code/_competitors.js) travels with every kit that
+    # asks "is this a competitor?" (_rivals.js, _ai_entities.js, _monitor_sites.js): the FIRST placeholder in the node gets the kit, the others
+    # a comment, so a node holds exactly one `const CMP`
+    if '/*__COMPETITORS__*/' in s:
+        s = s.replace('/*__COMPETITORS__*/', rd('code/_competitors.js').rstrip('\n'), 1).replace('/*__COMPETITORS__*/', '// CMP: inlined once above (section 196)')
+        assert s.count('const CMP = (() => {') == 1, p + ': the competitor kit must be inlined exactly once (section 196)'
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
 LEDGER_WIRING = {}   # R9: workflow name -> its ledger nodes; merged into harness/ledger_wiring.json at the end (S57)
@@ -357,7 +364,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Pro
        ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS),
        ('Ensure AI Imports Table', AI_IMPORTS_TABLE, AI_IMPORTS_COLS)]   # W2-E3 (2026-10-23): the app writes it; created here too so the tracker's load never fails on a new instance
 for i, (nm, t, c) in enumerate(ens): A.ensure(nm, t, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load Link Prospects', PROSPECT_TABLE)]
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]
 from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # F2 (2026-10-23): a stopped split run's ops alerts
 SINCE = lambda days: '={{ new Date(Date.now() - ' + str(days) + ' * 864e5).toISOString() }}'
 # F2 (2026-10-23, ENGINE_AUDIT.md E12): every execution used to load the answers of EVERY site for 6.2 days and the whole prompt / visibility
@@ -611,7 +618,7 @@ Q.node('Daily Schedule', 'n8n-nodes-base.scheduleTrigger', 1.2, {'rule': {'inter
 Q.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Answers Table', AI_ANSWERS_TABLE, AI_ANSWERS_COLS), ('Ensure AI Daily Table', AI_DAILY_TABLE, AI_DAILY_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): Q.ensure(nm, t, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]
 for i, (nm, t) in enumerate(loads): vis_scoped(Q, nm, at(1 + i, 1), PULSE_VIS_DAYS, PULSE_SCOPE) if nm == 'Load AI Visibility' else Q.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 Q.node('Load AI Daily', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_DAILY_TABLE, [('checked_at', 'gte', SINCE(15))]), at(7, 1), **LOAD)
 Q.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(8, 1), **LOAD)
@@ -680,7 +687,7 @@ X = WF('SEOagentAIPilot1', 'SEO Agent — AI Repeat Pilot', 'aipilot', 1800, cod
 X.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Prompts Table', AI_PROMPTS_TABLE, AI_PROMPTS_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t, c) in enumerate(ens): X.ensure(nm, t, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE)]   # no ladders: a pilot is for a tracked website, and its questions passed the fit gate when they were stored
+loads = [('Load Sites', SITES_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # no ladders: a pilot is for a tracked website, and its questions passed the fit gate when they were stored
 for i, (nm, t) in enumerate(loads): X.load(nm, t, at(1 + i, 1))
 X.node('Load Cache (AI)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(7, 1), **LOAD)
 X.code('AI Plan', 'Pilot_Plan.js', at(8, 1)); X.iff('Pilot Confirmed?', '{{ !$json.nothing_to_do }}', at(9, 1))
@@ -709,7 +716,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Snapsh
        ('Ensure Backlinks Table', LINKS_TABLE, LINKS_COLS), ('Ensure Link Imports Table', LINK_IMPORTS_TABLE, LINK_IMPORTS_COLS), ('Ensure Link Graph Table', LINK_GRAPH_TABLE, LINK_GRAPH_COLS)]
 for i, (nm, t, c) in enumerate(ens): B.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Content Log', LOG_TABLE), ('Load Case Studies', CASE_TABLE),
-         ('Load Backlinks', LINKS_TABLE), ('Load Link Imports', LINK_IMPORTS_TABLE), ('Load Link Graph', LINK_GRAPH_TABLE), ('Load AI Visibility (BL)', AI_VIS_TABLE)]   # C-2 (2026-10-17): the AI-named rivals
+         ('Load Backlinks', LINKS_TABLE), ('Load Link Imports', LINK_IMPORTS_TABLE), ('Load Link Graph', LINK_GRAPH_TABLE), ('Load AI Visibility (BL)', AI_VIS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # C-2 (2026-10-17): the AI-named rivals
 for i, (nm, t) in enumerate(loads): vis_scoped(B, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (BL)' else B.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 B.node('Load Cache (BL Rivals)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(12, 2), **LOAD)   # C-2: the Answer Analyst's learned names (ai_brands:)
 B.code('BL Plan', 'BL_Plan.js', at(12, 1)); B.iff('Any Sites (BL)?', '{{ !$json.nothing_to_do }}', at(13, 1)); B.node('Nothing To Do (BL)', 'n8n-nodes-base.noOp', 1, {}, at(14, 2))
@@ -819,7 +826,7 @@ S = WF('SEOagentAuditSc1', 'SEO Agent — Audit Scheduler', 'audsc', 900)
 S.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
 ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Audits Table', AUDITS_TABLE, AUDITS_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
 for i, (nm, t_, c) in enumerate(ens): S.ensure(nm, t_, c, at(1 + i, 0))
-loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Audits', AUDITS_TABLE)]
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Audits', AUDITS_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]
 for i, (nm, t_) in enumerate(loads): S.load(nm, t_, at(1 + i, 1))
 S.node('Load Cache (Audit)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'sitemap'), at(6, 1), **LOAD)
 S.code('Audit Candidates', 'Audit_Candidates.js', at(7, 1)); S.iff('Any Candidates?', '{{ !$json.nothing_to_do }}', at(8, 1))
@@ -861,7 +868,7 @@ for i, (nm, t, c) in enumerate(ens): G.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE),
          ('Load Content Log', LOG_TABLE), ('Load Query History', QUERY_TABLE), ('Load AI Pages', AI_PAGES_TABLE), ('Load AI Targets', AI_TARGETS_TABLE), ('Load AI Growth', AI_GROWTH_TABLE), ('Load Link Prospects (Growth)', PROSPECT_TABLE),
          ('Load Cycles', CYCLES_TABLE),   # 2026-10-19: the website's time zone (seo_cycles) - the Wikidata check outside a cycle is monthly in ITS calendar
-         ('Load Pages (Growth)', __import__('ladder_common').PAGES_TABLE)]   # client reports 2026-11-16 (INV1 F2 / F5): the page inventory (address, title, H1), so a question is matched to a page of its own market and a page that owns its search is improved, never copied
+         ('Load Pages (Growth)', __import__('ladder_common').PAGES_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # client reports 2026-11-16 (INV1 F2 / F5): the page inventory (address, title, H1), so a question is matched to a page of its own market and a page that owns its search is improved, never copied
 for i, (nm, t) in enumerate(loads): vis_scoped(G, nm, at(1 + i, 1), 70) if nm == 'Load AI Visibility' else G.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed'): six weekly runs
 G.node('Load AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('checked_at', 'gte', SINCE(8))]), at(13, 1), **LOAD)
 G.node('Load Cache (Growth)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(14, 1), **LOAD)
@@ -988,7 +995,7 @@ ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Prospe
 for i, (nm, t, c) in enumerate(ens): L.ensure(nm, t, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Link Outreach', LINK_OUTREACH_TABLE),
          ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE),
-         ('Load Pages (LB)', PAGES_TABLE), ('Load AI Visibility (LB)', AI_VIS_TABLE), ('Load Cycles', CYCLES_TABLE)]   # 2026-10-19: the website's time zone (pitches per page per month). C-2 (2026-10-17): the AI-named rivals. R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
+         ('Load Pages (LB)', PAGES_TABLE), ('Load AI Visibility (LB)', AI_VIS_TABLE), ('Load Cycles', CYCLES_TABLE), ('Load KI Competitors (Mon)', KI_COMP_TABLE)]   # 2026-10-19: the website's time zone (pitches per page per month). C-2 (2026-10-17): the AI-named rivals. R93 (2026-10-16): our pages' real titles (seo_pages), so a target page is never named by a search query
 for i, (nm, t) in enumerate(loads): vis_scoped(L, nm, at(1 + i, 1), 60) if nm == 'Load AI Visibility (LB)' else L.load(nm, t, at(1 + i, 1))   # W2-E3: scoped (F2 'Not fixed')
 L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('period_end', 'gte', SINCE(200))]), at(13, 1), **LOAD)
 L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)
@@ -1006,11 +1013,14 @@ L.agent('Outreach Sequence Writer', 'link_outreach.txt', {'type': 'object', 'pro
     'skip': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'reason': {'type': 'string'}}, 'required': ['n']}}}, 'required': ['sequences']}, at(32, -1), max_tokens=16000)
 L.code('LB Draft QA', 'LB_Draft_QA.js', at(33, -1))   # L2 (system review 2026-10-11): the deterministic gate every drafted e-mail passes
 L.code('LB Rows', 'LB_Rows.js', at(33, 0))
-def l_rows(name, comment, key, cols, pos):
-    L.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ";\nconst rows = $('LB Rows').all().flatMap(i => i.json." + key + " || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", pos)
-l_rows('Outreach Rows', 'Qualified prospects, contacts, our page, the link text and the drafted sequences (seo_link_outreach, upsert by site + prospect + type)', 'outreach_rows', LINK_OUTREACH_COLS, at(34, 0)); L.iff('Any Outreach Rows?', '{{ !$json.skip }}', at(35, 0))
+def l_rows(name, comment, key, cols, pos, keys=None):
+    # FX-LINKS (review R2 L2, 2026-11-18): a row without its upsert keys is never written (an empty prospect_domain / type would land on a
+    # row of no prospect at all); the keys are the table's own upsert keys
+    guard = (".filter(r => " + ' && '.join("String(r." + k + " ?? '').trim() !== ''" for k in keys) + ")") if keys else ''
+    L.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ";\nconst rows = $('LB Rows').all().flatMap(i => i.json." + key + " || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])))" + guard + ";\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", pos)
+l_rows('Outreach Rows', 'Qualified prospects, contacts, our page, the link text and the drafted sequences (seo_link_outreach, upsert by site + prospect + type)', 'outreach_rows', LINK_OUTREACH_COLS, at(34, 0), keys=['site_id', 'prospect_domain', 'type']); L.iff('Any Outreach Rows?', '{{ !$json.skip }}', at(35, 0))
 L.node('Save Link Outreach', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, ['site_id', 'prospect_domain', 'type']), at(36, -1), onError='continueRegularOutput')
-l_rows('LB Prospect Rows', 'New prospects of the new kinds (journalist requests, resource pages, broken links; seo_link_prospects, upsert by site + domain + type)', 'prospect_rows', PROSPECT_COLS, at(37, 0)); L.iff('Any LB Prospects?', '{{ !$json.skip }}', at(38, 0))
+l_rows('LB Prospect Rows', 'New prospects of the new kinds (journalist requests, resource pages, broken links; seo_link_prospects, upsert by site + domain + type)', 'prospect_rows', PROSPECT_COLS, at(37, 0), keys=['site_id', 'prospect_domain', 'type']); L.iff('Any LB Prospects?', '{{ !$json.skip }}', at(38, 0))
 L.node('Save LB Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), at(39, -1), onError='continueRegularOutput')
 l_rows('Listing Rows', 'The listings checklist (seo_listings, upsert by site + listing)', 'listing_rows', LISTINGS_COLS, at(40, 0)); L.iff('Any Listing Rows?', '{{ !$json.skip }}', at(41, 0))
 L.node('Save Listings', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LISTINGS_TABLE, LISTINGS_COLS, ['site_id', 'listing_id']), at(42, -1), onError='continueRegularOutput')
@@ -1055,6 +1065,21 @@ L.run_ledger('link_builder', 'LB', 'LB Plan', ['LB Report'], at(17, 4), measured
 # and their most-linked pages. A failure inside a 200 is a week with fewer opportunities and nobody told; the whole point of
 # this workflow is the pitch it ends with, so the evidence behind one has to be evidence that was really read.
 L.in200_gate('Run LB DFS', "the competitors' links and most-linked pages this week's opportunities come from", 'pull')
+# ---- 195. CR17-E (client report 2026-11-17, devaicon.com C4d): the Link Builder reads Index coverage's own read of each address (its final
+# address after redirects and noindex), so LB Plan can offer the whole page inventory as targets and never a page that redirects. One more
+# load between 'Load Cache (LB Rivals)' and 'Load AIR Kill (LB)' (RC-7 keeps the kill switch as the last read before LB Plan); a missing
+# table (a fresh install before Index coverage ran) gives an empty read and the run goes on.
+from ladder_common import INDEX_PAGES_TABLE
+L.load('Load Index Pages (LB)', INDEX_PAGES_TABLE, at(15, 4))
+_o195 = L.C['Load Cache (LB Rivals)']['main'][0]
+assert [t['node'] for t in _o195] == ['Load AIR Kill (LB)'], '195: the Link Builder load chain changed: ' + repr(_o195)
+L.C['Load Cache (LB Rivals)']['main'][0] = [{'node': 'Load Index Pages (LB)', 'type': 'main', 'index': 0}]
+L.link('Load Index Pages (LB)', 'Load AIR Kill (LB)')
+# one government list: the outreach kit carries the fit gate's own patterns (u.ae was pitched because the kit had a shorter rule of its own)
+_gov195 = re.findall(r"/\(\^\|\\\.\)\S*?\$/", re.search(r"const fitGovHost = .*\n", rd('code/_fit_gate.js')).group(0))
+assert len(_gov195) == 4 and all(_g in rd('code/_outreach_kit.js') for _g in _gov195), '195: OK.isGov is not the fit gate government list: ' + repr([_g for _g in _gov195 if _g not in rd('code/_outreach_kit.js')])
+print('CR17-E (section 195): won = contacted + our own reading + a clean page (LK.wonCheck in Prospect Rows, LB Assemble, LB Page Requests, Reply Classify Input); one verdict per website with reason codes; inventory targets without redirects; real link text; one government list')
+assert "rowsOf('Load Index Pages (LB)')" in src('LB_Plan.js') and 'LK.wonCheck(' in src('Prospect_Rows.js') and 'LK.wonCheck(' in src('LB_Assemble.js'), '195: the won rule / the inventory read is not wired'
 L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
 **Once a week in each website's own cycle** (job 7: after the Backlink Monitor and AI Growth; *Manual Run* {CYCLE_ENTRY}) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
 **New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), **journalist digests** (HARO / Source of Sources, read from the customer's own mailbox by the web app and written here as `digest` prospects — nothing arrives until a mailbox is connected), **podcast shows that take guests** (monthly: a free podcast directory → the show's RSS feed → the show's own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** and their **most-linked pages** (DataForSEO, ≈ $0.07 + ≈ $0.02 a competitor) — the second gives the **linkable-asset ideas** (data study / free tool / template / definitive guide), each tied to the competitor pages that prove it and the referring domains they hold, and never a promise of links. **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. **Two subjects a batch** (L7): the writer gives every sequence a second subject in the other style, the drafts take the two in turn (A, B, A, B …) and the app shows the reply rate per style — with **no verdict under 30 first e-mails per variant**. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.

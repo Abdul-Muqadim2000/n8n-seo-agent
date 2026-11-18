@@ -2,7 +2,16 @@ import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   autopilotRows,
   type AutopilotRow,
+  costPerOutcome,
   creditLimitsOf,
+  creditRunways,
+  KI_RUN_MODES,
+  measuredForecast,
+  type AutoTopUpView,
+  type CreditForecast,
+  type CreditUsage,
+  type ForecastSiteInput,
+  type UsageEntry,
   creditRate,
   creditStatus,
   creditPacksSchema,
@@ -35,12 +44,12 @@ import type { CreditPurchaseRequestRow, OrgRow, PlatformSettingsRow, SiteRow } f
 import { HttpError } from '../lib/errors';
 import { sendMail } from '../lib/mailer';
 import { siteAdmin, siteRows } from '../n8n/client';
-import { addCreditEntry, creditBalance, inFlightCredits } from './admin/credits';
+import { addCreditEntry, creditBalance, inFlightCredits, USAGE_ORIGIN_SQL } from './admin/credits';
 import { settingsRow } from './admin/settings';
 import { billingContacts, listInvoices } from './invoices';
 import { execRows, tsv } from './admin/sqlRows';
 import { monitorsFromRow } from './data';
-import { chosenLadderWriting } from './cadence';
+import { chosenLadderPagesLeft, chosenLadderWriting } from './cadence';
 
 // Credits as the customer lives with them (app/docs/CREDITS.md): the balance and what can be spent now, the schedules' forecast and
 // the credits kept for them, the company's own limits, the check every analysis passes before it starts, the Credits page, and the
@@ -75,12 +84,31 @@ export function quoteCredits(estimatedUsd: number, s: Pick<PlatformSettingsRow, 
 export interface SiteForecast {
   siteId: string;
   domain: string;
-  /** provider cost a month of the website's schedules, USD (0 while a person has paused them) */
+  /** provider cost a month of the website's schedules at the price list, USD (0 while a person has paused them) */
   usd: number;
   paused: boolean;
   pausedForCredits: boolean;
   pausedReason: string | null;
+  /** CR17-I (M2): what the measured forecast needs: the schedule's rows (on / off), pages a week, the pages its ladders still have to
+   *  write (null = no ceiling, level 3) and since when it runs */
+  rows?: AutopilotRow[];
+  pagesPerWeek?: number;
+  pagesLeft?: number | null;
+  since?: string | null;
+  /** FX-SERVER (R3 M1): rows a pending settings change switches on (creditRunway only) */
+  switchedOn?: string[];
 }
+
+/** A website as the measured forecast (shared/src/credit-forecast.ts) reads it. */
+export const forecastSite = (x: SiteForecast): ForecastSiteInput => ({
+  domain: x.domain,
+  rows: x.rows ?? [],
+  pagesPerWeek: x.pagesPerWeek ?? 0,
+  pagesLeft: x.pagesLeft === undefined ? 0 : x.pagesLeft,
+  since: x.since ?? null,
+  pausedByPerson: x.paused && !x.pausedForCredits,
+  ...(x.switchedOn?.length ? { switchedOn: x.switchedOn } : {}),
+});
 
 const forecastCache = new Map<string, { at: number; sites: SiteForecast[] }>();
 const FORECAST_TTL = 10 * 60_000;
@@ -132,16 +160,24 @@ export async function creditRunway(
   ]);
   const level = (change.autopilotLevel ?? (site.autopilotLevel === 1 || site.autopilotLevel === 3 ? site.autopilotLevel : 2)) as AutopilotLevel;
   const monitors = completeMonitors({ ...(monitorsFromRow(mon[0] ?? undefined) ?? {}), ...(change.monitors ?? {}) });
-  const afterUsd = autopilotRows(monitors, change.blogsPerWeek ?? site.blogsPerWeek ?? 0, {
+  const pagesPerWeek = change.blogsPerWeek ?? site.blogsPerWeek ?? 0;
+  const afterRows = autopilotRows(monitors, pagesPerWeek, {
     level,
     writing: chosenLadderWriting(ladders, settings, level),
     ranking: ladders.some((l) => String(l.ladder_id || '').trim() !== ''),
-  }).reduce((t, r) => t + r.usd, 0);
+  });
+  const afterUsd = afterRows.reduce((t, r) => t + r.usd, 0);
   const sites = await siteForecasts(org.id, { fresh: true });
   const before = await creditState(db, org, { sites });
   const mine = sites.find((x) => x.siteId === site.id);
-  // a website paused by a person forecasts nothing, with or without the change
-  const after = mine && !(mine.paused && !mine.pausedForCredits) ? await creditState(db, org, { sites: sites.map((x) => (x.siteId === site.id ? { ...x, usd: afterUsd } : x)) }) : before;
+  // a website paused by a person forecasts nothing, with or without the change; CR17-I: the changed rows go through the same measured
+  // forecast (a row switched off forecasts nothing, pages a week move the pages). FX-SERVER (review R3 M1): a row this change switches on
+  // has no measured window yet: it is priced at its typical run when it ran before, else from the price list (`switchedOn`), never at
+  // the 0 its off weeks charged
+  const wasOn = new Set((mine?.rows ?? []).filter((r) => r.on).map((r) => r.id));
+  const switchedOn = afterRows.filter((r) => r.on && !wasOn.has(r.id)).map((r) => r.id);
+  const changed = (x: SiteForecast): SiteForecast => ({ ...x, usd: afterUsd, rows: afterRows, pagesPerWeek, pagesLeft: level === 3 ? null : chosenLadderPagesLeft(ladders, settings, level), switchedOn });
+  const after = mine && !(mine.paused && !mine.pausedForCredits) ? await creditState(db, org, { sites: sites.map((x) => (x.siteId === site.id ? changed(x) : x)) }) : before;
   return { enforced: true, available: before.available, dailyBefore: before.dailyBurn, dailyAfter: after.dailyBurn };
 }
 
@@ -154,15 +190,31 @@ export async function siteForecasts(orgId: string, opts: { fresh?: boolean } = {
     sites.map(async (s): Promise<SiteForecast> => {
       const pausedByPerson = s.trackingStatus === 'paused' && !s.creditsPausedAt;
       let usd = 0;
+      let rows: AutopilotRow[] = [];
+      let pagesLeft: number | null = 0;
       if (!pausedByPerson) {
         const [mon, ladders, settings] = await Promise.all([
           siteRows<MonitorsRow>('monitors', s.domain, { max: 5 }).catch(() => [] as MonitorsRow[]),
           siteRows<LadderRow>('ladders', s.domain, { max: 2000 }).catch(() => [] as LadderRow[]),
           siteRows<LadderSettingsRow>('ladderSettings', s.domain, { max: 500 }).catch(() => [] as LadderSettingsRow[]),
         ]);
-        usd = Math.round(siteAutopilotRows(s, mon[0], ladders, settings).reduce((t, r) => t + r.usd, 0) * 10000) / 10000;
+        rows = siteAutopilotRows(s, mon[0], ladders, settings);
+        usd = Math.round(rows.reduce((t, r) => t + r.usd, 0) * 10000) / 10000;
+        const level = (s.autopilotLevel === 1 || s.autopilotLevel === 3 ? s.autopilotLevel : 2) as AutopilotLevel;
+        pagesLeft = level === 3 ? null : chosenLadderPagesLeft(ladders, settings, level);
       }
-      return { siteId: s.id, domain: s.domain, usd, paused: s.trackingStatus === 'paused', pausedForCredits: !!s.creditsPausedAt, pausedReason: s.creditsPausedReason ?? null };
+      return {
+        siteId: s.id,
+        domain: s.domain,
+        usd,
+        paused: s.trackingStatus === 'paused',
+        pausedForCredits: !!s.creditsPausedAt,
+        pausedReason: s.creditsPausedReason ?? null,
+        rows,
+        pagesPerWeek: s.blogsPerWeek ?? 0,
+        pagesLeft,
+        since: (s.trackingStartedAt ?? s.verifiedAt)?.toISOString() ?? null,
+      };
     }),
   );
   forecastCache.set(orgId, { at: Date.now(), sites: out });
@@ -173,14 +225,87 @@ export async function siteForecasts(orgId: string, opts: { fresh?: boolean } = {
 // What was used, split autopilot / on-demand (a usage entry's `ref.origin`; older entries: a run behind it = on-demand)
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-const ORIGIN = sql.raw(`coalesce(ref->>'origin', case when ref->>'runId' is not null then 'on_demand' else 'autopilot' end)`);
+const ORIGIN = sql.raw(USAGE_ORIGIN_SQL);
 
+/** our own team's test runs among the ledger's usage entries (shared/src/credit-forecast.ts `isOurTestEntry`), as SQL */
+const OUR_TEST = sql.raw(`(coalesce(ref->>'mode', '') in (${KI_RUN_MODES.map((m) => `'${m}'`).join(', ')}) and coalesce(ref->>'runId', '') = '')`);
+const KI_TRIAL_RUN = sql`exists (select 1 from ${schema.runs} ru where ru.id::text = ref->>'runId' and coalesce(ru.input->>'kiTrial', '') = 'true')`;
+
+/**
+ * CR17-I (client report 2026-11-17, F7): the company's credit use over a period, THE one computation of "credits used" (the Pipeline tile,
+ * its breakdown, the Credits page, the agency's client list and the admin's company view read it): every usage entry of the ledger in the
+ * period, debits and returns, split autopilot / on-demand by the entry's own `ref.origin`, by feature and by website. The feature rows add up
+ * to the total. Our team's test runs are named (`ourTests`), never hidden from the total: they were charged until they are returned.
+ */
+export async function creditUsage(q: Q, orgId: string, period: { from: Date; to?: Date }): Promise<CreditUsage> {
+  const to = period.to ?? new Date(Date.now() + 60_000);
+  const rows = await execRows<{ origin: string; mode: string; domain: string; test: boolean; used: number; n: number }>(q, sql`
+    select ${ORIGIN} as origin, coalesce(ref->>'mode', '') as mode, lower(coalesce(ref->>'domain', '')) as domain,
+      (${OUR_TEST} or ${KI_TRIAL_RUN}) as test,
+      (-sum(credits))::float as used, count(*) filter (where credits < 0)::int as n
+    from ${schema.creditLedger}
+    where org_id = ${orgId}::uuid and kind = 'usage' and created_at >= ${tsv(period.from)} and created_at < ${tsv(to)}
+    group by 1, 2, 3, 4`);
+  const sumOf = (pred: (r: (typeof rows)[number]) => boolean) => rows.filter(pred).reduce((t, r) => t + Number(r.used), 0);
+  const autopilot = Math.max(0, r2(sumOf((r) => r.origin !== 'on_demand')));
+  const onDemand = Math.max(0, r2(sumOf((r) => r.origin === 'on_demand')));
+  const features = new Map<string, BillingOverview['byFeature'][number]>();
+  const sites = new Map<string, { domain: string; autopilot: number; onDemand: number }>();
+  for (const r of rows) {
+    const origin: CreditOrigin = r.origin === 'on_demand' ? 'on_demand' : 'autopilot';
+    const label = featureLabel(r.mode);
+    const k = `${origin}:${label}`;
+    const f = features.get(k) ?? { key: k, label, origin, credits: 0, runs: 0 };
+    f.credits = r2(f.credits + Number(r.used));
+    // FX-A: our team's test runs are never counted as the company's runs
+    if (!r.test) f.runs += Number(r.n);
+    features.set(k, f);
+    const d = r.domain.replace(/^www\./, '');
+    const site = sites.get(d) ?? { domain: d, autopilot: 0, onDemand: 0 };
+    if (origin === 'on_demand') site.onDemand = r2(site.onDemand + Number(r.used));
+    else site.autopilot = r2(site.autopilot + Number(r.used));
+    sites.set(d, site);
+  }
+  return {
+    from: period.from.toISOString(),
+    to: to.toISOString(),
+    autopilot,
+    onDemand,
+    total: r2(autopilot + onDemand),
+    byFeature: [...features.values()].filter((f) => f.credits !== 0).sort((a, b) => b.credits - a.credits),
+    bySite: [...sites.values()].filter((x) => x.autopilot !== 0 || x.onDemand !== 0),
+    ourTests: r2(sumOf((r) => r.test)),
+  };
+}
+
+/** The two halves of creditUsage from `since` to now (kept for the callers that only need them). */
 export async function usageSince(q: Q, orgId: string, since: Date): Promise<{ autopilot: number; onDemand: number }> {
-  const rows = await execRows<{ origin: string; used: number }>(q, sql`
-    select ${ORIGIN} as origin, (-sum(credits))::float as used from ${schema.creditLedger}
-    where org_id = ${orgId}::uuid and kind = 'usage' and created_at >= ${tsv(since)} group by 1`);
-  const of = (o: string) => Math.max(0, r2(Number(rows.find((r) => r.origin === o)?.used ?? 0)));
-  return { autopilot: of('autopilot'), onDemand: of('on_demand') };
+  const u = await creditUsage(q, orgId, { from: since });
+  return { autopilot: u.autopilot, onDemand: u.onDemand };
+}
+
+/**
+ * CR17-I (M2): the company's usage entries since `since`, as the measured forecast and the cost per outcome read them. FX-SERVER (review R3
+ * L6): past the limit the NEWEST are kept (the 30-day forecast and the cost per outcome read those), newest first; no consumer reads order.
+ */
+export async function usageEntries(q: Q, orgId: string, since: Date): Promise<UsageEntry[]> {
+  const rows = await execRows<{ id: string; created_at: string; credits: number; origin: string; mode: string; domain: string; run_id: string | null; engine_run_id: string | null; trial: boolean }>(q, sql`
+    select id, created_at, credits, ${ORIGIN} as origin, coalesce(ref->>'mode', '') as mode, coalesce(ref->>'domain', '') as domain,
+      nullif(ref->>'runId', '') as run_id, nullif(ref->>'engineRunId', '') as engine_run_id, ${KI_TRIAL_RUN} as trial
+    from ${schema.creditLedger}
+    where org_id = ${orgId}::uuid and kind = 'usage' and credits <> 0 and created_at >= ${tsv(since)}
+    order by created_at desc limit 20000`);
+  return rows.map((r) => ({
+    id: r.id,
+    at: new Date(r.created_at).toISOString(),
+    credits: Number(r.credits),
+    origin: r.origin === 'on_demand' ? 'on_demand' : 'autopilot',
+    mode: r.mode,
+    domain: r.domain,
+    runId: r.run_id,
+    engineRunId: r.engine_run_id,
+    ...(r.trial ? { kiTrial: true } : {}),
+  }));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -205,6 +330,9 @@ export interface CreditState {
   status: CreditStatus;
   limits: CreditLimits;
   sites: SiteForecast[];
+  /** CR17-I (M2): the forecast from the ledger (the source of `forecastMonthly`) and the entries it was built from (the last 90 days) */
+  forecast: CreditForecast;
+  entries: UsageEntry[];
 }
 
 export async function creditState(q: Q, org: Pick<OrgRow, 'id' | 'creditsEnforced' | 'creditLimits'>, opts: { sites?: SiteForecast[]; now?: Date } = {}): Promise<CreditState> {
@@ -216,8 +344,11 @@ export async function creditState(q: Q, org: Pick<OrgRow, 'id' | 'creditsEnforce
   const balance = await creditBalance(q, org.id);
   const held = await inFlightCredits(q, org.id, s);
   const month = await usageSince(q, org.id, monthStartUtc(now));
-  const last30 = await usageSince(q, org.id, new Date(now.getTime() - 30 * DAY));
-  const forecastMonthly = r2(sites.reduce((t, x) => t + x.usd, 0) * rate);
+  // CR17-I (M2): the schedules' forecast and the on-demand pace from what the ledger really charged (shared/src/credit-forecast.ts); the
+  // price-list figure (`x.usd`) is only the fallback of a row with no history
+  const entries = await usageEntries(q, org.id, new Date(now.getTime() - 90 * DAY));
+  const forecast = measuredForecast({ sites: sites.map(forecastSite), entries, rate, now });
+  const forecastMonthly = forecast.autopilotMonthly;
   const start = monthStartUtc(now).getTime();
   const end = nextMonthUtc(now).getTime();
   const left = Math.max(0, (end - now.getTime()) / (end - start));
@@ -228,7 +359,7 @@ export async function creditState(q: Q, org: Pick<OrgRow, 'id' | 'creditsEnforce
   const reserved = limits.reserveForAutopilot ? r2(Math.min(autopilotNeed, Math.max(0, available))) : 0;
   let onDemandAvailable = r2(available - reserved);
   if (limits.onDemandMonthly != null) onDemandAvailable = Math.min(onDemandAvailable, r2(limits.onDemandMonthly - month.onDemand - held));
-  const dailyBurn = r2(forecastMonthly / 30 + last30.onDemand / 30);
+  const dailyBurn = creditRunways(available, forecastMonthly, forecast.onDemandMonthly).dailyWithOwn;
   const pausedForCredits = sites.some((x) => x.pausedForCredits);
   return {
     enforced: org.creditsEnforced,
@@ -246,6 +377,8 @@ export async function creditState(q: Q, org: Pick<OrgRow, 'id' | 'creditsEnforce
     status: org.creditsEnforced ? creditStatus(available, dailyBurn, pausedForCredits) : pausedForCredits ? 'paused' : 'ok',
     limits,
     sites,
+    forecast,
+    entries,
   };
 }
 
@@ -316,7 +449,7 @@ export const lotView = (l: typeof schema.creditLots.$inferSelect): CreditLot => 
   note: l.note,
 });
 
-export const requestView = (r: CreditPurchaseRequestRow): CreditPurchaseRequest => ({
+export const requestView = (r: CreditPurchaseRequestRow, granted: CreditPurchaseRequest['granted'] = null): CreditPurchaseRequest => ({
   id: r.id,
   packId: r.packId,
   credits: r.credits,
@@ -326,7 +459,19 @@ export const requestView = (r: CreditPurchaseRequestRow): CreditPurchaseRequest 
   requestedBy: r.requestedByEmail ?? null,
   createdAt: r.createdAt.toISOString(),
   resolvedAt: r.resolvedAt?.toISOString() ?? null,
+  auto: !!r.auto,
+  granted,
 });
+
+/**
+ * CR17-I: what each confirming grant really added and recorded as paid, by its ledger id. A request asked for the 2,000-credit pack was
+ * confirmed with 1,000 credits four times on production (the admin changed the pre-filled amount); the Credits page said "2,000" for each.
+ */
+export async function grantsOf(ledgerIds: string[]): Promise<Map<string, { credits: number; paidUsd: number }>> {
+  if (!ledgerIds.length) return new Map();
+  const rows = await db.select({ id: schema.creditLedger.id, credits: schema.creditLedger.credits, paidUsd: schema.creditLedger.paidUsd }).from(schema.creditLedger).where(inArray(schema.creditLedger.id, ledgerIds));
+  return new Map(rows.map((r) => [r.id, { credits: r.credits, paidUsd: r.paidUsd }]));
+}
 
 export async function billingOverview(org: OrgRow, now = new Date()): Promise<BillingOverview> {
   const s = await settingsRow();
@@ -334,27 +479,9 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
   const since = monthStartUtc(now);
   const rate = st.rate;
 
-  const perSite = await execRows<{ domain: string; used: number }>(db, sql`
-    select coalesce(ref->>'domain', '') as domain, (-sum(credits))::float as used from ${schema.creditLedger}
-    where org_id = ${org.id}::uuid and kind = 'usage' and created_at >= ${tsv(since)} and ${ORIGIN} = 'autopilot' group by 1`);
-  const usedOn = new Map(perSite.map((r) => [r.domain.toLowerCase().replace(/^www\./, ''), Math.max(0, r2(Number(r.used)))]));
-
-  // FX-A: our team's Trial runs (quoted and charged 0) never show as a feature row of the company's usage (the same mark as services/ki.ts)
-  const features = await execRows<{ mode: string; origin: string; used: number; n: number }>(db, sql`
-    select coalesce(ref->>'mode', '') as mode, ${ORIGIN} as origin, (-sum(credits))::float as used, count(*) filter (where credits < 0)::int as n
-    from ${schema.creditLedger} where org_id = ${org.id}::uuid and kind = 'usage' and created_at >= ${tsv(since)}
-      and not exists (select 1 from ${schema.runs} ru where ru.id::text = ref->>'runId' and coalesce(ru.input->>'kiTrial', '') = 'true')
-    group by 1, 2`);
-  const byFeature = new Map<string, BillingOverview['byFeature'][number]>();
-  for (const f of features) {
-    const label = featureLabel(f.mode);
-    const origin: CreditOrigin = f.origin === 'on_demand' ? 'on_demand' : 'autopilot';
-    const k = `${origin}:${label}`;
-    const cur = byFeature.get(k) ?? { key: k, label, origin, credits: 0, runs: 0 };
-    cur.credits = r2(cur.credits + Number(f.used));
-    cur.runs += Number(f.n);
-    byFeature.set(k, cur);
-  }
+  // CR17-I (F7): this month's use, the one computation (creditUsage) the Pipeline tile and the admin read too
+  const usage = await creditUsage(db, org.id, { from: since, to: new Date(now.getTime() + 60_000) });
+  const usedOn = new Map(usage.bySite.map((r) => [r.domain, Math.max(0, r.autopilot)]));
 
   const days = await execRows<{ d: string; origin: string; used: number }>(db, sql`
     select to_char(created_at at time zone 'UTC', 'YYYY-MM-DD') as d, ${ORIGIN} as origin, (-sum(credits))::float as used
@@ -382,10 +509,19 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     : null;
 
   const requests = await db.query.creditPurchaseRequests.findMany({ where: eq(schema.creditPurchaseRequests.orgId, org.id), orderBy: desc(schema.creditPurchaseRequests.createdAt), limit: 10 });
+  const granted = await grantsOf(requests.map((r) => r.ledgerId).filter((x): x is string => !!x));
   const invoices = await listInvoices(org.id);
+  // CR17-I (M2): two runways, the schedules alone and with the company's own analyses at last month's pace; the status keeps the second
+  const runways = creditRunways(st.available, st.forecastMonthly, st.forecast.onDemandMonthly);
   const runway = org.creditsEnforced ? runwayDays(st.available, st.dailyBurn) : null;
+  const packs = packsOf(s).map((p) => pricePack(p, s.creditValueUsd));
   return {
     enforced: org.creditsEnforced,
+    usage,
+    forecast: st.forecast,
+    runways,
+    costPerOutcome: costPerOutcome(st.entries, now),
+    autoTopUp: autoTopUpView(org, packs),
     balance: st.balance,
     held: st.held,
     reservedForAutopilot: st.reserved,
@@ -397,8 +533,8 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     runsOutOn: runway != null ? new Date(now.getTime() + runway * DAY).toISOString().slice(0, 10) : null,
     month: {
       month: monthKey(now),
-      autopilotUsed: st.autopilotUsed,
-      onDemandUsed: st.onDemandUsed,
+      autopilotUsed: usage.autopilot,
+      onDemandUsed: usage.onDemand,
       autopilotForecast: st.forecastMonthly,
       planMonthly: org.planMonthlyCredits > 0 ? org.planMonthlyCredits : null,
       planRenewsOn: org.planMonthlyCredits > 0 ? nextMonthUtc(now).toISOString().slice(0, 10) : null,
@@ -407,17 +543,17 @@ export async function billingOverview(org: OrgRow, now = new Date()): Promise<Bi
     sites: st.sites.map((x) => ({
       siteId: x.siteId,
       domain: x.domain,
-      forecastMonthly: r2(x.usd * rate),
+      forecastMonthly: st.forecast.sites.find((f) => f.domain === x.domain)?.monthly ?? r2(x.usd * rate),
       usedThisMonth: usedOn.get(x.domain.toLowerCase().replace(/^www\./, '')) ?? 0,
       paused: x.paused,
       pausedForCredits: x.pausedForCredits,
     })),
-    byFeature: [...byFeature.values()].filter((f) => f.credits !== 0).sort((a, b) => b.credits - a.credits),
+    byFeature: usage.byFeature,
     daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
     lots: lots.map(lotView),
     expiringSoon,
-    packs: packsOf(s).map((p) => pricePack(p, s.creditValueUsd)),
-    requests: requests.map(requestView),
+    packs,
+    requests: requests.map((r) => requestView(r, r.ledgerId ? (granted.get(r.ledgerId) ?? null) : null)),
     invoices,
     creditValueUsd: s.creditValueUsd,
     packExpiryMonths: s.packExpiryMonths,
@@ -503,22 +639,120 @@ export async function requestPack(org: OrgRow, user: { id: string; email: string
   if (!pack) throw new HttpError(400, 'Choose one of the credit packs.', 'bad_request');
   const pending = await db.query.creditPurchaseRequests.findMany({ where: and(eq(schema.creditPurchaseRequests.orgId, org.id), eq(schema.creditPurchaseRequests.status, 'pending')) });
   if (pending.length >= 3) throw new HttpError(409, 'Your company already has 3 credit requests waiting. Cancel one, or wait for them to be confirmed.', 'too_many_requests');
-  const priced = pricePack(pack, s.creditValueUsd);
-  const [row] = await db
+  return requestView(await fileRequest(org, { id: user.id, email: user.email }, pack, s.creditValueUsd, note, false, log));
+}
+
+/** One "Buy credits" request written and the platform admins told: a person's, or the automatic top-up's (CR17-I). */
+async function fileRequest(org: OrgRow, by: { id: string | null; email: string | null }, pack: CreditPack, creditValueUsd: number, note: string, auto: boolean, log: Log): Promise<CreditPurchaseRequestRow> {
+  const row = await insertRequest(db, org, by, pack, creditValueUsd, note, auto);
+  tellAdmins(org, row, pack, creditValueUsd, note, auto, log);
+  return row;
+}
+
+async function insertRequest(q: Q, org: OrgRow, by: { id: string | null; email: string | null }, pack: CreditPack, creditValueUsd: number, note: string, auto: boolean): Promise<CreditPurchaseRequestRow> {
+  const priced = pricePack(pack, creditValueUsd);
+  const [row] = await q
     .insert(schema.creditPurchaseRequests)
-    .values({ orgId: org.id, orgName: org.name, packId: pack.id, credits: pack.credits, priceUsd: priced.priceUsd, note, requestedBy: user.id, requestedByEmail: user.email })
+    .values({ orgId: org.id, orgName: org.name, packId: pack.id, credits: pack.credits, priceUsd: priced.priceUsd, note, requestedBy: by.id, requestedByEmail: by.email, auto })
     .returning();
+  return row;
+}
+
+/** the platform admins' mail of a request just filed (never awaited: a mail never fails the request) */
+function tellAdmins(org: OrgRow, row: CreditPurchaseRequestRow, pack: CreditPack, creditValueUsd: number, note: string, auto: boolean, log: Log): void {
+  const priced = pricePack(pack, creditValueUsd);
+  const who = auto ? `${org.name}'s automatic top-up (credits are running low)` : (row.requestedByEmail ?? 'The customer');
   for (const to of config.platformAdmins)
     void sendMail(
       {
         to,
-        subject: `Credit request: ${org.name} asks for ${formatCredits(pack.credits)} ($${priced.priceUsd.toFixed(2)})`,
-        lines: [`${user.email} asked for the ${formatCredits(pack.credits)} pack for ${org.name} ($${priced.priceUsd.toFixed(2)}).`, ...(note ? [`Their note: ${note}`] : []), 'Invoice it, then confirm it in the admin panel: the credits are added when you confirm.'],
+        subject: `Credit request${auto ? ' (automatic)' : ''}: ${org.name} asks for ${formatCredits(pack.credits)} ($${priced.priceUsd.toFixed(2)})`,
+        lines: [`${who} asked for the ${formatCredits(pack.credits)} pack for ${org.name} ($${priced.priceUsd.toFixed(2)}).`, ...(note ? [`Note: ${note}`] : []), 'Invoice it, then confirm it in the admin panel: the credits are added when you confirm.'],
         action: { label: 'Open the admin panel', url: `${config.appUrl}/admin/companies/${org.id}` },
       },
       log,
     ).catch(() => undefined);
-  return requestView(row);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// CR17-I (client report 2026-11-17, M2): the automatic top-up request. No card payment exists (app/docs/CREDITS.md section 5), so it does
+// what a person would: when the balance is running low (the guard's low / critical / empty, or schedules paused for an empty balance) and
+// nothing is already waiting, it files ONE ordinary "Buy credits" request for the company's chosen pack, tells the platform admins and the
+// company's owners and admins, and waits for an admin's confirmation (the existing grant + invoice). Once per low episode: it is armed again
+// only after the balance is back to ok. Never an overdraft (owner decision 2026-11-17).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+export function autoTopUpView(org: Pick<OrgRow, 'autoTopUpPackId' | 'autoTopUpArmed'>, packs: ReturnType<typeof pricePack>[]): AutoTopUpView | null {
+  const p = org.autoTopUpPackId ? packs.find((x) => x.id === org.autoTopUpPackId) : null;
+  return p ? { packId: p.id, credits: p.credits, priceUsd: p.priceUsd, armed: org.autoTopUpArmed } : null;
+}
+
+/** The company's setting (owner / admin): the pack to ask for, or null to switch it off. Returns the view. */
+export async function setAutoTopUp(org: OrgRow, user: { id: string }, packId: string | null): Promise<AutoTopUpView | null> {
+  const s = await settingsRow();
+  const packs = packsOf(s).map((p) => pricePack(p, s.creditValueUsd));
+  if (packId && !packs.some((p) => p.id === packId)) throw new HttpError(400, 'Choose one of the credit packs.', 'bad_request');
+  const [row] = await db
+    .update(schema.organizations)
+    .set({ autoTopUpPackId: packId, autoTopUpBy: packId ? user.id : null, ...(packId && !org.autoTopUpPackId ? { autoTopUpArmed: true } : {}) })
+    .where(eq(schema.organizations.id, org.id))
+    .returning();
+  return autoTopUpView(row, packs);
+}
+
+const AUTO_TOP_UP_LEVELS: ReadonlySet<CreditStatus> = new Set(['low', 'critical', 'empty']);
+
+/**
+ * The guard's step for one company (after its level is known): files the automatic request when due, re-arms it when the balance is back
+ * to ok. Returns the request filed, if any.
+ */
+export async function autoTopUpStep(org: OrgRow, level: CreditStatus, balance: number, log: Log): Promise<CreditPurchaseRequestRow | null> {
+  if (!org.autoTopUpPackId || !org.creditsEnforced) return null;
+  if (level === 'ok') {
+    if (!org.autoTopUpArmed) await db.update(schema.organizations).set({ autoTopUpArmed: true }).where(eq(schema.organizations.id, org.id));
+    return null;
+  }
+  const short = AUTO_TOP_UP_LEVELS.has(level) || (level === 'paused' && balance <= 0);
+  if (!short || !org.autoTopUpArmed) return null;
+  // a request already waiting (a person's or an earlier automatic one) covers this episode: nothing more is filed
+  const waiting = await db.query.creditPurchaseRequests.findFirst({ where: and(eq(schema.creditPurchaseRequests.orgId, org.id), eq(schema.creditPurchaseRequests.status, 'pending')) });
+  if (waiting) return null;
+  const s = await settingsRow();
+  const pack = packsOf(s).find((p) => p.id === org.autoTopUpPackId);
+  if (!pack) {
+    log.warn({ org: org.id, pack: org.autoTopUpPackId }, 'automatic top-up: the chosen pack no longer exists');
+    return null;
+  }
+  // disarm and file in ONE transaction (FX-SERVER, review R3 L4): a second guard pass, or a second server, never files twice for one
+  // episode (the conditional disarm), and a failed insert leaves the company armed, so the next pass asks again
+  const NOTE = 'Asked automatically: credits are running low.';
+  const row = await db.transaction(async (tx) => {
+    const [armed] = await tx
+      .update(schema.organizations)
+      .set({ autoTopUpArmed: false })
+      .where(and(eq(schema.organizations.id, org.id), eq(schema.organizations.autoTopUpArmed, true)))
+      .returning({ id: schema.organizations.id });
+    if (!armed) return null;
+    const by = org.autoTopUpBy ? await tx.query.users.findFirst({ where: eq(schema.users.id, org.autoTopUpBy) }) : null;
+    return insertRequest(tx, org, { id: by?.id ?? null, email: by?.email ?? null }, pack, s.creditValueUsd, NOTE, true);
+  });
+  if (!row) return null;
+  tellAdmins(org, row, pack, s.creditValueUsd, NOTE, true, log);
+  const priced = pricePack(pack, s.creditValueUsd);
+  for (const to of await billingContacts(org.id))
+    await sendMail(
+      {
+        to,
+        subject: `We asked for ${formatCredits(pack.credits)} for you · ${org.name}`,
+        lines: [
+          `Your credits are running low, so we asked for the ${formatCredits(pack.credits)} pack ($${priced.priceUsd.toFixed(2)}), as your company's setting says.`,
+          'The Alaventra team sends you the payment details; the credits are added as soon as it is paid. You can cancel the request on the Credits page.',
+        ],
+        action: { label: 'Open Credits', url: `${config.appUrl}/o/${org.id}/settings/credits` },
+      },
+      log,
+    ).catch(() => false);
+  return row;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -591,7 +825,7 @@ async function setPaused(site: SiteRow, reason: 'balance' | 'autopilot_limit' | 
 
 
 const NOTICE: Record<Exclude<CreditStatus, 'ok'>, { subject: string; line: (st: CreditState) => string }> = {
-  low: { subject: 'Your credits will run out within a week', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day, so they last about ${Math.floor(st.available / st.dailyBurn)} more days.` },
+  low: { subject: 'Your credits will run out within two weeks', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day, so they last about ${Math.floor(st.available / st.dailyBurn)} more days.` },
   critical: { subject: 'Your credits run out in the next few days', line: (st) => `You have ${formatCredits(st.available)} available and use about ${formatCredits(st.dailyBurn)} a day. When they run out, your websites' automatic work pauses until credits are added.` },
   empty: { subject: 'You are out of credits', line: () => 'Your company has no credits left. New analyses are refused and your websites\' automatic work pauses until credits are added.' },
   paused: { subject: 'Automatic work is paused: out of credits', line: (st) => `The automatic work of ${st.sites.filter((x) => x.pausedForCredits).map((x) => x.domain).join(', ')} is paused. It resumes by itself as soon as credits are added; nothing is lost but the weeks it misses.` },
@@ -670,7 +904,7 @@ export async function alignExistingCompanies(log: Log, opts: { auto?: boolean; a
   });
 }
 
-type GuardResult = { granted: number; expired: number; paused: number; resumed: number; notices: number };
+type GuardResult = { granted: number; expired: number; paused: number; resumed: number; notices: number; requested: number };
 let guardInFlight: Promise<GuardResult> | null = null;
 
 /** One pass over every company that has credits to watch. Never throws; returns what it did. Single-flight: a pass asked for while
@@ -687,7 +921,7 @@ export async function creditGuardTick(log: Log, now?: Date): Promise<GuardResult
 }
 
 async function guardPass(log: Log, now: Date): Promise<GuardResult> {
-  const out = { granted: 0, expired: 0, paused: 0, resumed: 0, notices: 0 };
+  const out = { granted: 0, expired: 0, paused: 0, resumed: 0, notices: 0, requested: 0 };
   out.granted = await grantPlanCredits(now).catch((e) => (log.warn({ err: String(e) }, 'plan credits failed'), 0));
   out.expired = await expireLots(now).catch((e) => (log.warn({ err: String(e) }, 'credit expiry failed'), 0));
   const orgs = await db.query.organizations.findMany({
@@ -713,6 +947,8 @@ async function guardPass(log: Log, now: Date): Promise<GuardResult> {
       }
       if (changed) invalidateForecast(org.id);
       const level: CreditStatus = changed ? (await creditState(db, org, { now, sites: await siteForecasts(org.id, { fresh: true }) })).status : st.status;
+      // CR17-I: the automatic top-up request, once per low episode (re-armed when the balance is back to ok)
+      if (await autoTopUpStep(org, level, st.balance, log).catch((e) => (log.warn({ org: org.id, err: String(e) }, 'automatic top-up failed'), null))) out.requested++;
       const before = (org.creditAlertLevel as CreditStatus) in SEVERITY ? (org.creditAlertLevel as CreditStatus) : 'ok';
       if (level !== before) {
         await db.update(schema.organizations).set({ creditAlertLevel: level, creditAlertAt: now }).where(eq(schema.organizations.id, org.id));
@@ -742,7 +978,7 @@ export function startCreditGuard(log: Log): () => void {
     if (running) return;
     running = true;
     void creditGuardTick(log)
-      .then((r) => (r.granted || r.expired || r.paused || r.resumed || r.notices) && log.info(r, 'credit guard'))
+      .then((r) => (r.granted || r.expired || r.paused || r.resumed || r.notices || r.requested) && log.info(r, 'credit guard'))
       .catch((err) => log.warn({ err: String(err) }, 'credit guard failed'))
       .finally(() => (running = false));
   };

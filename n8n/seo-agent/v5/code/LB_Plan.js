@@ -21,6 +21,9 @@ const profiles = rowsOf('Load Profiles'), cache = rowsOf('Load Cache (Links)'), 
 // by the first Search Console query of the page — 13 of 16 targets in exec 628 had a query as their "title", so the writer's anchor hint
 // "title" meant an exact-match keyword link, against the product's own "brand / title / URL, never a keyword" rule.
 const invRows = rowsOf('Load Pages (LB)').filter(r => r.url);
+// CR17-E (client report 2026-11-17, C4d; build section 195): Index coverage's own read of each address (the final address after redirects,
+// noindex), so a pitch is never aimed at a redirect, a 404 or a noindex page, and the whole inventory can be a target
+const idxRows = rowsOf('Load Index Pages (LB)').filter(r => r.url);
 const now = new Date(); const iso = now.toISOString();
 const parse = (t, d) => { try { return JSON.parse(t || ''); } catch (e) { return d; } };
 const countryOf = (code) => { const e = Object.entries(typeof COUNTRIES === 'object' ? COUNTRIES : {}).find(([, c]) => Number(c.code) === Number(code)); return e ? { name: e[0], iso: String(e[1].iso || '').toUpperCase() } : { name: '', iso: '' }; };
@@ -47,6 +50,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     return [...String(raw || '').matchAll(/"(?:d|domain)"\s*:\s*"([^"]+)"(?:\s*,\s*"(?:p|position)"\s*:\s*(\d+))?/g)]
       .map(m => ({ host: m[1], position: Number(m[2]) || 0 }));
   };
+  // CR17-F (2026-11-17, client report C5, section 196): a site that outranks the client is a rival only when its ONE role (CMP.role, with the
+  // client's own services and choices) is `competitor`: clutch.co, edx.org, github.com, linkedin.com and the platform the client builds on rank
+  // for its searches and compete for none of its customers. The rows keep their role, so the reason a prospect is left out names it.
+  const roleCtx = { own_domain: s.domain, services: SM.services(SM.stored(s) || { domain: s.domain, canonical_host: s.domain }), not_competitors: s.settings.not_competitors || [], declared: s.settings.competitors || [] };
   const serp_rivals = (() => {
     const cut = new Date(Date.now() - 90 * 864e5).toISOString(); const byDom = new Map();
     for (const h of ranks.filter(r => normD(r.domain) === s.domain && String(r.checked_at || '') >= cut)) {
@@ -54,6 +61,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
         const host = String(x.host || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, '');
         const dom = LK.regDomain(host); const pos = Number(x.position) || 0;
         if (!host || !dom || dom === LK.regDomain(s.domain) || !/\./.test(dom)) continue;
+        if (CMP.role(host, roleCtx).role !== 'competitor') continue;   // CR17-F: never a directory, a platform, a software maker or the platform you build on
         const was = byDom.get(dom);
         if (!was || (pos > 0 && (!was.position || pos < was.position))) byDom.set(dom, { domain: dom, host, position: pos || (was && was.position) || 0, keyword: String(h.keyword || '') });
       }
@@ -64,7 +72,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // Answer Analyst's learned names) are rivals here too - pactsoft.ae ("PACT REVENU") and the vendors AI cited were qualified as prospects
   const ai_rivals = (() => { let vis = [], cacheAi = []; try { vis = $('Load AI Visibility (LB)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) {}
     try { cacheAi = $('Load Cache (LB Rivals)').all().map(i => i.json).filter(r => r && r.key); } catch (e) {}
-    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi }); })();
+    return RV.aiRivals({ site_id: s.site_id, own: s.domain, vis_rows: vis, cache_rows: cacheAi, services: roleCtx.services, not_competitors: roleCtx.not_competitors }); })();   // CR17-F: the one role
   const pr = profiles.find(x => x.site_id === s.site_id) || {};
   const lad = ladders.filter(l => normD(l.domain) === s.domain);
   const topics = [...new Set([...lad.map(l => l.head_keyword || l.keyword), ...(s.keywords || []), pr.business_type].map(x => String(x || '').trim().toLowerCase()).filter(x => x && x.split(/\s+/).some(w => !STOP.test(w))))].slice(0, 4);
@@ -105,7 +113,26 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const invTitle = new Map(invRows.filter(r => r.site_id === s.site_id || normD(r.url) === s.domain).map(r => [pathKey(r.url), String(r.title || r.h1 || '').trim()]));
   for (const n of (site_model.nav_pages || [])) { const k = pathKey(SM.siteUrl(site_model, n.path || '/')); if (n.title && !invTitle.get(k)) invTitle.set(k, String(n.title)); }
   const realTitle = (u) => invTitle.get(pathKey(ourUrl(u))) || '';
-  const addPage = (url0, title, keyword, kind, page_type) => { const url = ourUrl(url0); if (!url || pages.some(p => pathKey(p.url) === pathKey(url))) return; pages.push({ url, title: String(realTitle(url) || (kind === 'home' ? title : '') || '').slice(0, 140), keyword: String(keyword || '').slice(0, 100), kind, page_type: page_type || '',
+  // CR17-E (195): what each address of ours answers (the Site Tracker's status, then Index coverage's read: its final address after
+  // redirects and noindex). A redirect is followed to the page it lands on (or, when only "it redirects" is known, to the page of ours with
+  // the same last path segment that answers 200); a 4xx / 5xx / noindex page is never a target. Live, two pitches asked for links to
+  // addresses that 301 (/ai-automation-services-pakistan, /industries/bfsi).
+  const invMine = invRows.filter(r => r.site_id === s.site_id || normD(r.url) === s.domain);
+  const idxMine = idxRows.filter(r => r.site_id === s.site_id || normD(r.url) === s.domain);
+  const answer = new Map();
+  for (const r of invMine) answer.set(pathKey(r.url), { status: Number(r.http_status) || 0, final: '', noindex: false });
+  for (const r of idxMine) { const k = pathKey(r.url); const was = answer.get(k) || { status: 0, final: '', noindex: false }; const fin = String(r.final_url || '').trim();
+    answer.set(k, { status: Number(r.http_status) || was.status, final: fin && pathKey(fin) !== k ? fin : was.final, noindex: was.noindex || /^(true|yes|1|noindex)/i.test(String(r.noindex || '')) }); }
+  const resolve = (u, depth) => { const k = pathKey(u); const a = answer.get(k); if (!a) return { url: u, known: false };
+    if (a.final) return (depth || 0) < 3 ? resolve(ourUrl(a.final), (depth || 0) + 1) : { url: '' };
+    if (a.status >= 300 && a.status < 400) { const slug = k.split('/').pop(); const hit = [...answer.entries()].find(([k2, v]) => k2 !== k && k2.split('/').length > 1 && k2.split('/').pop() === slug && v.status === 200 && !v.final && !v.noindex);
+      return hit ? { url: ourUrl('https://' + hit[0]), known: true } : { url: '' }; }
+    if (a.status >= 400 || a.noindex) return { url: '' };
+    return { url: u, known: a.status === 200 };
+  };
+  const addPage = (url0, title, keyword, kind, page_type, needKnown) => { let url = ourUrl(url0); if (!url) return;
+    if (kind !== 'home') { const r = resolve(url); if (!r.url || (needKnown && !r.known)) return; url = r.url; }
+    if (pages.some(p => pathKey(p.url) === pathKey(url))) return; pages.push({ url, title: String(realTitle(url) || (kind === 'home' ? title : '') || '').slice(0, 140), keyword: String(keyword || '').slice(0, 100), kind, page_type: page_type || '',
     position: posFor(url, keyword), rds: rdsTo(url), kw_share: Math.round(100 * kwShare(url)) / 100, pitched: pitched(url) }); };
   addPage(home, brand, brand, 'home');
   for (const l of lad.filter(l => l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true')).sort((a, b) => (Number(b.rung) || 0) - (Number(a.rung) || 0)))
@@ -117,6 +144,17 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const navQ = (q) => /\b(com|net|org|www|ae|io|ai)\b/.test(String(q || '').toLowerCase()) && String(q || '').trim().split(/\s+/).length <= 3;
   for (const [k, n] of [...imp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)) { const qs = myQ.filter(x => pathKey(x.page) === k && String(x.period_end) === lastPeriod).sort((a, b) => (Number(b.impressions) || 0) - (Number(a.impressions) || 0));
     const q = qs.find(x => !navQ(x.query)) || qs[0]; addPage(q.page, '', q.query, 'page'); }
+  // CR17-E (195): the whole page inventory (seo_pages) and the site model's menu pages are targets too, not only the top 15 Search Console
+  // pages: devaicon's /capabilities/open-edx-services was never offered, so an "Open edX vs Moodle" article was pitched the homepage. Only a
+  // page that answered 200 itself, never a utility page (careers, legal, contact, about) or a bare listing index; service pages are `money`.
+  const UTILITY = /\/(careers?|jobs?|privacy|privacy-policy|cookies?|cookie-policy|terms|terms-of-service|legal|security|security-policy|contact|contact-us|about|about-us|thank-you|thanks|login|sign-?in|sign-?up|register|cart|checkout|search|tag|tags|category|author|sitemap)(\/|$)/i;
+  const LISTING_INDEX = /^[^\/]+\/(blog|news|insights|resources|articles)$/i;
+  const SERVICE_PATH = /\/(services?|capabilities|solutions?|products?|industries|offerings?)\//i;
+  const topQ = (r) => { const q = (parse(r.queries_json, []) || [])[0]; return q ? String(q.query || q.q || q || '').slice(0, 100) : ''; };
+  for (const r of invMine.slice(0, 200)) { const k = pathKey(r.url); if (k.split('/').length < 2 || UTILITY.test('/' + k.split('/').slice(1).join('/')) || LISTING_INDEX.test(k)) continue;
+    addPage(r.url, '', topQ(r), SERVICE_PATH.test('/' + k.split('/').slice(1).join('/') + '/') ? 'money' : 'article', '', true); }
+  for (const n of (site_model.nav_pages || [])) { const u = SM.siteUrl(site_model, n.path || '/'); const k = pathKey(u); if (k.split('/').length < 2 || UTILITY.test('/' + k.split('/').slice(1).join('/'))) continue;
+    addPage(u, '', '', SERVICE_PATH.test('/' + k.split('/').slice(1).join('/') + '/') ? 'money' : 'page', '', true); }
   const mineP = prospects.filter(p => p.site_id === s.site_id);
   const mineO = outreach.filter(o => o.site_id === s.site_id);
   return { json: { site_id: s.site_id, domain: s.domain, country: s.country || c.name || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en',
@@ -127,5 +165,5 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
     due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true,
       podcasts: due('podcasts_at'), assets: due('assets_at') && !free_only },   // L5: podcast shows (free, monthly). L6: the asset ideas read from the competitors' most-linked pages (DataForSEO domain_pages, monthly, ~$0.02 a competitor)
-    state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso, cycle, tz, month } };
+    state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new' && !String(p.retired_at || '').trim()).length, outreach_rows: mineO.length, checked_at: iso, cycle, tz, month } };
 });

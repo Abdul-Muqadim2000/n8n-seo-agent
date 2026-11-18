@@ -19,6 +19,7 @@ import { TOPIC_SOURCES } from './cycles';
 import { aiAlertRulesSchema } from './ai-trends';
 import { SERVICE_MAX_CHARS, SERVICES_MAX } from './list-entries';
 import { isPlaceholderJobTitle, PLACEHOLDER_JOB_TITLE_MESSAGE } from './profile';
+import { TERMS_REQUIRED_MESSAGE } from './legal';
 
 // ---------- building blocks ----------
 const opt = (max: number) => z.string().trim().max(max, `At most ${max} characters`).default('');
@@ -85,7 +86,11 @@ export const signupSchema = z.object({
   email: emailField,
   password: passwordField,
   inviteToken: z.string().max(200).optional(),
+  // CR17-B (2026-11-17): the person agrees to the Terms and the Privacy Policy (the server records LEGAL_VERSION and the time)
+  acceptTerms: z.boolean().refine((v) => v === true, TERMS_REQUIRED_MESSAGE),
 });
+/** CR17-B: deleting one's own account: the person types their e-mail address to confirm */
+export const deleteAccountSchema = z.object({ confirm: z.string().max(300) });
 export const loginSchema = z.object({ email: emailField, password: z.string().min(1, 'Enter your password').max(200) });
 export const forgotSchema = z.object({ email: emailField });
 export const resetSchema = z.object({ token: z.string().min(10).max(200), password: passwordField });
@@ -339,7 +344,8 @@ export const trackInput = z.object({
   keywords: stringList(20, 100),
   ga4PropertyId: z.string().trim().regex(/^\d{0,16}$/, 'Digits only').default(''),
   blogsPerWeek: z.number().int().min(0).max(3).default(0),
-  competitors: domainList(3),
+  // CR17-F: up to 5, as the one competitor list (Site settings saves up to 5; the engine keeps 5)
+  competitors: domainList(5),
   monitors: monitorSettingsSchema.default(monitorSettingsSchema.parse({})),
   /** keyword-first (§5.2 / §14.5): the website's IANA time zone (the owner's browser zone; its cycles run at 06:00 there). '' = keep the
    * website's stored zone (or the engine's) */
@@ -638,7 +644,8 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     action: z.literal('monitors'),
     // D1: patchOf: a setting left out stays as it is (with .partial() zod 4 sent every default, and no competitors cleared the engine's)
     monitors: patchOf(monitorSettingsSchema),
-    competitors: z.array(domainField).max(3, 'Up to 3 domains').optional(),
+    // CR17-F: up to 5, the one competitor list's limit (KI_MAX_COMPETITORS): Site settings shows that list, the Competitors page choices included
+    competitors: z.array(domainField).max(5, 'Up to 5 competitors').optional(),
     /** AIR (2026-11-06): the AI-ranking settings, sent only when the person changed one (never with an ordinary monitors save) */
     aiRank: aiRankSettingsSchema.optional(),
   }),
@@ -852,6 +859,11 @@ export const sequencePatchSchema = z.object({ steps: z.array(stepSchema).min(1).
 export const sequenceReplySchema = z.object({ body: z.string().trim().min(2).max(6000) });
 export const sequenceOutcomeSchema = z.object({ status: z.enum(['won', 'rejected']) });
 export const draftDismissSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30) });
+// CR17-E (client report 2026-11-17, C4a): "I sent it myself" - a pitch a person sent from their own mail (no mailbox connected). The address is
+// optional (a contact form has none); nothing is sent by the app, the follow-ups become reminders and the won check reads their page.
+export const manualSentSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30), toEmail: z.union([z.literal(''), z.string().trim().toLowerCase().email().max(200)]).default(''),
+  /** FX-LINKS (review R2 M4): the same consent tick as approve (Germany, Austria, Saudi Arabia, a named person in the UAE) */
+  consent: z.boolean().optional() });
 export const listingStatusSchema = z.object({ status: z.enum(['submitted', 'listed', 'ignored', 'missing']), note: z.string().trim().max(300).optional() });
 export const suppressionSchema = z.object({ value: z.string().trim().toLowerCase().min(3).max(200), kind: z.enum(['email', 'domain']).default('email') });
 export const linkBuilderRunSchema = z.object({ freeOnly: z.boolean().default(false) });

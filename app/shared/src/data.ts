@@ -1,5 +1,6 @@
 // Dashboard payloads: what GET /api/orgs/:org/sites/:site/data/<page> returns. The server reads the n8n Data Tables
 // (filtered to the site's domain), parses the JSON columns and shapes them here; the client only renders.
+import type { CompetitorRole } from './competitor-roles';
 import type { ModeId } from './constants';
 import type { MonitorSettings, ProfileFields } from './schemas';
 import type { Report } from './api';
@@ -10,6 +11,7 @@ import type { Lineage } from './lineage';
 import type { RecommendationScore } from './queue';
 import type { AiPanelInfo, AiSegments } from './ai-panel';
 import type { AiRankPlanData, AiRankSettings } from './ai-rank';
+import type { LinkState, LinkStatusCounts } from './link-status';
 import type { AiAnswerDetail, AiEngineRate, AiLatestExtras, AiSovPoint } from './ai-detail';
 import type { AiFilter, AiFilterDim } from './ai-trends';
 import type { FindingLive } from './technical-live';
@@ -208,6 +210,8 @@ export interface SerpCompetitor {
   position: number | null;
   /** on the website's own competitor list (seo_monitors / the site model), not just a domain that happens to rank */
   tracked: boolean;
+  /** CR17-F: the one role rule's answer for this website (competitor, listing, software maker...); absent where it was not worked out */
+  role?: CompetitorRole;
 }
 
 /** G6: the whole results-page reading of the latest check of one keyword */
@@ -275,6 +279,9 @@ export interface TrackedKeyword {
 export interface RankingsData {
   ladders: Ladder[];
   keywords: TrackedKeyword[];
+  /** CR17-I (F8): the searches checked on Google every week, by the one definition (shared/src/tracked-keywords.ts): ladder keywords +
+   *  your own list, each once. The Overview's "of N keywords tracked" and Settings read this count. Absent from older servers. */
+  tracked?: { total: number; fromLadders: number; fromYourList: number; line: string };
   /** G29: where the positions and the share of voice come from */
   lineage: Lineage[];
   /** P1 / B6 (2026-10-21): no page is written on its own before the author profile and the business facts are on file (readiness.ts);
@@ -721,7 +728,11 @@ export interface AiData {
   latest: {
     runId: string;
     engines: AiEngineStat[];
+    /** CR17-F: the businesses AI names instead of you, by the one role rule (competitorRole); a name with no website stays here */
     competitors: { domain: string; mentions: number; share: number; auto: boolean }[];
+    /** CR17-F: the software makers and platforms AI names (software_json, or an older row's names of that role): never competitors, never in
+     *  the share of voice */
+    softwareNamed: { domain: string; name: string; answers: number; role: 'software' | 'your_platform' }[];
     sources: { domain: string; citations: number; engines: string[]; topics: string[]; kind: string }[];
     pages: { url: string; citations: number; engines: string[] }[];
     gaps: { prompt: string; competitors: string[]; sources: string[]; volume: number | null; stage: string; cluster: string; fanout: string[];
@@ -804,6 +815,10 @@ export interface AiData {
   /** client report 2026-11-16 (issue 1): the pages the website has from us (content log), with the AI question the app's run carried, so every
    *  "write a page for this question" button knows a page already written for it (ai-question-action.ts) */
   pagesWritten?: import('./ai-question-action').AiWrittenPage[];
+  /** CR17 (Q3): the main keywords of the website's keyword ladders (their main pages answer every question that carries all their words) */
+  ladderHeads?: string[];
+  /** CR17 (Q3): when AI answers are next checked for the website (ISO), absent when unknown */
+  nextAiCheck?: string;
   /** AIR (2026-11-06): the AI-ranking plan of a website in `on` mode (its newest on-mode run and open actions). Absent or null: the website is
    *  off or in its private trial, or the engine has no run yet; the page then shows nothing new */
   aiRank?: AiRankPlanData | null;
@@ -1018,6 +1033,8 @@ export interface Prospect {
   followupSubject: string;
   followupBody: string;
   verifiedAt: string;
+  /** CR17-E: the one link-building state of this prospect (shared link-status.ts) */
+  linkState?: LinkState;
 }
 
 export interface BacklinksData {
@@ -1045,6 +1062,8 @@ export interface BacklinksData {
   /** v4.10: the Common Crawl graph rows written for this site (monthly job) */
   linkGraph: { release: string; checkedAt: string; counts: Record<string, number> } | null;
   prospects: Prospect[];
+  /** CR17-E (F9): the link-building counts from the one status model (shared link-status.ts): the Backlinks page and the Pipeline read these */
+  linkCounts?: LinkStatusCounts;
   /** from the latest backlink report delivered to the app */
   report: {
     receivedAt: string;
@@ -1062,6 +1081,8 @@ export interface BacklinksData {
 }
 
 export interface ConsoleAlert {
+  /** the engine's message id: what "Mark as seen" names (never shown) */
+  id: string;
   kind: string;
   severity: string;
   subject: string;
@@ -1069,6 +1090,15 @@ export interface ConsoleAlert {
   receivedAt: string;
   status: string;
   source: string;
+  /** CR17-D (build section 194): the condition seen again (same alert, not a new one) */
+  lastSeenAt: string;
+  count: number;
+  /** when and why the condition went away ('' while it lasts) */
+  resolvedAt: string;
+  resolution: string;
+  /** "Mark as seen" (the alert stays listed, it leaves the open count) */
+  ackAt: string;
+  ackBy: string;
 }
 
 export interface Checkin {
@@ -1076,7 +1106,8 @@ export interface Checkin {
   manualAction: boolean;
   securityIssue: boolean;
   notes: string;
-  notIndexedTotal: number;
+  /** CR17-D (F6): null when the check-in has no Pages export (the engine stores -1 as "not recorded"): never a count */
+  notIndexedTotal: number | null;
   indexedTotal: number | null;
   csvKind: string;
   submittedAt: string;
@@ -1090,7 +1121,9 @@ export interface AlertsData {
 
 export interface SiteSettingsData {
   tracking: TrackingConnection;
-  monitors: (MonitorSettings & { competitors: string[]; updatedAt: string }) | null;
+  /** CR17-F: `competitors` is THE competitor list (Site settings + the Competitors page choices - not a competitor), the same list the
+   *  Competitors page and every monitor read; `declaredCompetitors` the Site settings list alone; `notCompetitors` the domains marked not one */
+  monitors: (MonitorSettings & { competitors: string[]; declaredCompetitors?: string[]; notCompetitors?: string[]; updatedAt: string }) | null;
   cadence: { pagesPerWeek: number; status: string } | null;
   profile: ProfileFields | null;
   readiness: ProfileReadiness;
@@ -1137,6 +1170,52 @@ export interface Recommendation {
   /** REP 3.3 (benchmark pass 2026-10-14): what this is worth and why it sits where it does in the one queue (`queue.ts`).
    * Absent only on rows written before the queue existed; a reader must treat a missing score as "not ranked". */
   score?: RecommendationScore;
+  // ---- CR17-H (client report 2026-11-17, Q4): one card per issue, a rule per family, a state with its date and evidence.
+  // All optional: an older server sends none of them, and a reader then shows the item as it did before.
+  /** what the item is about, so two sources asking about one page / AI question / link are one card (`recommendation-rules.ts`) */
+  issueKey?: string;
+  /** the other sources that reported the same issue, in plain words ("the weekly site report", "the technical audit") */
+  alsoFrom?: string[];
+  /** the pages (or questions, links) the card covers, for its check (the folded "not in Google yet" card lists its pages here) */
+  subjects?: string[];
+  /** the family's rule: why it matters, how to do it (with its guide), how we check it is done and when */
+  rule?: RecommendationRuleView;
+  /** where it stands (absent: not tracked yet) */
+  state?: import('./recommendation-rules').RecommendationState;
+  /** when it entered that state, and the line that says why ("Google indexed /about on 20 Nov") */
+  stateAt?: string;
+  stateEvidence?: string;
+  /** when we first recommended it */
+  firstSeenAt?: string;
+  /** dismissed by the client: the reason and who */
+  dismissed?: { reason: string; note: string; at: string };
+}
+
+/** CR17-H: the parts of a family rule a card shows (the full registry is `REC_RULES` in recommendation-rules.ts). */
+export interface RecommendationRuleView {
+  why: string;
+  how: string;
+  /** the "Show me how" guide ('' = the button on the card does it) */
+  guide: string;
+  /** how we check it is done ('' = nothing checks it: it can be dismissed, never resolved) */
+  check: string;
+  /** when that check runs */
+  checkWhen: string;
+  /** "Check now" re-reads it at once */
+  canCheckNow: boolean;
+}
+
+/** CR17-H: the Recommendations page's four tabs, read from the same states as the Overview and the Pipeline. */
+export interface RecommendationBoard {
+  todo: Recommendation[];
+  waiting: Recommendation[];
+  /** resolved in the last 90 days, newest first */
+  resolved: Recommendation[];
+  /** no longer reported by their source and not confirmed fixed by a check (never called resolved), last 90 days */
+  expired: Recommendation[];
+  dismissed: Recommendation[];
+  /** the dismiss reasons the API accepts, with their words */
+  dismissReasons: { id: string; label: string }[];
 }
 
 export interface OverviewData {
@@ -1254,7 +1333,16 @@ export interface PipelineData {
     keyword: string; status: 'started' | 'writing' | 'published'; startedAt: string; publishedUrl: string; source: string;
     /** client report 2026-11-16 (issue 1): the AI question the app's run that wrote it carried (its target id and question), when known */
     aiTargetId?: string; aiQuestion?: string;
+    /** CR17 (Q3): when the page went live, when known */
+    publishedAt?: string;
   }[];
+  /** CR17 (Q3, client report 2026-11-17): the pages and the stored AI questions every AI-question decision reads, the same lists the AI
+   *  visibility page gets (shared/src/ai-question-action.ts aiQuestionPages / aiAnsweredView), so the write form never contradicts it;
+   *  absent from an older server */
+  aiPages?: import('./ai-question-action').AiWrittenPage[];
+  aiTargets?: AiTargetStat[];
+  /** CR17 (Q3): when AI answers are next checked for the website (ISO), absent when unknown */
+  nextAiCheck?: string;
   /** keyword ladders with the pages still to write */
   ladders: {
     id: string;

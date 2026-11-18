@@ -139,7 +139,9 @@ for (const g of gateSites) {
     const prevRun = latest(runsPrev, 'checked_at');
     const access = accessOf(robotsG.find(r => r.site_id === sid));
     const bingIn = bingList === null ? null : bingList.some(x => { const h = rawHost(x.Url); return (h && h === S0(gp.site_host).toLowerCase()) || h.replace(/^www\./, '') === dom; });   // the list read: in it or not; not read: null
-    const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), S0(r.state || r.coverage)])),
+    // CR17-C (build section 193, F2): each Index coverage row carries its cause, action and final address, so the diagnosis follows a moved page
+    // and never counts a page left out on purpose as "not in Google"; the L04 check closes a step whose page moved
+    const index = { google: new Map(bySite(indexAll, sid, dom).map(r => [AIRF.urlKey(r.url), { state: S0(r.state || r.coverage), cause: S0(r.cause), action: S0(r.action), final_url: S0(r.final_url) }])),
       bing: { in_account: bingIn, crawled: new Map(aiPages.filter(p => S0(p.bing_crawled_at)).map(p => [AIRF.urlKey(p.url), S0(p.bing_crawled_at)])) },
       brave: fetched && fetched.brave ? new Map(Object.entries(fetched.brave)) : null, cc_captures: fetched && fetched.cc_captures != null ? Number(fetched.cc_captures) : null, gsc };
     const brandKnown = visLast.perception_json ? !!(P(visLast.perception_json, {}) || {}).known : null;
@@ -223,7 +225,9 @@ for (const g of gateSites) {
       if (v.contact === 'email') return { ...c, contact: 'email', contact_email: v.email };
       if (v.contact === 'form') return { ...c, contact: 'form', contact_url: v.form, manual: true, factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.7) / 1e4, why: S0(c.why) + '; a contact form only: a manual step (send it yourself through ' + v.form + ')' };
       return { ...c, contact: '', factor: Math.round(1e4 * (Number(c.factor) || 1) * 0.85) / 1e4 }; });
-    const scored = vetted.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc }; }).filter(Boolean);
+    // CR17-H (F1): the score's `why` is the lever's sentence for the client; the candidate's own reason stays for the team as reason_note, the
+    // arithmetic as score_note (it was written into `why` and reached devaicon.com's Pipeline as "6 cell(s), expected gain 0.0082 ...")
+    const scored = vetted.map(c => { const sc = un('ARL.score', ARL.score(c, { priors: rpAll, values, feas, weights: null, H: AIR_CFG.H })); return sc.unavailable ? null : { ...c, ...sc, reason_note: S0(c.why) }; }).filter(Boolean);
     const openStored = storedA.filter(a => AIR_CFG.open.includes(S0(a.status)));
     const choice = ARL.choose(scored, { capacities: {}, arms, mode, open_actions: storedA.filter(a => ['shadow', ...AIR_CFG.open].includes(S0(a.status))), now: nowMs, units60, exposure }) || { chosen: [], deferred: [], refused: [] };
     // the gate on the way out: a placement pitch to a competitor's own page is refused here, whatever the kit chose (rival lists: learn only)
@@ -293,7 +297,9 @@ for (const g of gateSites) {
     // every stored action has an exit (INVARIANTS rule 4): verified / not happened from its outcome, `expired` once its window + 14 days passed
     const chosenIds = new Set(a_rows.map(r => r.action_id)); const pendingOc = [];
     for (const o of outcomes) { const a = storedById.get(S0(o.action_id)); if (!a || chosenIds.has(S0(a.action_id))) continue; const v = o.verify || {}; const oc = o.outcome || {};
-      const status = v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
+      // CR17-C (F2): verify refuses a step whose page moved (its own reason in verify_json): the step leaves the client's list, never "did not work"
+      // CR17-FX-INDEX (review R1 L4): only a step that has not happened leaves as refused; one that happened (done, its page got indexed) keeps its result
+      const status = (v.refused && !S0(a.happened_at) && S0(a.status) !== 'done' && S0(a.status) !== 'verified') ? 'refused' : v.happened === true ? (oc.due && oc.verdict && oc.verdict !== 'not_due' ? 'verified' : 'done') : v.happened === false && oc.due ? 'not_happened' : S0(a.status);
       if (status === S0(a.status) && !(v.happened === true && !S0(a.happened_at))) continue;
       const row = { ...a, status, happened_at: v.happened === true ? (S0(a.happened_at) || S0(v.at) || nowIso) : S0(a.happened_at), verify_json: J(v), outcome_json: oc.due ? J(oc) : S0(a.outcome_json),
         learned_at: !S0(a.learned_at) && typeof ARL.learnable === 'function' && ARL.learnable(o) ? nowIso : S0(a.learned_at), updated_at: nowIso };
@@ -340,7 +346,7 @@ for (const g of gateSites) {
         sinks.prospects.push({ site_id: sid, domain: dom, prospect_domain: pd, type: 'ai_source', rank: Number(o.rank) || 0, spam_score: Number(o.spam_score) || 0,
           detail: ('cited for ' + (src.questions || []).length + ' question(s) on ' + (src.engines || []).length + ' engine(s)' + ((src.rivals_named || []).length ? '; names ' + src.rivals_named.slice(0, 3).join(', ') : '')).slice(0, 500),
           source_url: url, target_url: S0(o.target_url), status: S0(o.status) || 'new', first_seen: S0(o.first_seen) || nowIso, last_seen: nowIso, won_at: S0(o.won_at), outreach_subject: S0(o.outreach_subject), outreach_body: S0(o.outreach_body),
-          note: S0(o.note) || ('AI ranking placement (' + a.lever + ')' + (a.manual ? ': a contact form only, a manual step' : '')), score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
+          note: (S0(o.note) && !/^AI ranking placement \(L\d{2}\)/.test(S0(o.note)) ? S0(o.note) : 'Found by AI ranking: AI answers cite this page' + (a.manual ? '. A contact form only, a manual step: you send it yourself' : '')),   /* CR17-H (F1): no lever code in a note the client reads (an old note is rewritten) */ score: Math.max(0, Math.min(100, Math.round(100 * (Number((a.expected || {}).p) || Number(a.p_hat) || 0)))), origin: 'ai_rank',
           contact_email: S0(o.contact_email) || S0(src.contact_email) || S0(a.contact_email), contact_url: S0(o.contact_url) || S0(src.contact_url) || S0(a.contact_url), contacted_at: S0(o.contacted_at), followup_step: Number(o.followup_step) || 0,
           followup_subject: S0(o.followup_subject), followup_body: S0(o.followup_body), verified_at: S0(o.verified_at), drafted_at: S0(o.drafted_at) }); }
       const fitCtxQ = { ...fitCtx, topics: null };
@@ -358,7 +364,7 @@ for (const g of gateSites) {
       const gr = gm.growth_row || null;
       if (human.length && gr && gr.run_id) { const had = P(gr.actions_json, []); const list = Array.isArray(had) ? had.slice() : [];
         const lab = (a) => S0((ARL.LEVERS.find(l => l.id === a.lever) || {}).label) || a.lever;
-        for (const a of human) { const item = { priority: 2, type: 'ai_rank', action: (lab(a) + (S0((a.ref || {}).url) ? ': ' + a.ref.url : '')).slice(0, 200), why: S0(a.why || 'chosen by AI ranking (' + a.lever + ')').slice(0, 300) };
+        for (const a of human) { const item = { priority: 2, type: 'ai_rank', action: (lab(a) + (S0((a.ref || {}).url) ? ': ' + a.ref.url : '')).slice(0, 200), why: S0(a.why || 'Chosen by AI ranking for the questions your buyers ask.').slice(0, 300), score_note: S0(a.score_note).slice(0, 300) };   // CR17-H (F1): the client's sentence, the arithmetic apart
           if (!list.some(x => x && x.action === item.action)) list.push(item); }
         sinks.growth = { site_id: sid, run_id: S0(gr.run_id), actions_json: J(list) }; }
     }

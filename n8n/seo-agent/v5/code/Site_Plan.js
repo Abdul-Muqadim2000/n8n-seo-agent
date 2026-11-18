@@ -7,6 +7,7 @@
 // read-path gate the Rank Tracker and the Content Cadence use (FITR, _fit_gate.js) runs here, and what it sets aside is named with its reason.
 /*__FIT_GATE__*/
 /*__SERP_URL__*/
+/*__LADDER_RULES__*/
 // 2026-10-19 (SCHEDULING_KEYWORDS_PLAN.md §4.5 / §4.8): three kinds of run. No site named = the batch over every active site (the old Monday run).
 // A site named with `on_demand` semantics = the owner or "Track my site" asking (a paused site still runs). A site named by a run of its weekly
 // cycle (`trigger: 'cycle'`, the Cycle Dispatcher) = a SCHEDULED run for that one site: `on_demand` false and a paused site honoured. The monthly
@@ -87,9 +88,15 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     heads: lrowsAll.map(l => l.head_keyword), keywords: s.keywords || [] });
   const fitS = FITR.rungs(lrowsAll, fitCtx, { where: 'weekly site tracking' });
   const lrows = fitS.keep; const set_aside = fitS.set_aside;
+  // CR17 review R5 (M4 / L8): the tracked keywords by the app's own definition (app/shared/src/tracked-keywords.ts): the rungs still in play
+  // (not set aside, stopped, merged or archived) and your own list, each SEARCH once (two spellings of one search are one: LRU.sameSearch), so
+  // the weekly report's "Tracked keywords: N" is the app's number; and only a page that was written (or is live) is a page we follow
+  const UNTRACKED = ['set_aside', 'stopped', 'merged', 'archived'];
   const tracked = []; const seen = new Set();
-  for (const k of s.keywords) if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'site', rung: 0, ladder_id: '', head_keyword: '' }); }
-  for (const l of lrows) { const k = String(l.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'ladder', rung: Number(l.rung) || 0, ladder_id: l.ladder_id, head_keyword: String(l.head_keyword || '').toLowerCase() }); } }
+  const has = (k) => seen.has(k) || tracked.some(t => LRU.sameSearch(t.keyword, k));
+  for (const k of s.keywords) if (!has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'site', rung: 0, ladder_id: '', head_keyword: '' }); }
+  for (const l of lrows) { const k = String(l.keyword).toLowerCase().trim(); if (UNTRACKED.includes(String(l.status || '').toLowerCase().trim())) continue;
+    if (!has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'ladder', rung: Number(l.rung) || 0, ladder_id: l.ladder_id, head_keyword: String(l.head_keyword || '').toLowerCase() }); } }
   const pages = []; const seenU = new Set();
   const blogs = logRows.filter(r => normD(r.domain) === s.domain);
   // R1 (2026-10-13, re-rating): `written` in seo_content_log is the only proof that a page exists. A ladder row saying `writing` is a promise:
@@ -102,7 +109,8 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const notReadyOf = new Map(blogs.filter(b => b.status === 'not_ready' && !String(b.published_url || '').trim()).map(b => [normKw(b.keyword), b]));
   const reasonsOf = (b) => String((b && b.qa_reasons) || '').split(/;\s+/).map(x => x.trim()).filter(Boolean);
   for (const l of lrows) { const u = String(l.target_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); const nr = notReadyOf.get(normKw(l.keyword)) || null; pages.push({ url: u, keyword: l.keyword, rung: Number(l.rung) || 0, status: l.status || '', ladder_id: l.ladder_id, page_exists: !!l.page_exists, written: writtenKw.has(normKw(l.keyword)), not_ready: !!nr && !writtenKw.has(normKw(l.keyword)), qa_reasons: nr ? reasonsOf(nr) : [], status_note: String(l.status_note || '') }); } }
-  for (const b of blogs) { const k = String(b.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'blog', rung: 0, ladder_id: b.ladder_id || '', head_keyword: '' }); } }
+  for (const b of blogs) { const k = String(b.keyword).toLowerCase().trim(); if (!(b.status === 'written' || b.status === 'published' || String(b.published_url || '').trim())) continue;   // L8: a held, failed or started run wrote no page
+    if (!has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'blog', rung: 0, ladder_id: b.ladder_id || '', head_keyword: '' }); } }
   for (const b of blogs) { const u = String(b.published_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: b.keyword, rung: 0, status: 'published', ladder_id: b.ladder_id || '', page_exists: true, written: true, status_note: '', published_at: b.published_at || '' }); } }
   // R1 (2026-10-13): only a row that says `written` waits for the owner's publish link — a `started` row is a run that never finished, and
   // asking the owner to publish a page that was never written is the harm R1 describes. P2-4 (2026-10-12): the comment used to sit before the

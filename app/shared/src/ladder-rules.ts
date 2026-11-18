@@ -13,7 +13,7 @@ import { LRU } from './ladder-rules.generated.js';
 import type { LadderMarket, LadderRungState, LadderStuck } from './ladder-rules.generated.js';
 
 export { LRU };
-export type { LadderMarket, LadderRungState, LadderStuck, LadderStage, LadderVerdictStop, LadderOwner } from './ladder-rules.generated.js';
+export type { LadderMarket, LadderRungState, LadderStuck, LadderStage, LadderVerdictStop, LadderOwner, LadderFolder, LadderFolderEvidence } from './ladder-rules.generated.js';
 
 const isoOf = (country: string | null | undefined): string => {
   const s = String(country ?? '').trim();

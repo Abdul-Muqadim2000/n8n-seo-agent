@@ -33,6 +33,7 @@ import {
   type MonitorsRow,
   type AutomationStatus,
   type AiTargetRow,
+  type PageWatchRow,
   type ContentLogRow,
   type DetectedPage,
   type LadderCard,
@@ -52,10 +53,12 @@ import {
   type TrendRow,
   contentReadiness,
   READINESS_REASON,
+  healthLabelFor,
+  technicalGrade,
 } from '@seo/shared';
 import { config } from '../config';
 import { db } from '../db';
-import { monthStartUtc, siteAutopilotRows, usageSince } from './billing';
+import { creditUsage, monthStartUtc, siteAutopilotRows } from './billing';
 import { creditsOfUsd, settingsRow, wholeCreditsOfUsd } from './admin/settings';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { customerError } from '../lib/customerError';
@@ -64,6 +67,7 @@ import { executions, rows as n8nRows, siteRows, type ExecutionSummary } from '..
 import { aiQuotaOf, chosenLadderWriting, competitorsOf, declaredServicesOf, levelOf, navPagesOf, servicesOf, type CadenceSiteRow } from './cadence';
 import { skipsOf } from './comingUp';
 import { contentCycleNote, cycleIntentOf, loadCycleRows, siteCycleView } from './cycles';
+import { nextAiCheckOf, trackingStateOf } from './aiSchedule';
 import { engineCostTable } from './engineCost';
 import { autopilotNeedsYou, nudgeDue } from './autopilot';
 import { schema } from '../db';
@@ -74,11 +78,12 @@ import { CADENCE, simulateCadence, type CadenceWeek } from './cadence';
 import { profileNeedsYou } from './readiness';
 import { aiPanelNeedsYou } from '@seo/shared';
 import { buildLadders, draftQa, failedPageRow, failedPageRequests, noPageRow, ladderAppSources, ladderNeedsYou, ladderReports, sortNeedsYou, type LadderBuild, type LadderSchedule, type SiteRun, type WaitingPage } from './ladders';
-import { loadBundle, recommend, type SiteBundle } from './recommendations';
+import { loadBundle, recommendQueue, type SiteBundle } from './recommendations';
+import { todoRecommendations } from './recommendationStates';
 import { siteTasksOf } from './siteTasks';
 import { kiForRecs, kiNeedsYou } from './kiData';   // KI (2026-11-08, A1): its Needs-you items, On websites only
 import type { SiteTask } from '@seo/shared';
-import { ga4Now, gscNow } from './data';
+import { aiDecisionInputs, ga4Now, gscNow, targetStat } from './data';
 import { latestReport, monthSpend, reportsList } from './runs';
 
 // The pipeline of one website: every automation the engine runs for it (in the website's own weekly cycle since 2026-10-19, the daily
@@ -658,7 +663,7 @@ export async function airCacheRowsFor(mode: unknown, siteId: string, read: (key:
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild; rows: { logs: ContentLogRow[]; queries: QueryRow[]; audits: AuditPoint[] } }> {
   const d = site.domain;
   const sid = n8nSiteId(d);
-  const [x, ladders, queries, trends, logs, history, settingsRows, app, , cadenceReport, recentReports, running, aiTargets, sitePages, cyc, engineSite, skips, aiBrands, costTable, monRows, proposals, rechecks, published] = await Promise.all([
+  const [x, ladders, queries, trends, logs, history, settingsRows, app, , cadenceReport, recentReports, running, aiTargets, sitePages, cyc, engineSite, skips, aiBrands, costTable, monRows, proposals, rechecks, published, watchRows] = await Promise.all([
     loadBundle(org, site),
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<QueryRow>('queryHistory', d, { sortBy: 'period_end:desc', max: 4000 }),
@@ -687,21 +692,23 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     db.select().from(schema.keywordProposals).where(and(eq(schema.keywordProposals.siteId, site.id), inArray(schema.keywordProposals.status, ['pending', 'starting']))).orderBy(desc(schema.keywordProposals.createdAt)).catch(() => []),
     db.select().from(schema.ladderRechecks).where(and(eq(schema.ladderRechecks.siteId, site.id), eq(schema.ladderRechecks.paused, true))).catch(() => []),
     siteRows<ContentLogRow>('contentLog', d, { extra: [{ columnName: 'status', condition: 'eq', value: 'published' }], max: 200 }).catch(() => [] as ContentLogRow[]),
+    // CR17 (Q3): the client's own permanent redirects, for the AI-question page list (the same list as the AI visibility page's)
+    siteRows<PageWatchRow>('pageWatch', d, { max: 200 }).catch(() => [] as PageWatchRow[]),
   ]);
   // AIR (2026-11-06, P6): a website whose AI ranking is `on` has the kind-'air' cache rows (kill switch, protect list) read for the cadence mirror;
   // any other website reads nothing more and plans exactly as before
   // FX-C RC-10: read by key (this website's protect list and the kill switch), never the first 50 kind-'air' rows of every website
   const airCache = await airCacheRowsFor(monRows[0]?.ai_rank_mode, sid, (key) => n8nRows<AirCacheRow>('cache', { filters: [{ columnName: 'key', condition: 'eq', value: key }], max: 3 }));
-  const used = await usageSince(db, org.id, monthStartUtc()).catch(() => null);
-  const creditsUsed = used ? Math.round((used.autopilot + used.onDemand) * 100) / 100 : 0;
+  // CR17-I (F7): the month's credits used from the one usage computation (services/billing.ts creditUsage), the figure the Credits page shows
+  const used = await creditUsage(db, org.id, { from: monthStartUtc() }).catch(() => null);
+  const creditsUsed = used ? used.total : 0;
   const ownRuns = activeRuns(app.runs);
   const failedReq = failedPageRequests(app.runs); // W06-B: a page run that failed wrote no page (its opening content-log row is not one)
   const verified = !!site.verifiedAt;
   // site tasks (app/docs/SITE_TASKS.md): the steps on the website itself, done or to do (a failure to read them never fails the Pipeline)
   // undefined (not []) when they cannot be read: recommend() then keeps its own rules instead of reading "nothing left to do"
   const siteTasks: SiteTask[] | undefined = verified ? await siteTasksOf(org, site).catch(() => undefined) : undefined;
-  const engineTracked = x.settings.tracking.tracked && x.settings.tracking.status !== 'paused';
-  const status: PipelineData['tracking']['status'] = site.trackingStatus === 'paused' || x.settings.tracking.status === 'paused' ? 'paused' : site.trackingStatus === 'active' || engineTracked ? 'active' : 'not_started';
+  const status: PipelineData['tracking']['status'] = trackingStateOf(site, x.settings.tracking);   // one rule with the AI page's schedule (aiSchedule.ts)
   const active = status === 'active';
   const m = x.settings.monitors;
   const pagesPerWeek = x.content.cadence && x.content.cadence.status !== 'off' ? x.content.cadence.pagesPerWeek : 0;
@@ -796,7 +803,9 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     }),
     base('link_builder', m?.linkBuilder ?? true, 'The Link Builder is switched off in the monitor settings', {
       lastRunAt: reportOf(['link_builder'])?.receivedAt ?? null,
-      lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; return r ? `${Number(sm.drafted) || 0} pitch(es) drafted · ${Number(sm.press) || 0} journalist request(s) · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
+      // CR17-E (F9): "written this run" from the run's report, "waiting for you" from the one link status (shared link-status.ts), the same
+      // number the Links page and the recommendations show; a draft nobody has sent is never called progress
+      lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; const lc = x.backlinks.linkCounts; return r ? `This run: ${Number(sm.drafted) || 0} pitch(es) written · ${lc ? `${lc.waitingForYou} waiting for you · ${lc.won} won (link checked)` : `${Number(sm.press) || 0} journalist request(s)`} · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
       lastReportId: reportOf(['link_builder'])?.id ?? null,
       monthlyUsd: rowUsd('link_builder'),
       detail: 'Up to 10 drafted sequences a week · sent from your mailbox after approval',
@@ -807,7 +816,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastResult: lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} ${lastBl.unionDomains != null ? 'linking sites (all sources)' : 'referring domains (DataForSEO)'} · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
       lastReportId: blReport?.id ?? null,
       monthlyUsd: rowUsd('backlinks'),
-      detail: x.backlinks.prospects.length ? `${x.backlinks.prospects.filter((p) => p.status === 'new').length} new link prospects` : null,
+      detail: x.backlinks.prospects.length ? `${x.backlinks.linkCounts ? x.backlinks.linkCounts.found + x.backlinks.linkCounts.inQueue : x.backlinks.prospects.filter((p) => p.status === 'new').length} open link prospects` : null,   // CR17-E (F9): the one link status
     }),
     base('rank_tracker', x.rankings.ladders.length > 0, 'No keyword ladder yet: plan one with "Rank my site for a keyword"', {
       lastRunAt: lastIso(...rungChecks, rtReport?.receivedAt),
@@ -840,7 +849,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     }),
     base('audit', m?.auditMonthly ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastAudit?.auditedAt, auReport?.receivedAt),
-      lastResult: lastAudit ? `Health ${lastAudit.healthScore}/100 (${lastAudit.grade}) · ${lastAudit.findings} findings` : null,
+      // CR17-C (client report 2026-11-17 C3): the audit score is Technical health, its grade always "(technical)"
+      lastResult: lastAudit ? `${healthLabelFor(lastAudit.reportType)} ${lastAudit.healthScore}/100 (${technicalGrade(lastAudit.healthScore)?.label ?? lastAudit.grade}) · ${lastAudit.findings} findings` : null,
       lastReportId: auReport?.id ?? null,
       monthlyUsd: rowUsd('audit'),
       detail: m ? `up to ${m.auditPages} pages${m.auditJs ? ' · JavaScript' : ''}` : 'up to 200 pages',
@@ -927,7 +937,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const cp = cadenceReport?.payload as { upcoming?: { keyword: string; source: string; why: string }[]; paused_reason?: string; waiting_publish?: number; max_waiting?: number } | undefined;
 
   // ---------- the growth loop ----------
-  const recs = recommend(site, x, siteTasks);
+  // CR17-H (Q4): the Improve stage counts the To do tab (what is waiting for Google, resolved or dismissed is not to do)
+  const recs = await todoRecommendations(org, site, x, siteTasks, recommendQueue(site, x, siteTasks));
   const high = recs.filter((r) => r.priority === 'high').length;
   const ladderPages = x.rankings.ladders.reduce((t, l) => t + l.pages, 0);
   const ladderPublished = x.rankings.ladders.reduce((t, l) => t + l.published, 0);
@@ -977,7 +988,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       id: 'monitor',
       title: 'Monitor',
       state: active ? 'active' : 'waiting',
-      headline: lastAudit ? `Health ${lastAudit.healthScore}/100` : 'No audit yet',
+      headline: lastAudit ? `${healthLabelFor(lastAudit.reportType)} ${lastAudit.healthScore}/100` : 'No audit yet',
       detail: [lastAi ? `AI named ${formatPercent(lastAi.mentionRate, 0)}` : null, lastBl ? `${lastBl.unionDomains ?? lastBl.referringDomains} linking sites` : null].filter(Boolean).join(' · ') || 'AI answers, backlinks and technical health',
       action: { label: 'Technical health', page: 'technical' },
     },
@@ -1062,6 +1073,14 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     running: runningHere,
     activeRuns: ownRuns,
     written: writtenPages(logs, ladders, Date.now(), failedReq, app.runs),
+    // CR17 (Q3, client report 2026-11-17): the write form's AI notice decides on the AI visibility page's own pages and stored questions
+    ...(() => {
+      // CR17 review R5 L7: the one next AI check (aiSchedule.ts), the date the AI visibility page shows too
+      const aiNext = nextAiCheckOf(automations);
+      const aiQ = new Map(app.runs.filter((r) => r.requestId && r.aiQuestion).map((r) => [String(r.requestId), { targetId: r.aiTargetId ?? '', question: r.aiQuestion ?? '' }]));
+      const dec = aiDecisionInputs({ logs, ladders, aiRuns: { questions: aiQ, failed: failedReq }, moves: watchRows, market: site.country ?? '', nextAiCheck: aiNext });
+      return { aiPages: dec.written, aiTargets: aiTargets.map((t) => targetStat(t, logs, false, dec)), ...(aiNext ? { nextAiCheck: aiNext } : {}) };
+    })(),
     ladders: ladderSummaries(ladders),
     ladderCards: build.cards,
     needsYou,

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, clientSafePayload, isClientRole, stripHookSecrets, type AiExportKind, type Role } from '@seo/shared';
+import { AI_EXPORT_KINDS, aiExportFileName, aiFilterFrom, boardWithoutDismissNotes, clientSafePayload, isClientRole, stripHookSecrets, withoutDismissNote, type AiExportKind, type Role } from '@seo/shared';
 import { and, eq } from 'drizzle-orm';
 import { isPlatformAdmin, isUuid, requireUser, requireVerified, siteAccess } from '../auth/access';
 import { db, schema } from '../db';
@@ -7,8 +7,10 @@ import { HttpError, notFound } from '../lib/errors';
 import { aiAnswersPage, aiCsvStream, aiImportsOverview, aiQuestionHistory } from '../services/aiWave2';
 import { aiData, aiRankShadowData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from '../services/data';
 import { requestRecheck } from '../services/pageWatch';
+import { markAlertSeen } from '../services/alerts';
 import { ladderDetailData, pipelineData } from '../services/pipeline';
-import { loadBundle, overviewData, recommend } from '../services/recommendations';
+import { loadBundle, overviewData, recommendQueue } from '../services/recommendations';
+import { checkRecommendation, dismissRecommendation, recommendationBoard, restoreRecommendation, todoRecommendations } from '../services/recommendationStates';
 
 type P = { orgId: string; siteId: string };
 
@@ -121,6 +123,12 @@ export async function dataRoutes(app: FastifyInstance) {
     const a = await guard(req);
     return alertsData(a.site);
   });
+  // CR17-D (client report 2026-11-17, F5): "Mark as seen" on one alert ({ id }). Members and above; written to the audit log. Only ack_by /
+  // ack_at are written on that alert's row; the engine's daily watch keeps the mark and resolves the alert when its condition is gone.
+  app.post('/api/orgs/:orgId/sites/:siteId/data/alerts/seen', { config: { rateLimit: { max: 60, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await guard(req, 'member');
+    return markAlertSeen(a, req, req.body);
+  });
   app.get('/api/orgs/:orgId/sites/:siteId/data/settings', async (req) => {
     const a = await guard(req);
     return settingsData(a.org, a.site);
@@ -135,11 +143,44 @@ export async function dataRoutes(app: FastifyInstance) {
     if (!ladderId || ladderId.length > 80) throw notFound('Keyword ladder not found');
     return ladderDetailData(a.org, a.site, ladderId);
   });
-  app.get('/api/orgs/:orgId/sites/:siteId/recommendations', async (req) => {
-    const a = await portal(req);
+  // CR17-H (client report 2026-11-17, Q4): the list is the To do tab of the board below (what is not waiting for Google, resolved or
+  // dismissed), each item with its state, the date it was first recommended, its rule (why / how / how we check it) and its issue
+  const recInputs = async (req: Parameters<typeof siteAccess>[0], a: Awaited<ReturnType<typeof portal>>) => {
     const x = await loadBundle(a.org, a.site);
     // site tasks: a step done or skipped on the website is not recommended again; open ones carry their check button
     const tasks = a.site.verifiedAt ? await import('../services/siteTasks').then((m) => m.siteTasksOf(a.org, a.site, req.log)).catch(() => undefined) : undefined;
-    return shown(a.role, recommend(a.site, x, tasks));
+    // FX-SERVER (review R3 L2): the queue before one card per issue; the states are decided per item, then the tabs fold
+    return { x, tasks, recs: recommendQueue(a.site, x, tasks) };
+  };
+  app.get('/api/orgs/:orgId/sites/:siteId/recommendations', async (req) => {
+    const a = await portal(req);
+    const { x, tasks, recs } = await recInputs(req, a);
+    const list = await todoRecommendations(a.org, a.site, x, tasks, recs);
+    // FX-SERVER (review R3 L5): an agency's client people see that an item was dismissed and why, never the staff's free-text note
+    return shown(a.role, isClientRole(a.role) ? list.map(withoutDismissNote) : list);
+  });
+  app.get('/api/orgs/:orgId/sites/:siteId/recommendations/board', async (req) => {
+    const a = await portal(req);
+    const { x, tasks, recs } = await recInputs(req, a);
+    const board = await recommendationBoard(a.org, a.site, x, tasks, recs);
+    return shown(a.role, isClientRole(a.role) ? boardWithoutDismissNotes(board) : board);
+  });
+  const member = async (req: Parameters<typeof siteAccess>[0]) => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(a.site);
+    return a;
+  };
+  app.post('/api/orgs/:orgId/sites/:siteId/recommendations/dismiss', { config: { rateLimit: { max: 120, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await member(req);
+    return { recommendation: await dismissRecommendation(a, req, req.body) };
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/recommendations/restore', { config: { rateLimit: { max: 120, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await member(req);
+    return { recommendation: await restoreRecommendation(a, req, req.body) };
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/recommendations/check', { config: { rateLimit: { max: 30, timeWindow: '10 minutes' } } }, async (req) => {
+    const a = await member(req);
+    return { recommendation: await checkRecommendation(a, req, req.body) };
   });
 }

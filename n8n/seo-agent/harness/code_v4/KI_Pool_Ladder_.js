@@ -1947,7 +1947,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
   /** KI.plan(clusters, gaps, cfg) -> <= 10 actions { action_id, kind, title, why, target, credits, cluster_id | gap_id, ev }, ranked by expected value
    *  clusters: head rows { keyword, cluster_id, score (number or KI.score object), verdict, stage, page_action, page_url, gsc_position,
    *  gsc_impressions, striking, cluster_size, demand_note }; gaps: KI.gaps rows. Plain ASCII words. */
-  const plan = (clusters, gapRows, c0) => {
+  const plan = (clusters, gapRows, c0, bal) => {
     const c = C(c0); const P = c.plan; const acts = []; const byCluster = new Set();
     for (const h of (Array.isArray(clusters) ? clusters : [])) {
       if (!h || S(h.gate) === 'fail' || S(h.verdict) === 'gated') continue;
@@ -1984,9 +1984,65 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
         target: ascii(S(g.action_target)), credits: credits(kind, c), gap_id: S(g.gap_id), ev: r1(ev) });
     }
     const seenT = new Set();
-    return acts.sort((a, b) => b.ev - a.ev || a.title.localeCompare(b.title) || a.action_id.localeCompare(b.action_id))
+    const ranked = acts.sort((a, b) => b.ev - a.ev || a.title.localeCompare(b.title) || a.action_id.localeCompare(b.action_id))
       .filter(a => !(a.kind === 'refresh' && !S(a.target)))   // FX-L L6: an "Improve your page" with no page is not an action
-      .filter(a => { const k = a.kind === 'refresh' ? 'refresh|' + (urlKey(S(a.target)) || S(a.target)) : a.kind + '|' + a.title; if (seenT.has(k)) return false; seenT.add(k); return true; }).slice(0, c.caps.plan);
+      .filter(a => { const k = a.kind === 'refresh' ? 'refresh|' + (urlKey(S(a.target)) || S(a.target)) : a.kind + '|' + a.title; if (seenT.has(k)) return false; seenT.add(k); return true; });
+    // CR17-F (section 196): with the client's services, the picks keep a balance between them (KI.balance); without, the order of value as before
+    if (bal && Array.isArray(bal.services) && bal.services.length) {
+      const subj = (a) => { const h = (Array.isArray(clusters) ? clusters : []).find(x => x && a.cluster_id && S(x.cluster_id) === a.cluster_id); const g = (Array.isArray(gapRows) ? gapRows : []).find(x => x && a.gap_id && S(x.gap_id) === a.gap_id);
+        return h ? S(h.keyword) : g ? S(g.keyword) || S(g.action_target) : S(a.target); };
+      for (const a of ranked) a.service = serviceOf(subj(a), bal.services);
+      return balance(ranked, { services: bal.services, lead: bal.lead, n: c.caps.plan, get: (a) => a.service }).picked;
+    }
+    return ranked.slice(0, c.caps.plan);
+  };
+
+  // ---- CR17-F (2026-11-17, client report C5, section 196): which of the client's services a search belongs to, and a balanced pick ----
+  // devaicon.com's research kept 129 searches: 90 generic software development, 12 AI / automation (its lead services), 5 Open edX (a real, smaller
+  // service); its top 45 by score held no Open edX search and few AI ones. Each kept search now carries the service it belongs to, and the
+  // recommended picks keep a balance: the lead services (the ones the client names first) take at least half, no one service more than 40%
+  // (unless it is the only one), every service with a passing search at least one place, and a search that matches no service ("generic") at
+  // most a fifth.
+  //  * KI.serviceOf(keyword, services) -> the service family it belongs to ('' = none): the service whose words it holds most of (service and
+  //    seller words aside), folded into the most general service it contains ("custom software development" -> "software development")
+  //  * KI.balance(items, { services, lead, n, get }) -> { picked, shares } (items in value order; get(item) = its service)
+  const svcToks = (x) => uniq(ownToks(x).filter(t => !SELLER_S.has(t)));
+  const serviceOf = (keyword, svcs) => {
+    const list = services(svcs); if (!list.length) return '';
+    const kw = new Set(ownToks(keyword).flatMap(t => [t, stem1(t)]));
+    let best = null;
+    list.forEach((sv, i) => { const t = svcToks(sv); if (!t.length) return; const hit = t.filter(w => kw.has(w)).length;
+      if (hit < t.length) return;   // every word of the service is in the search ("open edx services company" -> Open edX Services)
+      if (!best || hit > best.hit || (hit === best.hit && t.length < best.n)) best = { sv, hit, n: t.length, i }; });
+    if (!best) return '';
+    // the family: the most general service whose words are all in this one ("Custom Software Development" -> "software development")
+    const bt = svcToks(best.sv); let fam = best;
+    list.forEach((sv, i) => { const t = svcToks(sv); if (t.length && t.length < fam.n && t.every(w => bt.includes(w))) fam = { sv, hit: t.length, n: t.length, i }; });
+    return S(fam.sv);
+  };
+  const balance = (items, o) => {
+    const arr = (Array.isArray(items) ? items : []).filter(Boolean); const n = Math.max(1, Math.min(Number(o && o.n) || 10, arr.length)); const get = (o && o.get) || ((x) => S(x.service));
+    const leadSet = new Set(services((o && o.lead) || []).map(x => key(x)));
+    const fam = new Map(); for (const x of arr) { const k = S(get(x)); fam.set(k, (fam.get(k) || 0) + 1); }
+    const real = [...fam.keys()].filter(k => k);
+    const isLead = (k) => !!k && (leadSet.has(key(k)) || [...leadSet].some(l => l && (key(k).includes(l) || l.includes(key(k)))));
+    const cap = real.length <= 1 ? n : Math.max(1, Math.floor(n * 0.4)); const capGeneric = real.length ? Math.max(1, Math.floor(n * 0.2)) : n;
+    const picked = []; const cnt = new Map(); const take = (x) => { picked.push(x); const k = S(get(x)); cnt.set(k, (cnt.get(k) || 0) + 1); };
+    const roomFor = (k) => (cnt.get(k) || 0) < (k ? cap : capGeneric);
+    // 1. every real service with a passing search: its best item (lead services first)
+    for (const k of real.slice().sort((a, b) => (isLead(b) ? 1 : 0) - (isLead(a) ? 1 : 0))) { if (picked.length >= n) break; const x = arr.find(y => S(get(y)) === k); if (x) take(x); }
+    // 2. the lead services up to half, best value first
+    const leadWant = Math.ceil(n * 0.5);
+    for (const x of arr) { if (picked.length >= n) break; if (picked.includes(x)) continue; const k = S(get(x)); if (!isLead(k)) continue;
+      if (picked.filter(y => isLead(S(get(y)))).length >= leadWant) break; if (roomFor(k)) take(x); }
+    // 3. the rest in value order, within the caps
+    for (const x of arr) { if (picked.length >= n) break; if (picked.includes(x)) continue; if (roomFor(S(get(x)))) take(x); }
+    // 4. still short (every service at its cap): value order
+    for (const x of arr) { if (picked.length >= n) break; if (!picked.includes(x)) take(x); }
+    const order = new Map(arr.map((x, i) => [x, i]));
+    const out = picked.sort((a, b) => order.get(a) - order.get(b));
+    const shares = {}; for (const x of out) { const k = S(get(x)) || 'generic'; shares[k] = (shares[k] || 0) + 1; }
+    return { picked: out, shares };
   };
 
   // ---------------------------------------------------------------------------------------------------------------------------------
@@ -2015,7 +2071,7 @@ var KI = (typeof KI === 'object' && KI && KI.VERSION === 'ki-1') ? KI : (() => {
 
   return { VERSION, CONFIG, cfg, norm, key, services, validHost, reg, hostOf, urlKey, classifyDomain, CLASS_IDS, PAGE_TYPES, pageType, top10, stage,
     gate, fit, GATE_TEXT, mergeCandidates, families, prescore, cluster, demand, win, value, gap: gapFactor, score, verdict, VERDICT_WORDS, sizeTag,
-    scoreCompetitors, striking, strikingBar, pageAction, gaps, gapsUnread, plan, readable, label, ascii, hash, topicSim, brandDomains };
+    scoreCompetitors, striking, strikingBar, pageAction, gaps, gapsUnread, plan, readable, label, ascii, hash, topicSim, brandDomains, serviceOf, balance };
 })();
 // ---- LADDER PACKAGE (2026-11-09, docs/keyword-intel-2026-11-08/fixes/LADDER.md): the five ladder rules, ONE copy ----
 // Production (2026-10-22 .. 11-08, R3_PROD_OUTPUTS.md F1 F6 F7 F9): three rungs of techand.ai's ERP ladder, the main page included, were written onto
@@ -2097,9 +2153,114 @@ const LRU = (() => {
     }
     return null;
   };
-  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
-  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** the address a new page gets on the site: home + folder + slug(keyword), with the site's trailing-slash form. `folder` (client report
+   *  2026-11-17 F4): the site's folder for this kind of page (folderFor(...).folder, e.g. '/services/'); none or '/' = the root, as before */
+  const plannedUrl = (home, keyword, slash, folder) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const f = S(folder && typeof folder === 'object' ? folder.folder : folder).replace(/^\/*/, '/').replace(/\/+$/, '');
+    return h && sl ? h + (f && f !== '/' ? f : '') + '/' + sl + (slash ? '/' : '') : ''; };
+
+  // ---- client report 2026-11-17 (F4, devaicon.com): the address of a new page follows the site ----
+  // Every address our ladders planned for devaicon.com was at the root (/ai-app-development) while its service pages live under /services/ and
+  // its articles under /insights/: the client published five of six elsewhere and moved its own pages into /services/ with 301s. A new page
+  // now goes where the site puts that kind of page. Two kinds: `service` (service, product, landing, local, category and pillar pages, the
+  // main page of a ladder) and `article` (guides, blog posts, comparisons, case studies, FAQ and AI answer pages). Evidence, newest habit first:
+  //   1. where the client published the pages WE wrote of that kind (the content log's live address, after a permanent redirect the client
+  //      made) and where it moved its own pages (its 301s, the target's folder): the client's own choice;
+  //   2. else the live inventory (sitemap / seo_pages, pages answering): articles = the blog folder holding most of them, services = the
+  //      folder (or the root) holding most pages that are neither articles nor company pages (about, contact, careers, legal ...).
+  // A folder is used only with at least 3 pages behind it and 60% of them; else the root, as before (no change for a site we cannot read).
+  // A service page is never planned in a blog folder (rule 1). Pure: callers pass what they have read.
+  CFG.folder_min = 3; CFG.folder_share = 0.6;
+  CFG.company_segs = ['about', 'about-us', 'company', 'contact', 'contact-us', 'careers', 'career', 'jobs', 'team', 'people', 'privacy', 'privacy-policy', 'cookies',
+    'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'policies', 'imprint', 'impressum', 'disclaimer', 'accessibility', 'sitemap',
+    'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks', 'security', 'author', 'authors', 'tag', 'tags', 'category'];
+  // CR17 review R5 (M2): only a folder whose name says it holds what the business sells is a folder of SERVICE pages. Every other folder
+  // (case studies, portfolio, work, projects, clients, industries, docs, help, locations, events, press, careers ...) is neither kind, so it
+  // never decides where a new service page goes (9 /case-studies/ pages beside 3 /services/ pages planned "/case-studies/ai-app-development").
+  // The root still counts for service pages (techand.ai keeps them there). Evidence of 17 Nov 2026: devaicon.com /services/ (its service
+  // pages), /capabilities/ (its service groups), /industries/ (industry pages, not services); techand.ai /whatwedo/ and /capabilities/.
+  CFG.service_dirs = ['services', 'service', 'our-services', 'solutions', 'solution', 'products', 'product', 'capabilities', 'capability', 'offerings', 'offering',
+    'what-we-do', 'whatwedo', 'expertise', 'practice-areas'];
+  const ARTICLE_TYPE = /guide|blog|post|article|compar|case stud|faq|answer|news|how.?to|review/;
+  /** the kind of a page type: 'article' (guides, posts, comparisons, case studies, FAQ, AI answers) or 'service' (everything else) */
+  const classOf = (pageType) => (ARTICLE_TYPE.test(low(pageType)) ? 'article' : 'service');
+  /** the folder of an address: '/services/' for /services/x, '/' for /x ('' for no address or the home page) */
+  const folderOf = (u) => { const s = segs(u); if (!s.length) return ''; return '/' + s.slice(0, -1).map(x => x + '/').join(''); };
+  const blogFolder = (f) => { let s = S(f).split('/').filter(Boolean); if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 0 && CFG.blog_dirs.includes(s[0]); };
+  const companyPage = (u) => { const s = segs(u); if (!s.length) return true; let a = s; if (a.length > 1 && LOCALE.test(a[0])) a = a.slice(1);
+    return CFG.company_segs.includes(a[0]) || /^(?:about|contact)-/.test(a[0]); };
+  const gone = (st) => Number(st) >= 300;   // 0 / empty = never read (a sitemap page): it counts as live
+  /** the kind of page a folder holds: 'article' (a blog folder), 'service' (the root, or a folder of CFG.service_dirs), '' (neither: case
+   *  studies, industries, docs ... never decide where a new page goes). A language prefix is skipped. */
+  // a language root (/en/x beside /ar/x) is the root of that language: service pages there count as at the root (a two-letter folder that is
+  // not a common language, such as /ai/ or /hr/, is a folder like any other)
+  const LANG_ROOT = /^(?:en|ar|fr|de|es|it|nl|pt|ur|hi|zh|ja|ko|ru|tr)(?:-[a-z]{2})?$/;
+  const folderKind = (f) => { let s = S(f).split('/').filter(Boolean); if (!s.length || (s.length === 1 && LANG_ROOT.test(s[0]))) return 'service'; if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1);
+    return CFG.blog_dirs.includes(s[0]) ? 'article' : CFG.service_dirs.includes(s[0]) ? 'service' : ''; };
+  // review R5 (L5): a dated or category blog path (/blog/2024/05/x, /blog/news/x) votes for the blog folder itself, so the site's habit is
+  // not split by month or category; a language prefix stays (/en/blog/)
+  const voteFolder = (f) => { const s = S(f).split('/').filter(Boolean); if (!blogFolder(f)) return f; const n = s.length > 1 && LOCALE.test(s[0]) ? 2 : 1; return '/' + s.slice(0, n).join('/') + '/'; };
+  /** pageType: the new page's type; ev: { published: [{ url, page_type }] (our pages the client published: content log / published ladder rows),
+   *  moves: [{ from, to }] (the client's permanent redirects), pages: [{ url, http_status? } | url] (the live inventory) }
+   *  -> { folder ('/' = the root), kind ('service' | 'article'), basis ('published' | 'inventory' | 'default'), votes, of, why ('' at the root) } */
+  const folderFor = (pageType, ev) => {
+    const x = ev || {}; const kind = classOf(pageType);
+    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => p && typeof p === 'object' ? { url: S(p.url), st: p.http_status } : { url: S(p), st: null }).filter(p => p.url);
+    const bad = new Set(pages.filter(p => gone(p.st)).map(p => urlKey(p.url)));
+    const moveTo = new Map();
+    // review R5 (L4): only the site's own permanent moves (301 / 308 on the same host; a move with no status given is taken as read): a
+    // redirect to another website or a temporary one says nothing about where this site keeps its pages
+    const hostK = (k) => k.split('/')[0];
+    for (const m of (Array.isArray(x.moves) ? x.moves : [])) { const a = urlKey(m && m.from), b = urlKey(m && m.to); const st = m && m.status != null && S(m.status) !== '' ? Number(m.status) : 0;
+      if (a && b && hostK(a) === hostK(b) && pathOf(a) !== pathOf(b) && pathOf(b) && (!st || st === 301 || st === 308)) moveTo.set(a, S(m.to)); }
+    const fits = (f) => kind === 'article' || !blogFolder(f);
+    const pick = (votes, basis) => {   // votes: Map(url key -> folder)
+      const by = new Map(); for (const f of votes.values()) by.set(f, (by.get(f) || 0) + 1);
+      const of = votes.size; const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+      if (!top || of < CFG.folder_min || top[1] < CFG.folder_share * of) return null;
+      const what = kind === 'article' ? 'guides and articles' : 'service pages';
+      const where = top[0] === '/' ? 'at the top level of the site' : 'under ' + top[0];
+      return { folder: top[0], kind, basis, votes: top[1], of,
+        why: top[0] === '/' ? '' : 'your ' + what + ' live ' + where + ' (' + top[1] + ' of the ' + of + (basis === 'published' ? ' you published or moved' : ' on your website') + ')' };
+    };
+    // 1. the client's own choices: our pages it published (at the address they answer now) and its own moves
+    const direct = new Map();
+    for (const p of (Array.isArray(x.published) ? x.published : [])) {
+      if (!p || classOf(p.page_type) !== kind) continue;
+      const k0 = urlKey(p.url); if (!k0) continue;
+      const u = moveTo.get(k0) || S(p.url); const k = urlKey(u);
+      if (!pathOf(u) || (bad.has(k) && !moveTo.has(k0))) continue;   // a page that no longer answers (and was not moved) says nothing
+      const f = folderOf(u); if (f && fits(f)) direct.set(k, voteFolder(f));
+    }
+    for (const [from, to] of moveTo) { const f = folderOf(to); if (!f || companyPage(to) || folderOf(from) === f) continue;
+      if (folderKind(f) !== kind) continue; direct.set(urlKey(to), voteFolder(f)); }
+    const d = pick(direct, 'published'); if (d) return d;
+    // 2. the live inventory: a folder index page (/insights beside /insights/x) and company pages are not pages of either kind
+    const live = pages.filter(p => !gone(p.st) && pathOf(p.url));
+    const dirs = new Set(live.map(p => folderOf(p.url)).filter(f => f && f !== '/'));
+    const inv = new Map();
+    for (const p of live) { const k = urlKey(p.url); if (inv.has(k) || companyPage(p.url) || dirs.has(pathOf(p.url) + '/')) continue;
+      const f = folderOf(p.url); if (!f || folderKind(f) !== kind) continue; inv.set(k, voteFolder(f)); }
+    const i = pick(inv, 'inventory'); if (i) return i;
+    return { folder: '/', kind, basis: 'default', votes: 0, of: direct.size || inv.size, why: '' };
+  };
+  /** review R5 (M1): the evidence folderFor reads, built ONE way by every caller (Cadence Plan, the app's cadence mirror and its Write now):
+   *  logs: the website's content-log rows, ladders: its ladder rows, pages: its page inventory (seo_pages rows). Ladder Plan adds the moves. */
+  const folderEvidence = (logs, ladders, pages) => ({
+    published: [...(Array.isArray(logs) ? logs : []).filter(l => l && S(l.status) === 'published' && S(l.published_url)).map(l => ({ url: S(l.published_url), page_type: S(l.page_type) })),
+      ...(Array.isArray(ladders) ? ladders : []).filter(r => r && S(r.status) === 'published' && S(r.target_url)).map(r => ({ url: S(r.target_url), page_type: S(r.page_type) }))],
+    pages: (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url)).map(p => ({ url: S(p.url), http_status: p.http_status })) });
+  /** the page type a ladder row is placed by: its main page (rung 4) is the page people choose a provider on, a service page */
+  const rowType = (r) => (Number((r || {}).rung) === 4 ? 'Service Page' : S((r || {}).page_type) || 'Service Page');
+  /** review R5 (M1): a rung planned at the ROOT (its address is the root address of its keyword) before the folder rule, not written, not
+   *  published, not merged, on a site that keeps that kind of page in a folder: -> its folder address (`fo`: folderFor for its kind), or ''
+   *  when it keeps its address. The one rule for the weekly pages, their hub and sibling links, "Write now" and "Coming up". */
+  const folderAddress = (row, fo) => { const r = row || {}; const was = S(r.target_url); const exists = r.page_exists === true || r.page_exists === 'true';
+    const f = S(fo && typeof fo === 'object' ? fo.folder : fo);
+    if (!was || exists || !f || f === '/' || ['published', 'merged'].includes(S(r.status))) return '';
+    const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0]; const slash = /\/$/.test(was);
+    if (!home || urlKey(was) !== urlKey(plannedUrl(home, r.keyword, slash))) return '';
+    const nu = plannedUrl(home, r.keyword, slash, f); return nu && urlKey(nu) !== urlKey(was) ? nu : ''; };
   /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
    *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
    *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
@@ -2329,7 +2490,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, classOf, folderOf, folderFor, folderKind, folderEvidence, rowType, folderAddress, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // LADDER PACKAGE (2026-11-09, rule 6; build_v4.py section 183): keyword intelligence's stored picture as the ladder's pool, read ONCE here and

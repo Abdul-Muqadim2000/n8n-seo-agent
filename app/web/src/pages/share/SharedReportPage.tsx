@@ -22,7 +22,7 @@ import { StageIcon, stageLabel } from '@/components/reports/meta';
  * needs: that the link expires and can be turned off, and the run's own caveat when the report is not finished work.
  */
 
-// A headline key is written the way the app writes it everywhere else ("healthScore" -> "Health score"), never as the stored key,
+// A headline key is written the way the app writes it everywhere else ("healthScore" -> "Technical health"), never as the stored key,
 // a client should not have to read our field names. The few keys that no rule can make readable are named outright.
 const NAMED: Record<string, string> = { qa: 'Quality check', eeatScore: 'E-E-A-T score', aiOverviews: 'AI Overviews', aiSessions: 'AI sessions', url: 'URL' };
 const label = (k: string) =>

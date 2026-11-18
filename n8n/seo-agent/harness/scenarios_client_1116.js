@@ -262,6 +262,8 @@ module.exports = async (ctx) => {
     for (const node of ['AI Target Settle', 'AI Target Settle (Idle)']) {
       const out = (await run(node, [{ json: {} }])).map(i => i.json); const by = (id) => out.find(o => o.target_id === id) || {};
       console.log('   ' + node + ' ->', J(out.map(o => [o.target_id, o.status, o.reason_code])));
+      // CR17 Q2 (2026-11-17): a folded question keeps a ladder page of another search only once that page is LIVE (scenarios_cr17_g.js CR17G6);
+      // a page only written (this fixture) still puts the question back in the queue
       check(node + ': published -> written (code live, its address), failed -> queued (run_failed), a ladder page of another search -> queued, the same search in other words -> written',
         by('ait_pub').status === 'written' && by('ait_pub').reason_code === 'live' && /x\.example\/peppol/.test(by('ait_pub').reason_args)
         && by('ait_fail').status === 'queued' && by('ait_fail').reason_code === 'run_failed' && by('ait_fold').status === 'queued' && /another search/.test(by('ait_fold').reason)

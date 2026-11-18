@@ -51,6 +51,19 @@ import {
   aiQuestionAction,
   aiTargetInput,
   type AiQuestionInputs,
+  clientText,
+  foldByIssue,
+  isIndexFinding,
+  pageKey,
+  recSourceOf,
+  splitTitle,
+  withRule,
+  openAlertCount,
+  indexingSupersedesAudit,
+  healthLabelFor,
+  aiQuestionInputsOf,
+  junkLinkSite,
+  type LinkStatusCounts,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, ga4Now, gscNow, previousOfType, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -75,7 +88,7 @@ export interface SiteBundle {
   /** the engine tracks the site but its weekly reports go to another address (an older setup): they never reach this app */
   reportsElsewhere: boolean;
   /** v4.13 Link Builder: pitches waiting, a mailbox, replies waiting, listings competitors have */
-  links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[] };
+  links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[]; counts: LinkStatusCounts | null };
   /** keyword-first: when the website's latest keyword research arrived (null: none yet) */
   researchAt?: string | null;
   /** Index coverage (2026-10-29): the daily index check's newest counts (null: not run yet, or it could not be read) */
@@ -168,6 +181,15 @@ const TO_MONTH = 30 / 28;
  * the open ones carry their key (the "I've done it, check now" button) and a blocked AI search crawler is recommended too.
  */
 export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTask[]): Recommendation[] {
+  return foldByIssue(recommendQueue(site, x, tasks)).slice(0, 60);
+}
+
+/**
+ * FX-SERVER (review R3 L2): the queue BEFORE one card per issue: every item in queue order with its rule and issue. The states are decided
+ * per item on this list (recommendationStates.ts), and only then are the items still to do folded into one card per issue: a member folded
+ * under another card is never "gone from its source", and a resolved or dismissed card never hides an open sibling nothing checked.
+ */
+export function recommendQueue(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTask[]): Recommendation[] {
   const taskOpen = (key: string) => !tasks || tasks.some((t) => t.key === key && t.state === 'todo');
   const out: Recommendation[] = [];
   // REP 3.3: every item carries what it is worth. Where the caller measured a quantity it passes one; where it did not, the visible
@@ -257,8 +279,13 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const L = x.links;
   if (L && L.repliesWaiting)
     add({ id: 'links:replies', category: 'backlinks', priority: 'high', title: `${L.repliesWaiting} link-building repl${L.repliesWaiting === 1 ? 'y' : 'ies'} waiting for your answer`, detail: 'Someone answered your pitch. A suggested answer is ready: edit it and send it in the same thread. A quick answer is what turns a reply into a link.', action: { label: 'Answer', page: 'links' } });
-  if (L && L.drafted && !L.mailbox)
-    add({ id: 'links:mailbox', category: 'backlinks', priority: 'high', title: 'Connect your mailbox to send the link pitches', detail: `${L.drafted} pitch${L.drafted === 1 ? ' is' : 'es are'} drafted. They go out from your own address (company settings > Mailboxes) after you approve them, never from ours.`, action: { label: 'See the pitches', page: 'links' } });
+  // CR17-E (F9, wired by the integrator): the pitches waiting for the client come from the one link status model (shared link-status.ts);
+  // with no mailbox they can still be sent by hand ("I sent it myself"), so this is a medium step, not a blocker
+  const waitingPitches = L?.counts ? L.counts.waitingForYou : L?.drafted ?? 0;
+  if (L && waitingPitches && !L.mailbox)
+    add({ id: 'links:mailbox', category: 'backlinks', priority: 'medium', title: 'Connect a mailbox, or send the link pitches yourself',
+      detail: `${waitingPitches} pitch${waitingPitches === 1 ? ' is' : 'es are'} written and waiting for you. Connect your mailbox (company settings > Mailboxes) and approve them, or copy each one, send it from your own e-mail and press "I sent it myself". Nothing is sent for you.`,
+      action: { label: 'See the pitches', page: 'links' } });
   else if (L && L.drafted)
     add({ id: 'links:approve', category: 'backlinks', priority: 'high', title: `${L.drafted} link-building pitch${L.drafted === 1 ? '' : 'es'} ready for your approval`, detail: 'Each one is written for one site (a dead link to replace, a list that leaves you out, a mention without a link) with the right page of yours and the right person. Read, edit and approve: they go out from your mailbox, a few a day.', action: { label: 'Review the pitches', page: 'links' } });
   for (const l of (L?.listingsMissing ?? []).slice(0, 2))
@@ -355,13 +382,11 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const engine = [...(snap?.actions ?? []), ...(x.ai.report?.actions ?? []), ...(x.rankNext ? [x.rankNext] : [])];
   // client report 2026-11-16 (issue 1): an AI question's page goes through the shared resolver, as on the AI visibility page (the question's
   // own search, never the panel topic; the AI target; "Improve <page>" when a page owns the search; nothing when its page exists)
+  // CR17-G (Q3, wired by the integrator): the same inputs the AI visibility page decides with (the server's page list with moves followed,
+  // the targets with the answered override, the next AI check); the ladder heads fall back to the rankings' ladders
   const aiInputs: AiQuestionInputs = {
-    prompts: x.ai.prompts,
-    questions: x.ai.report?.questions ?? [],
-    targets: x.ai.growth?.targets ?? [],
-    written: x.ai.pagesWritten ?? x.content.items.filter((c) => !['failed', 'held'].includes(c.status)).map((c) => ({ keyword: c.keyword, status: c.status, publishedUrl: c.publishedUrl, startedAt: c.startedAt, source: c.source })),
-    market: site.country ?? undefined,
-    ladderHeads: x.rankings.ladders.map((l) => l.headKeyword).filter(Boolean),
+    ...aiQuestionInputsOf(x.ai, site.country ?? ''),
+    ladderHeads: x.ai.ladderHeads?.length ? x.ai.ladderHeads : x.rankings.ladders.map((l) => l.headKeyword).filter(Boolean),
   };
   for (const a of engine) {
     const ai = a.source === 'ai_visibility' && aiQuestionBody(a.apiBody) ? aiQuestionAction({ apiBody: a.apiBody }, aiInputs) : null;
@@ -383,11 +408,12 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
       }
       add({
         // the id the item always had (the action's own keyword), so a ticket made from it is not made twice
-        id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
+        id: engineRecId(a),
         category: 'ai',
         priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-        title: cutTitle(a.action),
-        detail: [a.why, improve || ai.step !== 'improve' ? ai.note : ''].filter(Boolean).join(' '),
+        // CR17-H (F1): a title never ends mid-sentence; what does not fit opens the detail
+        title: splitTitle(a.action).title,
+        detail: [splitTitle(a.action).rest, a.why, improve || ai.step !== 'improve' ? ai.note : ''].filter(Boolean).join(' '),
         evidence: `from the ai visibility report`,
         action: { label: improve ? 'Improve the page for this question' : 'Write the answer page', mode: 'keyword', prefill },
       }, {
@@ -427,11 +453,11 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
     if (!action && a.url) action = { label: 'Open', href: a.url };
     if (!action) action = a.source === 'ai_visibility' ? { label: 'Open AI visibility', page: 'ai' } : a.source === 'rank_tracker' ? { label: 'Open rankings', page: 'rankings' } : { label: 'Open search & traffic', page: 'search' };
     add({
-      id: `engine:${a.source}:${a.type}:${a.keyword ?? a.action.slice(0, 60)}`,
+      id: engineRecId(a),
       category: cat,
       priority: a.priority <= 1 ? 'high' : a.priority === 2 ? 'medium' : 'low',
-      title: ownTitle || cutTitle(a.action),
-      detail: a.why + ownNote,
+      title: ownTitle || splitTitle(a.action).title,
+      detail: [ownTitle ? '' : splitTitle(a.action).rest, a.why + ownNote].filter(Boolean).join(' '),
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
     }, {
@@ -449,7 +475,7 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   // R66: a score drop only within one report type, a full report after a technical audit is a different scale, not a fall
   const prevAudit = previousOfType(t.audits, t.audits.length - 1);
   if (latestAudit && prevAudit && latestAudit.healthScore < prevAudit.healthScore - 2)
-    add({ id: 'tech:score-drop', category: 'technical', priority: 'high', title: `Health score fell from ${prevAudit.healthScore} to ${latestAudit.healthScore}`, detail: 'New issues appeared since the previous audit. Start with the new critical and high findings.', action: { label: 'See what changed', page: 'technical' } });
+    add({ id: 'tech:score-drop', category: 'technical', priority: 'high', title: `${healthLabelFor(latestAudit.reportType)} fell from ${prevAudit.healthScore} to ${latestAudit.healthScore}`, detail: 'New issues appeared since the previous audit. Start with the new critical and high findings.', action: { label: 'See what changed', page: 'technical' } });
   // G26 (2026-10-12, FIX_PLAN): the findings arrive in the audit's own impact order (services/data.ts), so these are the six that matter most,
   // and each one carries the line the audit used to rank it. Where the audit weighted them, its three highest-impact findings are the "high"
   // ones here too, otherwise a Critical on a page nobody visits would be pushed above the index blocker on the pages that earn the traffic,
@@ -512,7 +538,9 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   const lastBl = bl.snapshots[bl.snapshots.length - 1];
   const REASON: Record<string, string> = { link_removed: 'the link was removed from the page', page_gone: 'the linking page is gone', domain_gone: 'the linking site no longer exists', not_seen: 'no source has seen it for 4 months' };
   const confirmed = (bl.latest?.lost ?? []).filter((l) => !l.pending && l.reason !== 'domain_gone' && (l.domainRank >= 100 || l.reason));
-  for (const l of confirmed.filter((l) => l.domainRank >= 100 || bl.refs.find((r) => r.refDomain === l.fromDomain && r.seoValue >= 35)).slice(0, 3))
+  // CR17-E (C4, wired by the integrator): a link from a junk page (a job listing, a profile, a code host, a link farm) is not worth winning back
+  const junkLost = (l: (typeof confirmed)[number]) => { const ref = bl.refs.find((r) => r.refDomain === l.fromDomain); return !!junkLinkSite({ domain: l.fromDomain, url: l.fromUrl || ref?.fromUrl, title: l.title || ref?.pageTitle, linkType: ref?.linkType, spam: Math.max(l.spam ?? 0, ref?.spamScore ?? 0) }); };
+  for (const l of confirmed.filter((l) => !junkLost(l) && (l.domainRank >= 100 || bl.refs.find((r) => r.refDomain === l.fromDomain && r.seoValue >= 35))).slice(0, 3))
     add({ id: `bl:lost:${l.fromDomain}`, category: 'backlinks', priority: 'high', title: `Win back the link from ${l.fromDomain}`, detail: `Checked twice on the page: ${REASON[l.reason ?? ''] ?? 'the link is gone'}. The outreach pipeline has a draft asking to restore it.`, evidence: `authority ${l.domainRank}${l.lastSeen ? ` · last seen ${l.lastSeen}` : ''}`, action: { label: 'Open backlinks', page: 'backlinks' } }, {
       impact: impactFromPoints(Math.min(20, l.domainRank / 30)),
       confidence: 'modelled',
@@ -577,7 +605,115 @@ export function recommend(site: SiteRow, x: SiteBundle, tasks?: readonly SiteTas
   for (const { rec, score } of kiRecommendations(x.ki)) add(rec, score);
 
   // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
-  return queueOrder(out).slice(0, 60);
+  return rankQueue(out, x);
+}
+
+/**
+ * CR17-H (client report 2026-11-17, Q4 + F1): the last pass every list goes through, so the Recommendations page, the Overview, the Pipeline
+ * and the issue trackers read one list.
+ * 1. Pages Google has not put in search are ONE card when Index coverage runs (it owns indexing): the weekly report's "Request indexing for
+ *    <page>", the audit's "A large share of important pages is not indexed" and "Ask Google to read these pages again" were three asks in
+ *    three wordings for the same pages (`foldNotIndexed`).
+ * 2. Each item gets its family rule (why, how with its guide, how we check it) and its badge from the queue score, capped by how sure we are;
+ *    a measure that is not a task (AI names you in N%, spammy links) leaves the list for its page's KPI (`withRule`).
+ * 3. Every client-facing string goes through the one client-copy guard (`clientText`).
+ * 4. One card per issue (a page, an AI question, a link, a search): the others become "Also reported by" (`foldByIssue`).
+ */
+export function finishQueue(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
+  return foldByIssue(rankQueue(out, x)).slice(0, 60);
+}
+
+/** Steps 1 to 3 of finishQueue: the queue in order with rules and issues, not folded yet (bounded: at most 150 items). */
+export function rankQueue(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
+  const folded = foldNotIndexed(out, x);
+  const ruled = folded.map(withRule).filter((r): r is Recommendation => !!r).map(cleanCopy);
+  return queueOrder(ruled).slice(0, 150);
+}
+
+/**
+ * FX-SERVER (review R3 L3): the id of an item from a weekly report, stable across weeks. With its search: the search (as always, so tickets
+ * and states made from it keep their key). Without one: the page it is about, else its wording with the numbers taken out ("3 pages" next
+ * week is "4 pages"), so a new wording of the same item does not start a new row, and a dismissal sticks.
+ */
+export function engineRecId(a: { source: string; type: string; keyword?: string | null; url?: string | null; action: string }): string {
+  if (a.keyword) return `engine:${a.source}:${a.type}:${a.keyword}`;
+  const page = a.url ? pageKey(a.url) : '';
+  if (page) return `engine:${a.source}:${a.type}:page:${page}`;
+  return `engine:${a.source}:${a.type}:${a.action.toLowerCase().replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').trim().slice(0, 60)}`;
+}
+
+/** Every string a client reads on a card, through the client-copy guard (shared/src/client-copy.ts). */
+function cleanCopy(r: Recommendation): Recommendation {
+  return {
+    ...r,
+    title: clientText(r.title) || r.title,
+    detail: clientText(r.detail),
+    ...(r.evidence ? { evidence: clientText(r.evidence) } : {}),
+  };
+}
+
+/** The members of the one "not in Google yet" card: the weekly report's index action per page, the audit's indexing finding, ask-Google. */
+const isNotIndexedAsk = (r: Recommendation, findings: SiteBundle['technical']['findings']): boolean =>
+  /^engine:[a-z_]+:index:/.test(r.id) || r.id === 'ix:ask_google' || (r.id.startsWith('tech:') && isIndexFinding(findings.find((f) => `tech:${f.key}` === r.id) ?? { key: r.id.slice(5) }));
+
+/**
+ * CR17-H (Q1 + Q4): with Index coverage running for the website, every "this page is not in Google" ask becomes one card that opens the
+ * Indexing page, where each page has Google's own reason and the one next step. Nothing is folded while Index coverage is off or has not
+ * run (the weekly report's and the audit's items then stay, as before). The card lists the pages it covers (`subjects`), which is what
+ * its check reads: it is resolved when the daily index check finds them in Google.
+ * Adapter (package C, Index coverage): `notIndexedCard` may be replaced by `setNotIndexedCard` with Index coverage's own summary.
+ */
+export function foldNotIndexed(out: readonly Recommendation[], x: Pick<SiteBundle, 'indexing' | 'technical'>): Recommendation[] {
+  const ix = x.indexing;
+  if (!ix || !indexingSupersedesAudit(ix)) return [...out];   // CR17-C: Index coverage owns indexing asks once it has a reading
+  const members = out.filter((r) => isNotIndexedAsk(r, x.technical.findings));
+  if (!members.length) return [...out];
+  const card = notIndexedCard(members, ix);
+  const first = out.findIndex((r) => members.includes(r));
+  const rest = out.filter((r) => !members.includes(r));
+  return card ? [...rest.slice(0, first), card, ...rest.slice(first)] : rest;
+}
+
+/** The pages a member is about (its button's page, the address in its text, the ask-Google list). */
+function memberPages(r: Recommendation, ix: IndexingForRecs): string[] {
+  if (r.id === 'ix:ask_google') return ix.askGoogle.map((p) => p.url);
+  const own = r.action?.href ?? (r.action?.prefill?.existingPageUrl as string | undefined) ?? '';
+  const inText = [r.title, r.detail, r.evidence ?? ''].join(' ').match(/https?:\/\/[^\s)]+/g) ?? [];
+  return [own, ...inText].map((u) => u.replace(/[.,;:]+$/, '')).filter(Boolean);
+}
+
+export type NotIndexedCard = (members: readonly Recommendation[], ix: IndexingForRecs) => Recommendation | null;
+let notIndexedCardImpl: NotIndexedCard = defaultNotIndexedCard;
+/** Index coverage (package C) may hand its own summary card here; the default below builds it from the members. */
+export function setNotIndexedCard(fn: NotIndexedCard | null): void {
+  notIndexedCardImpl = fn ?? defaultNotIndexedCard;
+}
+const notIndexedCard: NotIndexedCard = (members, ix) => notIndexedCardImpl(members, ix);
+
+function defaultNotIndexedCard(members: readonly Recommendation[], ix: IndexingForRecs): Recommendation | null {
+  const seen = new Map<string, string>();
+  for (const m of members) for (const u of memberPages(m, ix)) if (pageKey(u) && !seen.has(pageKey(u))) seen.set(pageKey(u), u);
+  const pages = [...seen.values()];
+  const ask = ix.askGoogle.length;
+  const sources = [...new Set(members.map((m) => recSourceOf(m.id)))];
+  return {
+    id: 'ix:not_indexed',
+    category: 'technical',
+    priority: 'medium',
+    title: pages.length === 1 ? 'A page of yours is not in Google yet' : 'Some of your pages are not in Google yet',
+    detail: [
+      'The daily index check reads Google\'s own view of each page and the Indexing page gives each one its next step.',
+      'A new page Google has not visited needs a link from a page that is already in Google, and time: rewriting it does not help a page Google has not read.',
+      'A page Google read and left out is improved at its own address. A page you moved to a new address needs nothing more than its permanent redirect.',
+      ask ? `For ${ask === 1 ? 'one page' : `${ask} pages`}, asking Google to read ${ask === 1 ? 'it' : 'them'} again in Search Console is the right next step.` : '',
+    ].filter(Boolean).join(' '),
+    ...(pages.length ? { evidence: pages.slice(0, 5).map((u) => indexPath(u)).join(' · ') + (pages.length > 5 ? ` and ${pages.length - 5} more` : '') } : {}),
+    action: { label: 'See the pages', page: 'indexing' },
+    ...(ask ? { guideVars: { pageUrl: ix.askGoogle[0].url } } : {}),
+    subjects: pages,
+    alsoFrom: sources.filter((s) => s !== 'Index coverage'),
+    score: scoreOf(ruleScoreFor('ix:not_indexed')!),
+  };
 }
 
 /**
@@ -776,6 +912,8 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
   // a free-sources-only check (v4.10, mode 'free') has no DataForSEO figures: the overview shows the latest check that used DataForSEO
   const lastBl = [...bl].reverse().find((b) => b.mode !== 'free') ?? bl[bl.length - 1] ?? null;
   const ga4 = ga4Now(snap, x.settings.tracking);
+  // CR17-H (Q4): the Overview's top recommendations are the To do tab's (a dismissed, resolved or waiting item leaves both at once)
+  const todo = await import('./recommendationStates').then((m) => m.todoRecommendations(org, site, x, tasks, recommendQueue(site, x, tasks)));
   return {
     site: { domain: site.domain, trackingStatus: site.trackingStatus, verified: !!site.verifiedAt },
     // 2026-10-28: what the weekly cycle runs on its own (the checklist offers it as scheduled, not as a manual run) and GA4 by the shared rule
@@ -794,7 +932,7 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
     },
     rankings: {
       ladders: x.rankings.ladders.length,
-      keywords: kw.length + ladderRungs.length,
+      keywords: x.rankings.tracked?.total ?? kw.length + ladderRungs.length,   // CR17-I (F8): the one tracked-keyword count
       top3: positions.filter((p) => p <= 3).length,
       top10: positions.filter((p) => p <= 10).length,
       top50: positions.filter((p) => p <= 50).length,
@@ -804,8 +942,8 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
       pagesPerWeek: x.content.cadence?.pagesPerWeek ?? 0,
       caseStudies: x.content.caseStudies.length,
     }),
-    alerts: { open: x.alerts.alerts.filter((a) => a.status !== 'resolved' && a.status !== 'closed').length, checkinDue: x.alerts.checkinDue },
-    recommendations: recommend(site, x, tasks).slice(0, 6),
+    alerts: { open: openAlertCount(x.alerts.alerts), checkinDue: x.alerts.checkinDue },   // CR17-D: not resolved, not seen, not an Info notice
+    recommendations: todo.slice(0, 6),
     reports,
   };
 }

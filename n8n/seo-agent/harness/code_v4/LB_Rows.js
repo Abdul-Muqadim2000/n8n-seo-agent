@@ -72,7 +72,7 @@ return sites.map(s => {
       r.sequence_json = JSON.stringify(steps); r.drafted_at = s.checked_at;
       if (v.ok) { r.status = 'drafted'; drafted++; }
       else { r.status = 'needs_edit'; r.fit_reason = 'held for your edit: ' + (v.held || []).join('; ').slice(0, 400); held++; } }
-    for (const sk of (qa.writer_skip || [])) { const r = rowFor(sk); if (!r || ['drafted', 'needs_edit'].includes(r.status)) continue; r.status = 'not_fit'; r.fit_reason = 'writer: ' + clean(sk.reason, 200); skipped++; }
+    for (const sk of (qa.writer_skip || [])) { const r = rowFor(sk); if (!r || ['drafted', 'needs_edit'].includes(r.status)) continue; r.status = 'not_fit'; r.fit_reason = 'writer: ' + clean(sk.reason, 200); r.reason_code = 'writer_skip'; skipped++; }   // CR17-E: the verdict code
   }
   return { json: { site_id: s.site_id, outreach_rows: rows, prospect_rows: s.prospect_rows, listing_rows: s.listing_rows, impact_rows: s.impact_rows, cache_rows: [s.cache_row], drafted, skipped, held, writer_error: qa ? qa.writer_error : '' } };
 });

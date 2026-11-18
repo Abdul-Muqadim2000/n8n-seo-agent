@@ -152,7 +152,14 @@ def dt_update_where_params(table, cols, conditions, values):
 # ---- Search Console notices (mail watcher) and monthly check-ins (v4.3) ----
 ALERTS_TABLE = 'seo_console_alerts'
 CHECKIN_TABLE = 'seo_console_checkins'
-ALERTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('kind', 'string'), ('severity', 'string'), ('subject', 'string'), ('summary', 'string'), ('received_at', 'string'), ('message_id', 'string'), ('status', 'string'), ('source', 'string')]
+ALERTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('kind', 'string'), ('severity', 'string'), ('subject', 'string'), ('summary', 'string'), ('received_at', 'string'), ('message_id', 'string'), ('status', 'string'), ('source', 'string'),
+               # client report 2026-11-17 (devaicon.com F5, build section 194): one open alert per condition, closed when the condition is gone.
+               # condition_key = watch:<site_id>:<family>:<page hash> (Page Watch; '' on mail / check-in alerts), last_seen_at / count = the
+               # condition seen again (never a new row a day), resolved_at / resolution = when and why it closed (status 'resolved'), ack_by /
+               # ack_at = "Mark as seen" in the app (the alert stays listed, it leaves the open count). New columns reach the live table only
+               # through sync_tables.py.
+               ('condition_key', 'string'), ('last_seen_at', 'string'), ('count', 'number'), ('resolved_at', 'string'), ('resolution', 'string'),
+               ('ack_by', 'string'), ('ack_at', 'string')]
 CHECKIN_COLS = [('site_id', 'string'), ('domain', 'string'), ('month', 'string'), ('manual_action', 'boolean'), ('security_issue', 'boolean'), ('notes', 'string'), ('coverage_json', 'string'), ('not_indexed_total', 'number'), ('csv_kind', 'string'), ('submitted_at', 'string'), ('source', 'string'), ('request_id', 'string'),
                 # D25c (2026-10-12, FIX_PLAN): a test check-in is stored like any other but never counts as the month's answer
                 # (v5/code/_checkin_test.js: the form's "test" answer, the API's is_test, a test caller, or a note that marks it)
@@ -287,7 +294,9 @@ AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string')
                ('fanout_gap_json', 'string'), ('demand_json', 'string'), ('imports_json', 'string'), ('exec_ids', 'string'), ('notes_json', 'string'),
                # W2-E3 + W2-A contract addition (2026-10-23): the persona effect on API answers, [{role, with:{rate, n}, without:{rate, n}, delta, lo, hi,
                # significant}] (rates and the 95% interval of the difference in points 0-100; the 28-day pooled figures)
-               ('persona_effect_json', 'string')]
+               ('persona_effect_json', 'string'),
+    # CR17-F (2026-11-17, section 196): the software makers and platforms AI names (CMP.role software / your_platform), kept apart from the competitors
+    ('software_json', 'string')]
 # W2-E3 (2026-10-23, WAVE2_CONTRACTS.md §5): the owner's AI reports, uploaded in the app (W2-A writes, upsert by site_id + source + day + url +
 # query): Bing Webmaster "AI Performance" (source bing_ai: citations per page and query across Copilot) and the Search Console performance
 # export filtered to AI Mode / AI Overviews (source gsc_ai: impressions and clicks). The AI Visibility Tracker reads the period's rows.
@@ -404,7 +413,9 @@ KI_KW_COLS = [('site_id', 'string'), ('domain', 'string'), ('market', 'string'),
               ('score', 'number'), ('score_low', 'number'), ('score_high', 'number'), ('low_confidence', 'boolean'), ('verdict', 'string'),
               ('cluster_id', 'string'), ('is_head', 'boolean'), ('cluster_size', 'number'), ('cluster_demand', 'number'), ('serp_read_at', 'string'),
               ('top10_json', 'string'), ('page_action', 'string'), ('page_url', 'string'), ('cannibal_json', 'string'), ('competitors_json', 'string'),
-              ('striking', 'boolean'), ('run_id', 'string'), ('fetched_at', 'string'), ('updated_at', 'string')]
+              ('striking', 'boolean'), ('run_id', 'string'), ('fetched_at', 'string'), ('updated_at', 'string'),
+    # CR17-F (2026-11-17, section 196): the client service a kept search belongs to ('' = matches none: generic), for the per-service balance
+    ('service', 'string')]
 # seo_ki_gaps: one row per gap against the chosen competitor set (upsert gap_id): its type, the evidence, the action and its credits, its status
 KI_GAPS_TABLE = 'seo_ki_gaps'
 KI_GAPS_COLS = [('gap_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('market', 'string'), ('type', 'string'), ('keyword', 'string'),
@@ -420,7 +431,9 @@ PROSPECT_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain'
                  ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string'),
                  ('score', 'number'), ('origin', 'string'), ('contact_email', 'string'), ('contact_url', 'string'), ('contacted_at', 'string'), ('followup_step', 'number'),
                  ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string'),   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
-                 ('drafted_at', 'string')]   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
+                 ('drafted_at', 'string'),   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
+    # CR17-F (2026-11-17, section 196): set when the AI question a prospect came from was retired (never pitched since); the row and its status stay
+    ('retired_at', 'string')]
 # v4.10: the link ledger — one row per site and referring domain, merged from every source (DataForSEO, Bing Webmaster Tools, the Search Console
 # links export, GA4 referrals, Wikipedia / Hacker News / news / web mentions) and verified by fetching the linking page (BACKLINKS_SPEC.md).
 LINKS_TABLE = 'seo_backlinks'
@@ -442,7 +455,13 @@ LINK_OUTREACH_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_do
                       ('fit', 'number'), ('fit_reason', 'string'), ('checks_json', 'string'), ('page_url', 'string'), ('page_title', 'string'), ('evidence', 'string'),
                       ('contacts_json', 'string'), ('contact_email', 'string'), ('contact_form_url', 'string'), ('country', 'string'), ('language', 'string'),
                       ('target_url', 'string'), ('target_reason', 'string'), ('anchor_hint', 'string'), ('sequence_json', 'string'), ('deadline', 'string'),
-                      ('drafted_at', 'string'), ('checked_at', 'string'), ('request_id', 'string')]
+                      ('drafted_at', 'string'), ('checked_at', 'string'), ('request_id', 'string'),
+                      # CR17-E (client report 2026-11-17, C4; build section 195): the link text itself (the business name, our page's own
+                      # title without the brand suffix, or the bare address; never a keyword) beside its kind `anchor_hint`, and a code for
+                      # the verdict (`reason_code`: competitor | government | platform | job_board | sells_links | low_authority | off_topic |
+                      # no_matching_page | ...; OK.reasonCode), so a website-level verdict reaches every row of that website and the app
+                      # never parses a sentence. Package F (C5) proposes the same `reason_code` column: one column, both packages.
+                      ('anchor_text', 'string'), ('reason_code', 'string')]
 LISTINGS_TABLE = 'seo_listings'
 LISTINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('listing_id', 'string'), ('name', 'string'), ('category', 'string'), ('status', 'string'),
                  ('profile_url', 'string'), ('rel', 'string'), ('competitors', 'string'), ('submit_url', 'string'), ('priority', 'number'), ('why', 'string'),
@@ -499,7 +518,15 @@ PAGE_WATCH_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'
                    ('robots_blocked', 'boolean'), ('robots_hash', 'string'), ('state', 'string'), ('changes', 'string'), ('last_change_at', 'string'),
                    ('changed_count', 'number'), ('error', 'string'),
                    ('inspect_at', 'string'), ('index_state', 'string'), ('indexed', 'string'), ('coverage', 'string'), ('google_canonical', 'string'),
-                   ('last_crawl', 'string'), ('mobile', 'string'), ('rich_results', 'string'), ('inspect_error', 'string')]
+                   ('last_crawl', 'string'), ('mobile', 'string'), ('rich_results', 'string'), ('inspect_error', 'string'),
+                   # build section 194 (client report 2026-11-17, F5 / F10): the address this page moved to, a permanent redirect to a working page
+                   # of the same site seen on two reads (v5/code/_moves.js MV.confirm). The watch then reads the new address instead, and the
+                   # ladder / content log / AI question / AI readiness rows follow it. '' = it did not move.
+                   ('moved_to', 'string'),
+                   # CR17-FX-INDEX (review R1 M1): the verdict on where this page's redirect landed at its last read (moved / temporary / gone / error /
+                   # home / noindex / loop / offsite / canonical_elsewhere / locale / broken; '' = no redirect, or a row before this fix). A page that
+                   # keeps redirecting is judged again every day; a verdict that changed (a target that broke after the move) raises an alert.
+                   ('redirect_verdict', 'string')]
 
 # ---- Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md §2): which pages Google left out, why, and what to do. Written ONLY by
 # SEO Agent - Index Coverage (build_index_coverage.py, SEOagentIndexCv1, daily), read by the web app's Indexing page. It reads the Site Tracker's
@@ -1388,3 +1415,85 @@ def serp_cache_wrap(wf, http, label, body_js, sc_src, rt_src, what, unit='search
     assert plan['jsCode'].count(old) == 1, 'KW-SERP: %s does not read its requests from %s' % (plan_node, parent)
     plan['jsCode'] = plan['jsCode'].replace(old, "(() => { try { return $('" + SP + "').all(); } catch (e) { return " + old + "; } })()")   # a run with no split (an older caller) pairs as before
     return {'keys': K, 'load': LD, 'split': SP, 'if': IF_, 'with_cache': WC, 'rows': RW, 'new': NR, 'save': SV, 'restore': RS, 'dsts': [t['node'] for t in dsts]}
+
+
+# =============================================================================
+# CR17-B (client report 2026-11-17, C1; build section 200): ONE list of the engine tables that hold a website's history, and how a row
+# is known to be that website's. Read by the Site Admin `delete` chain (build_site_tracker.py), by the app's backstop (generated into
+# app/shared/src/engine-purge.generated.ts by build_v4.py section 200; app/server/src/services/enginePurge.ts) and by the private
+# backfill script (tools/repair_b_purge.py). Every table of this file is either purged with the website or kept with a reason
+# (purge_registry_check() fails the build otherwise), so a new table cannot be forgotten.
+# How a row is matched, always by EXACT equality (never a prefix or a substring: devaicon.com never touches mydevaicon.com):
+#   'domain'  the column equals the website's domain or its www. form
+#   'id'      the column equals the engine's site id ('site_' + domain with every non [a-z0-9] run as '-'); used only for tables without a
+#             domain column. Two domains can share an id (foo.co.uk / foo-co.uk): the app refuses the second one when it is verified
+#             (services/engineSite.ts), and its backstop skips the 'id' keys while another domain holds the id.
+# =============================================================================
+import re as _re
+_PD = [('domain', 'domain')]
+SITE_PURGE = [
+    (LADDER_TABLE, _PD), (LADDER_SETTINGS_TABLE, _PD),
+    (HISTORY_TABLE, [('domain', 'domain'), ('ladder_id', 'id')]),          # ladder checks carry the domain; the Site Tracker's live checks use the site id as ladder_id
+    (SITES_TABLE, _PD), (METRICS_TABLE, _PD), (QUERY_TABLE, _PD), (PAGES_TABLE, [('site_id', 'id')]),
+    (LOG_TABLE, _PD), (TRENDS_TABLE, _PD), (CADENCE_TABLE, _PD),
+    (ALERTS_TABLE, _PD), (CHECKIN_TABLE, _PD), (PROFILE_TABLE, _PD), (CASE_TABLE, _PD),
+    (MONITORS_TABLE, _PD), (AI_PROMPTS_TABLE, _PD), (AI_ANSWERS_TABLE, _PD), (AI_VIS_TABLE, _PD), (AI_DAILY_TABLE, _PD), (AI_IMPORTS_TABLE, _PD),
+    (AI_PAGES_TABLE, _PD), (AI_TARGETS_TABLE, _PD), (AI_GROWTH_TABLE, _PD),
+    (AI_RANK_RUNS_TABLE, _PD), (AI_RANK_QUESTIONS_TABLE, _PD), (AI_RANK_ACTIONS_TABLE, _PD), (AI_RANK_SOURCES_TABLE, _PD),
+    (BL_SNAP_TABLE, _PD), (PROSPECT_TABLE, _PD), (LINKS_TABLE, _PD), (LINK_OUTREACH_TABLE, _PD), (LISTINGS_TABLE, _PD), (LINK_IMPACT_TABLE, _PD),
+    (LINK_GRAPH_TABLE, _PD), (LINK_IMPORTS_TABLE, _PD),
+    (AUDITS_TABLE, _PD), (AUDIT_FINDINGS_TABLE, _PD), (PAGE_WATCH_TABLE, _PD),
+    (INDEX_PAGES_TABLE, _PD), (INDEX_HISTORY_TABLE, [('site_id', 'id')]), (INDEX_RUNS_TABLE, _PD), (UPDATE_IMPACT_TABLE, _PD),
+    (CACHE_TABLE, [('site_id', 'id'), ('site_id', 'domain')]),              # the website's own keys (site id) and its publish / keyword idempotency keys (domain)
+    (CYCLES_TABLE, _PD), (CYCLE_JOBS_TABLE, [('site_id', 'id')]), (SKIPS_TABLE, [('site_id', 'id')]),
+    (KI_RUNS_TABLE, _PD), (KI_COMP_TABLE, _PD), (KI_KW_TABLE, _PD), (KI_GAPS_TABLE, _PD),
+]
+# kept on purpose (the retention facts say so): nothing in them is one website's history
+SITE_KEEP = {
+    RUN_LEDGER_TABLE: 'cost record of each run (date, kind of run, money); kept for accounting, like the app keeps its cost history after a company is deleted',
+    OPS_ALERTS_TABLE: 'the platform\'s own operations alerts (failed workflow steps); no website column',
+    GOOGLE_EVENTS_TABLE: 'Google\'s public update announcements, the same for every website',
+    AI_RANK_PRIORS_TABLE: 'pooled learning across websites (lever x stage counts), names no website',
+}
+
+
+def purge_values(kind, domain):
+    """-> the exact values a column must equal for a row to be this website's ('domain': bare and www.; 'id': the engine site id)."""
+    d = str(domain or '').strip().lower()
+    d = _re.sub(r'^https?://', '', d)
+    d = _re.sub(r'^www\.', '', d)
+    d = _re.sub(r'[/?#].*$', '', d)
+    d = _re.sub(r':\d+$', '', d)
+    if not d:
+        return []
+    if kind == 'domain':
+        return [d, 'www.' + d]
+    if kind == 'id':
+        return ['site_' + _re.sub(r'[^a-z0-9]+', '-', d)]
+    raise ValueError('unknown purge key kind %r' % kind)
+
+
+def all_engine_tables():
+    """-> every Data Table name this file defines (a module-level *_TABLE string starting seo_)."""
+    return sorted({v for k, v in globals().items() if k.endswith('_TABLE') and isinstance(v, str) and v.startswith('seo_')})
+
+
+def purge_registry_check():
+    """Every table is purged or kept, never both, never twice; every key column is a column of its table."""
+    purged = [t for t, _ in SITE_PURGE]
+    assert len(purged) == len(set(purged)), 'CR17-B: a table is listed twice in SITE_PURGE: %s' % sorted({t for t in purged if purged.count(t) > 1})
+    both = set(purged) & set(SITE_KEEP)
+    assert not both, 'CR17-B: a table is both purged and kept: %s' % sorted(both)
+    missing = sorted(set(all_engine_tables()) - set(purged) - set(SITE_KEEP))
+    assert not missing, 'CR17-B: engine table(s) neither purged with a website nor kept with a reason (add to SITE_PURGE or SITE_KEEP): %s' % missing
+    extra = sorted((set(purged) | set(SITE_KEEP)) - set(all_engine_tables()))
+    assert not extra, 'CR17-B: SITE_PURGE / SITE_KEEP names unknown tables: %s' % extra
+    cols_of = {v: [c for c, _ in globals()[k[:-6] + '_COLS']] for k, v in globals().items() if k.endswith('_TABLE') and isinstance(v, str) and (k[:-6] + '_COLS') in globals()}
+    for t, keys in SITE_PURGE:
+        assert keys, 'CR17-B: %s has no key' % t
+        for col, kind in keys:
+            assert kind in ('domain', 'id'), 'CR17-B: %s key kind %r' % (t, kind)
+            assert col in cols_of.get(t, []), 'CR17-B: %s has no column %r to purge by' % (t, col)
+            if kind == 'id':
+                assert 'domain' not in cols_of[t] or t in (HISTORY_TABLE, CACHE_TABLE), 'CR17-B: %s has a domain column: purge it by domain, not by the shared site id' % t
+    return {'purged': len(purged), 'kept': len(SITE_KEEP)}

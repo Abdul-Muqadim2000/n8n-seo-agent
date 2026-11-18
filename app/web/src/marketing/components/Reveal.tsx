@@ -2,11 +2,17 @@ import { useEffect, useState, type CSSProperties, type ElementType, type ReactNo
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-/** True once the element has scrolled into view (stays true). Under reduced motion or without IntersectionObserver it is true at once. */
+/** True once the element has scrolled into view (stays true). Under reduced motion or without IntersectionObserver it turns true right
+ *  after mounting. It always starts false, in the browser and in the build-time prerender alike, so a prerendered page hydrates with
+ *  the same classes it was written with (a different first value is never patched up by React and would stick). */
 export function useInView<T extends Element>(ref: RefObject<T | null>, { rootMargin = '0px 0px -10% 0px', threshold = 0.15 } = {}): boolean {
-  const [seen, setSeen] = useState(() => reducedMotion() || typeof IntersectionObserver === 'undefined');
+  const [seen, setSeen] = useState(false);
   useEffect(() => {
     if (seen) return;
+    if (reducedMotion() || typeof IntersectionObserver === 'undefined') {
+      setSeen(true);
+      return;
+    }
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(

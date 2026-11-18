@@ -109,6 +109,9 @@ PROMISES = [
      # only on a `written` content-log row" -- is proof one hop away, and the nodes that follow it (the cadence's AI-target
      # settle) must be allowed to say so. The limit is stated rather than implied: this token says the node READ the log, not
      # that it required the row's status to be `written`; the harness scenario is what proves that half.
+     # CR17 review R5 (L1): *AI Target Settle (Publish)* mints `written` only inside the AQ kit (settleOnPublish), which own_code strips, so
+     # naming Publish Check / Detect Published here proved nothing and let any future node that merely names them mint `written` unchallenged.
+     # The kit itself is held to its proof instead (KIT_PROMISES below).
      'evidence': ('article_html', 'page_markdown', "$('Blog Package')", "$('Build Word File')",
                   "$('Load Content Log')", "$('Load Content Log (Run)')"),
      'why': 'D10 / R1: a row saying a page was written while no page was written is read by the ladder plan, the Rank Tracker and '
@@ -135,6 +138,15 @@ BUILDERS = [
             'same run told them "the page could not be fetched"',
      'how': 'pass `live:` (what proved the page is there) at every call site; the builder keeps the row at its earlier state and '
             'says why when the proof is absent'},
+]
+
+# A shared kit that mints a forward state itself, out of sight of check A (own_code strips every kit): the function must keep reading its proof.
+# CR17 review R5 (L1): AQ.settleOnPublish settles an AI question to `written` from content-log rows proved LIVE; it must refuse a row that is not
+# `published` with an address. A rename or a dropped refusal fails the build, like BUILDERS.
+KIT_PROMISES = [
+    {'kit': '_ai_question.js', 'fn': 'const settleOnPublish = ', 'state': 'written',
+     'needles': ("S(r.status) !== 'published'", "S(r.published_url).trim()", "status: 'written'"),
+     'why': "an AI question said `written` (a page answers it) on a row nothing proved live"},
 ]
 
 # A Data Table node can mint a forward state WITHOUT any code at all: `defineBelow` writes the literal straight into the row, so
@@ -538,6 +550,17 @@ def _kits_define():
             if needle not in src:
                 bad.append('v5/code/%s no longer carries %r — the published-row builder was renamed or its refusal removed, so '
                            'state_lint.BUILDERS is stale' % (b['kit'], needle))
+    for kp in KIT_PROMISES:
+        src = open(os.path.join(V5_CODE, kp['kit']), encoding='utf-8').read()
+        i = src.find(kp['fn'])
+        if i < 0:
+            bad.append('v5/code/%s no longer defines %r -- state_lint.KIT_PROMISES is stale' % (kp['kit'], kp['fn'].strip()))
+            continue
+        ends = [j for j in (src.find('\n  const ', i + 1), src.find('\n  return {', i + 1)) if j > 0]
+        body = src[i:min(ends) if ends else len(src)]
+        for needle in kp['needles']:
+            if needle not in body:
+                bad.append('v5/code/%s %s no longer carries %r -- it mints `%s` without its proof (%s)' % (kp['kit'], kp['fn'].strip(), needle, kp['state'], kp['why']))
     for kit, needles in DELIVERY['defines'].items():
         src = open(os.path.join(V5_CODE, kit), encoding='utf-8').read()
         for needle in needles:
@@ -779,6 +802,10 @@ def selftest():
     BUILDERS[0]['defines'] = ('function thisWasRenamed(',)
     res['the_builder_renames_itself'] = {'caught': bool(_kits_define())}
     BUILDERS[0].update(saved)
+    saved3 = dict(KIT_PROMISES[0])
+    KIT_PROMISES[0]['needles'] = KIT_PROMISES[0]['needles'] + ("S(r.proof_nobody_reads) === 'yes'",)
+    res['the_settle_kit_drops_its_proof'] = {'caught': bool(_kits_define())}
+    KIT_PROMISES[0].update(saved3)
     saved2 = dict(VERDICTS[0])
     VERDICTS[0]['fields'] = VERDICTS[0]['fields'] + ('a_field_nobody_has',)
     res['the_verdict_field_list_goes_stale'] = {'caught': bool(_verdict_fields_are_real())}

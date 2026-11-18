@@ -5,10 +5,10 @@ import { signupSchema } from '@seo/shared';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
-import { Field, Input } from '@/components/ui/field';
+import { Checkbox, Field, FieldError, Input } from '@/components/ui/field';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useAuthMutation, useProviders } from '@/lib/queries';
-import { AuthCard, GoogleButton, safeNext } from './shared';
+import { AuthCard, GOOGLE_ERRORS, GoogleButton, safeNext, TermsLabel } from './shared';
 
 type Values = z.input<typeof signupSchema>;
 
@@ -21,8 +21,15 @@ export default function SignupPage() {
   const providers = useProviders();
   const form = useForm<Values>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: '', email: params.get('email') ?? '', password: '', inviteToken },
+    defaultValues: { name: '', email: params.get('email') ?? '', password: '', inviteToken, acceptTerms: false },
   });
+
+  const accepted = form.watch('acceptTerms') === true;
+  const googleError = params.get('error');
+  const askForTerms = () => {
+    form.setError('acceptTerms', { message: 'Tick the box to agree to the Terms and the Privacy Policy before you continue with Google.' });
+    form.setFocus('acceptTerms');
+  };
 
   const onSubmit = form.handleSubmit((v) =>
     signup.mutate(v, {
@@ -46,7 +53,12 @@ export default function SignupPage() {
         </>
       }
     >
-      <GoogleButton next={next ?? '/onboarding'} label="Sign up with Google" />
+      {googleError && (
+        <Callout tone="critical" className="mb-5">
+          {GOOGLE_ERRORS[googleError] ?? googleError}
+        </Callout>
+      )}
+      <GoogleButton next={next ?? '/onboarding'} label="Sign up with Google" terms={{ accepted, onMissing: askForTerms }} />
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <Field label="Your name" error={form.formState.errors.name?.message}>
           {(p) => <Input {...p} autoComplete="name" placeholder="Sara Khan" {...form.register('name')} />}
@@ -57,6 +69,10 @@ export default function SignupPage() {
         <Field label="Password" hint="At least 10 characters, with letters and numbers or symbols." error={form.formState.errors.password?.message}>
           {(p) => <Input {...p} type="password" autoComplete="new-password" {...form.register('password')} />}
         </Field>
+        <div>
+          <Checkbox label={<TermsLabel />} aria-invalid={!!form.formState.errors.acceptTerms} {...form.register('acceptTerms', { onChange: () => form.clearErrors('acceptTerms') })} />
+          <FieldError>{form.formState.errors.acceptTerms?.message}</FieldError>
+        </div>
         {signup.isError && !Object.keys((signup.error as ApiRequestError).fields ?? {}).length && <Callout tone="critical">{errorMessage(signup.error)}</Callout>}
         <Button type="submit" size="lg" className="w-full" loading={signup.isPending}>
           Create account

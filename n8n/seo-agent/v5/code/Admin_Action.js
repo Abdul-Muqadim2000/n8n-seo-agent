@@ -33,6 +33,14 @@ if (fact_answers_sent && (Array.isArray(t.fact_answers) || (typeof t.fact_answer
 const FAP = fact_answers_sent ? FA.parse(t.fact_answers) : { answers: {}, dropped: 0 };
 const fact_answers_json = fact_answers_sent ? JSON.stringify(FAP.answers) : '';
 if (!site_id) throw new Error('site_id or domain is required');
+// CR17-B (2026-11-17, build section 200): `delete` purges the website's engine history (ladder_common.SITE_PURGE) only for a domain the caller
+// NAMED whose engine id is this site id. Never a domain read back from the id: site_my-site-com could be my-site.com or my.site.com.
+const purge_domain = (action === 'delete' && normD(t.domain) && ('site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-')) === site_id) ? normD(t.domain) : '';
+// FX-SERVER (review R5 M5): whether the rows keyed ONLY by the engine site id are this website's. The app reads it before the delete (another
+// domain may hold the same id: site_my-site-com is my-site.com and my.site.com) and sends purge_ids: false when they are not; then every
+// id-keyed delete of this action matches a value no row holds (purge_id), and only the rows that name this domain go. Absent = true (as before).
+const purge_ids = !(t.purge_ids === false || /^(false|0|no|off)$/i.test(String(t.purge_ids == null ? '' : t.purge_ids).trim()));
+const purge_id = purge_ids ? site_id : '(kept: another website uses this engine id)';
 const pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));
 if (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');
 const keyword = String(t.keyword || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -128,12 +136,12 @@ const kiComp = normD(t.comp_domain);
 const kiStatus = String(t.status == null ? '' : t.status).trim().toLowerCase();
 const kiGap = String(t.gap_id == null ? '' : t.gap_id).trim();
 if (action === 'ki_competitor') {
-  if (!/^[A-Z]{2}-[a-z]{2,3}$/.test(kiMarket)) throw new Error('market (the KI market key, e.g. AE-en) is required for action ki_competitor');
+  if (kiMarket && !/^[A-Z]{2}-[a-z]{2,3}$/.test(kiMarket)) throw new Error('market (the KI market key, e.g. AE-en) must look like AE-en for action ki_competitor');   // CR17-F: optional, a domain outside the KI set has no market
   if (!/^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/.test(kiComp)) throw new Error('comp_domain (a competitor host, e.g. example.com) is required for action ki_competitor');
-  if (!['chosen', 'watch', 'dismissed'].includes(kiStatus)) throw new Error('status must be chosen, watch or dismissed');
+  if (!['chosen', 'watch', 'dismissed', 'not_competitor'].includes(kiStatus)) throw new Error('status must be chosen, watch, dismissed or not_competitor');   // CR17-F (section 196): not_competitor works for any domain, KI on or off
 }
 if (action === 'ki_gap') {
   if (!/^g_[a-z0-9]{6,40}$/.test(kiGap)) throw new Error('gap_id is required for action ki_gap');
   if (!['open', 'started', 'dismissed', 'done'].includes(kiStatus)) throw new Error('status must be open, started, dismissed or done');
 }
-return [{ json: { ...(action === 'ki_competitor' || action === 'ki_gap' ? { ki_market: kiMarket, ki_comp_domain: kiComp, ki_status: kiStatus, ki_gap_id: kiGap } : {}), fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
+return [{ json: { ...(action === 'ki_competitor' || action === 'ki_gap' ? { ki_market: kiMarket, ki_comp_domain: kiComp, ki_status: kiStatus, ki_gap_id: kiGap } : {}), fact_answers_sent, fact_answers_json, fact_answers_count: Object.keys(FAP.answers).length, fact_answers_dropped: FAP.dropped, action, site_id, domain: normD(t.domain) || '', purge_domain, purge_ids, purge_id, status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), ...(String(t.note_mode || '') === 'system' ? { note_mode: 'system' } : {}), add_prompts, off_prompts, on_prompts, pin_prompts, unpin_prompts, edit_prompts, accept_prompts, retire_prompts, monitors, content_groups_json, business_facts, market_country: market.country, market_location_code: market.location_code, market_language_code: market.language_code, market_iso: market.country_iso, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

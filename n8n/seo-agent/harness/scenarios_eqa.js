@@ -209,9 +209,12 @@ module.exports = async (ctx) => {
     const SN = 'EQA7 RV-17 — every planned URL ended in "/" while techand.ai\'s sitemap writes none and the site 308-redirects the slash away';
     reset(); begin(SN); const check = mkCheck(SN);
     const src = fs.readFileSync(path.join(CD, 'Ladder_Plan.js'), 'utf8');
-    const a = src.indexOf('const slashFormLP = (() => {'), b = src.indexOf('const plannedUrl = (kw) =>', a), c = src.indexOf('\n', b);
-    check('Ladder Plan carries the slash rule', a > 0 && b > a, 'missing');
-    const mk = (urls) => new Function('base', 'homeUrl', 'slug', src.slice(a, c) + '\nreturn plannedUrl;')({ site_urls: urls }, 'https://www.techand.ai/', (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+    // CR17-G (section 197): the planned address also takes the site's folder (LRU.folderFor, scenarios_cr17_g.js); this check keeps to the
+    // slash rule, with the folder held at the root and the kit's own plannedUrl
+    const a = src.indexOf('const slashFormLP = (() => {'), a2 = src.indexOf('\n', src.indexOf('return ps.filter(', a)), b = src.indexOf('const plannedUrl = (kw, type) =>', a), c = src.indexOf('\n', b);
+    check('Ladder Plan carries the slash rule', a > 0 && b > a && a2 > a, 'missing');
+    const LRU0 = new Function(fs.readFileSync(path.join(CD, '_ladder_rules.js'), 'utf8').replace(/\nreturn \$input[\s\S]*$/, '') + '\nreturn LRU;')();
+    const mk = (urls) => new Function('base', 'homeUrl', 'slug', 'LRU', 'folderLP', src.slice(a, a2) + '\n' + src.slice(b, c) + '\nreturn plannedUrl;')({ site_urls: urls }, 'https://www.techand.ai/', (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-'), LRU0, () => ({ folder: '/' }));
     const techand = FX.parse_brief.site_urls;
     check('techand.ai (no slash in its sitemap): https://www.techand.ai/ai-consulting', mk(techand)('ai consulting') === 'https://www.techand.ai/ai-consulting', mk(techand)('ai consulting'));
     check('a WordPress-style sitemap (slashes): the slash is kept', mk(['https://x.example/a/', 'https://x.example/b/', 'https://x.example/c/'])('ai consulting') === 'https://www.techand.ai/ai-consulting/', 'slash dropped');

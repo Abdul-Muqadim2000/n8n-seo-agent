@@ -11,17 +11,19 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | /api/auth/providers | | `AuthProviders` |
-| POST | /api/auth/signup | `signupSchema` | `Me` (signed in) |
+| POST | /api/auth/signup | `signupSchema` (CR17-B: `acceptTerms: true` required, else 400 with the field `acceptTerms`) | `Me` (signed in); stores `users.terms_version` = `LEGAL_VERSION` and `terms_accepted_at` |
 | POST | /api/auth/login | `loginSchema` | `Me`, or `MfaChallenge` (`{ mfaRequired: true, methods, emailHint }`, no session yet) when two-step verification is on |
 | POST | /api/auth/logout | | `{ ok }` |
 | POST | /api/auth/forgot | `forgotSchema` | `{ ok }` (always, no account enumeration) |
 | POST | /api/auth/reset | `resetSchema` | `{ ok }` (signs out every session) |
 | POST | /api/auth/verify-email | `{ token }` | `{ ok }` |
 | POST | /api/auth/resend-verification | | `{ ok, sent }` |
-| GET | /api/auth/google?next=/path | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`; `/login/mfa?next=` when a second step is due) |
-| GET | /api/me | | `Me`, or `null` when signed out |
+| GET | /api/auth/google?next=/path&terms=<LEGAL_VERSION> | | 302 to Google, back to `/api/auth/google/callback`, then to `next` (or `/login?error=`; `/login/mfa?next=` when a second step is due). CR17-B: a NEW account is created only when `terms` was the current `LEGAL_VERSION` (the sign-up page's tick, cookie `g_terms`); without it the callback answers 302 `/signup?error=terms_required&next=`. Existing accounts sign in without it |
+| GET | /api/me | | `Me`, or `null` when signed out. CR17-B: `user.termsAccepted` (agreed to the current `LEGAL_VERSION`), `user.termsVersion`, `user.termsAcceptedAt` (null for accounts from before 2026-11-17 and SSO / SCIM / admin-created people; nothing is forced yet) |
 | PATCH | /api/me | `updateMeSchema` | `Me` |
 | POST | /api/me/password | `changePasswordSchema` | `{ ok }` |
+| GET | /api/me/deletion | | `AccountDeletionPlan` (CR17-B): `canDelete`, `soleOwnerOf` (the only owner of a company with other members), `agencyWithClients`, `deletes` (companies only this person owns and belongs to, with `websites`), `leaves`, `platformAdmin` |
+| DELETE | /api/me | `deleteAccountSchema` `{ confirm: <own e-mail> }` (step-up; 5 / min) | `{ ok, deletedCompanies, leftCompanies }`; clears the session cookie. 400 `confirm`; 409 `sole_owner` / `agency_has_clients` / `platform_admin` (with `companies`); 403 `reauth_required`. A company only this person owns and belongs to is deleted with the account (`deleteCompany`: its verified websites stop in the engine and their engine history is purged); other memberships end with `team.left` `{ accountDeleted: true }` in that company's log; the platform's `admin_audit` gets `user.self_deleted`; a goodbye e-mail is sent. The platform admin's `DELETE /api/admin/users/:id` uses the same deletion (`services/accountDelete.ts`) |
 
 ### Two-step verification and step-up (G1, `app/docs/IDENTITY.md`, `shared/src/identity.ts`)
 A sign-in with a second factor is two requests: the password (or Google) answers `MfaChallenge` and sets the http-only cookie
@@ -141,7 +143,7 @@ cost or a dollar budget in them (`customerAuditDetails`: keys ending in `Usd` or
 | POST | /api/orgs | `createOrgSchema` | `Org` (caller becomes owner) |
 | GET | /api/orgs/:orgId | | `Org` |
 | PATCH | /api/orgs/:orgId | `updateOrgSchema` (admin) | `Org` |
-| DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n, deletes the company's data in the app) |
+| DELETE | /api/orgs/:orgId | `{ confirm: <company name> }` (owner) | `{ ok }` (stops tracking of its sites in n8n and deletes their engine history, as a website delete does; deletes the company's data in the app) |
 | PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin); `step` is one of `ONBOARDING_STEPS` (shared/src/constants.ts: the wizard's steps in order, `keyword` included, then `done`) | `Org` |
 | PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (**platform admin only**; anyone else 403 "Limits are in Settings → Credits.") | `Org` |
 | POST | /api/orgs/:orgId/hook-token/rotate | (owner / admin; 5 an hour) a new address for the SEO engine's reports: every verified website's engine rows are pointed at it, the old one still delivers for 48 h (a report still arriving on it re-routes its website); the token is never returned. 409 `hook_rotation_settling` inside the previous renewal's 48 h, 409 `hook_rotation_in_progress` when another renewal won the race | `{ rotatedAt, sitesUpdated, sitesFailed: string[], oldAddressWorksUntil }` |
@@ -169,7 +171,7 @@ Keyword-first (2026-10-19): `Site` also carries `timezone` (IANA, `''` = the eng
 up to 30 × 2-80 characters), `cycleWeekday` (0 Sunday - 6, `null` = the weekday tracking started on) and `autopilotLevel` (1 | 2 | 3).
 `createSiteSchema` / `updateSiteSchema` accept `timezone` (an unknown zone is a 400) and `services`; both reach the engine with the next
 "Track my site" (`mode: 'track'`), which sends them with `tracking_started_at`.
-| DELETE | /api/orgs/:orgId/sites/:siteId | (admin) | `{ ok }` (also stops tracking in n8n) |
+| DELETE | /api/orgs/:orgId/sites/:siteId | (admin) | `{ ok }` (also stops tracking in n8n). CR17-B: a verified website's engine history is deleted: Site Admin `delete` with the domain, then the app's own pass (`services/enginePurge.ts`) over the one list `ladder_common.SITE_PURGE` (app copy `shared/src/engine-purge.generated.ts`: 50 tables, exact matches on the domain, its www. form or the engine site id; the site-id-only tables are skipped while another domain holds the id). Kept with a reason (`ENGINE_SITE_KEEP`): `seo_run_ledger` (cost records), `seo_ops_alerts`, `seo_google_events`, `seo_ai_rank_priors`. The app's own runs and reports of the website stay in the company (`site_id` set null) |
 | GET | /api/orgs/:orgId/sites/:siteId/verification | | `SiteVerificationInfo` |
 | POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult`; 409 `engine_id_taken` (as above; a unique index on verified websites settles two verifications at the same moment) |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
@@ -263,11 +265,16 @@ Verified sites only (403 `forbidden` otherwise); another company's website is a 
 | GET | …/data/ai/imports | `{ sources: [{ source, rows, from, to, citations, impressions, clicks, importedAt, fileName }] }` — the AI report uploads so far (not in the client portal) |
 | GET | …/data/ai/export?kind=answers\|questions\|sources\|competitors\|pages&<filter> | CSV (`text/csv`, attachment `ai-<kind>-<domain>-<day>.csv`), streamed, built from the same capped reads as the page, columns `AI_EXPORT_COLUMNS` in `shared/src/ai-export.ts`; every cell through `csvCell` (formula injection neutralised); viewer and up, not the client portal; 30 / 10 min |
 | GET | …/data/backlinks | `BacklinksData` (v4.10: `refs` = the link ledger with sources, check status and SEO / referral / brand values; `latest.coverage` per source + Google-sample share; `latest.anchors`, `pages`, `wins`, `relChanged`, `compNew`, `lists`; `imports`; `linkGraph`; prospects with score, contact and follow-up drafts; `report.mentions`, `atRisk`, `reclaim`, `drEnabled`) |
-| GET | …/data/alerts | `AlertsData` |
+| GET | …/data/alerts | `AlertsData`. CR17-D (2026-11-17, engine build section 194): each alert carries `id` (the engine's message id, never shown), `lastSeenAt` / `count` (the same condition seen again by the daily page watch: one alert, not one a day), `resolvedAt` / `resolution` (the condition is gone, with the sentence why; `status: 'resolved'`), `ackAt` / `ackBy` ("Mark as seen"). Open / seen / resolved and the open count come from one rule, `shared/src/alerts.ts` (`alertState`, `alertCounts`, `openAlertCount`: open = not resolved, not marked seen, not an Info notice). `checkins[].notIndexedTotal` is `null` when the check-in has no Pages export (the engine stores -1 as "not recorded"); it is Google's count of every address it knows, never compared with the Indexing page's figure |
+| POST | …/data/alerts/seen | CR17-D: "Mark as seen" `{ id }` (member and up, 60 / 10 min). Reads the alert row of this website (`seo_console_alerts`, filter `domain` + `message_id`, fresh), then writes only `ack_by` (the person's e-mail) and `ack_at` through the n8n public API `rows/update`; audit `alerts.seen`. → `{ id, ackAt, ackBy }`. 400 no id, 404 not an alert of this website, 409 `already_resolved`, an alert already seen is answered as it is (no write), 503 `engine_unreachable` / `engine_not_saved` (n8n not answering, or the table has no `ack_*` columns before the deploy's `sync_tables.py`). The daily watch keeps the mark and resolves the alert when its condition is gone |
 | GET | …/data/settings | `SiteSettingsData` |
 | GET | …/data/pipeline | `PipelineData` (automations with next/last run, the page queue, growth loop, 4-week calendar, recent automatic runs; for the tool-form notices: `running` schedule executions and cycle jobs, this site's `activeRuns`, `written` pages, `ladders` with their planned pages; keyword-first: `cycle`, `autopilot`) |
 | GET | …/data/ladders/:ladderId | `LadderDetail` (one keyword ladder: its card plus every page with its state, position history, run / report, volume / difficulty; the timeline with the coming Mondays; clicks and impressions of its published pages by Search Console period; its plan, rank and page reports; cost so far; 404 when the ladder is not one of this domain's). LADDER PACKAGE (2026-11-09): each page also carries `action` (`new` / `improve`), `why` (its address and why), `stage` (problem / solution / compare / hire / info) and, for the states `stopped` / `failed` / `merged`, `reason`; the detail carries `market` (`{ country, iso, siteCountry, note }`, note only when measured outside the website's market) |
-| GET | …/recommendations | `Recommendation[]` |
+| GET | …/recommendations | `Recommendation[]`: the To do tab (CR17-H: what is not waiting for Google, resolved, expired or dismissed), each with `state`, `stateAt`, `stateEvidence`, `firstSeenAt`, `issueKey`, `alsoFrom`, `subjects`, `rule` (`why`, `how`, `guide`, `check`, `checkWhen`, `canCheckNow`) |
+| GET | …/recommendations/board | `RecommendationBoard` `{ todo, waiting, resolved, expired, dismissed, dismissReasons }` (CR17-H): the Recommendations page's tabs. Reading it brings `recommendation_states` up to date (inserts new items, settles gone ones through their check); resolved and expired items are listed 90 days |
+| POST | …/recommendations/dismiss | `{ key, reason, note? }` (member+; `reason` one of `not_relevant`, `done_elsewhere`, `not_possible`, `disagree`, `other`; `other` needs a note, 300 chars max) → `{ recommendation }`. A step on the website (`taskKey`) is skipped with it. Audit `recommendation.dismissed`. 120 / 10 min |
+| POST | …/recommendations/restore | `{ key }` (member+) → `{ recommendation }` open again (its step unskipped). Audit `recommendation.restored` |
+| POST | …/recommendations/check | `{ key }` (member+) → `{ recommendation }` as it stands after its own check: a step on the website runs its check (as `…/tasks/check`, same errors), an audit finding asks the daily page watch to read it again, any other family re-reads our newest data. Audit `recommendation.checked`. 30 / 10 min |
 
 `PipelineData` fields for the Pipeline home (v4.8, `PIPELINE_FEATURE_SPEC.md` §4.1; rules in `server/src/services/ladders.ts` and `shared/src/ladders.ts`):
 
@@ -329,14 +336,16 @@ Pitches go out from the company's own mailbox, after a person approves them (or 
 | POST | /api/orgs/:orgId/mailbox-oauth/start | `mailboxOauthStartSchema` `{ provider: ms_graph \| gmail_oauth, label? }` (admin; 20 an hour): sets the round-trip cookies and answers with the provider's consent URL; 503 `no_key` without `MAILBOX_KEY`, 503 `oauth_not_configured` when the provider has no app | `{ url }` |
 | GET | /api/mailbox-oauth/callback | the provider's redirect (signed-in admin + the state cookie): stores the mailbox and its encrypted tokens, then redirects to `…/settings/mailboxes?mailbox=connected\|error` | redirect |
 | GET · POST · DELETE | /api/orgs/:orgId/suppressions(/:id) | the opt-out list (hash + masked hint); add: member `{ value, kind: email \| domain }`, remove: admin | `SuppressionView[]` / `{ ok }` |
-| GET | /api/orgs/:orgId/sites/:siteId/link-building | verified site: drafts (from `seo_link_outreach`), sequences with their messages, numbers, listings, redirects, impact, `subjectAb` (L7: first e-mails and replies per subject style; **no verdict under 30 sends per style** — the counts with "not enough sends yet"), `canSend` | `LinkBuildingData` |
+| GET | /api/orgs/:orgId/sites/:siteId/link-building | verified site: drafts (from `seo_link_outreach`), sequences with their messages, numbers, listings, redirects, impact, `subjectAb` (L7: first e-mails and replies per subject style; **no verdict under 30 sends per style** — the counts with "not enough sends yet"), `canSend`. CR17-E (2026-11-17): `counts` (every number from the one status model, shared `link-status.ts`: a website-level verdict leaves every pitch of that website out; **won only when we wrote to the site and our own check found the link on a clean page**), each draft's `state`, `reasonCode` and `anchorText` (the link text itself), `brand`, `manualWeek` `{ sent, limit }` | `LinkBuildingData` |
 | PATCH | …/link-building/settings | `linkSettingsSchema` (admin; `mode: auto` owner only) | `LinkSettings` |
 | POST | …/link-building/approve | `approveSchema` `{ prospectDomain, type, toEmail, steps, consent, mailboxId? }` (member): checks the mailbox, postal address, opt-out list, consent rule (recipient country + address), one conversation per site, 90 days' rest. A step may carry `variant` (`A` \| `B`) and `subjectAlt`: L7 keeps which subject style went out | `{ ok, id }` |
 | POST | …/link-building/dismiss | `{ prospectDomain, type }` (member): "not a fit" → the prospect is rejected in n8n | `{ ok }` |
+| POST | …/link-building/manual-sent | `manualSentSchema` `{ prospectDomain, type, toEmail? }` (member; CR17-E): "I sent it myself" - a written pitch (`drafted` / `needs_edit`) sent from the person's own mail: a `manual` sequence (no mailbox; the sender never sends in it), the first e-mail recorded, follow-ups as reminders, the prospect marked contacted (the engine's won check then reads their page weekly). 409 `not_written`, `suppressed`, `weekly_limit` (25 first e-mails a company a week, app and by hand together), a conversation already going on; the client-approval rule applies as for approve | `{ ok, id }` |
+| POST | …/link-building/sequences/:id/followup-sent | member (CR17-E): the next follow-up of a `manual` sequence went out from the person's own mail; 409 for an app-sent one | `{ ok }` |
 | PATCH | …/link-building/sequences/:id | `{ steps?, toEmail? }` (member): only unsent steps change; the address only before the first e-mail | `{ ok }` |
 | POST | …/link-building/sequences/:id/pause · /resume · /cancel | member | `{ ok }` |
 | POST | …/link-building/sequences/:id/reply | `{ body }` (member): sent now, in the same thread, from the sequence's mailbox | `{ ok }` |
-| POST | …/link-building/sequences/:id/outcome | `{ status: won \| rejected }` (member) | `{ ok }` |
+| POST | …/link-building/sequences/:id/outcome | `{ status: won \| rejected }` (member). CR17-E: `won` is a claim ("they say it is live"): the conversation becomes replied / `says_linked` and the prospect `replied`; the engine counts it won when its own check finds the link | `{ ok }` |
 | POST | …/link-building/listings/:listingId | `{ status: submitted \| listed \| ignored \| missing, note? }` (member) → `seo_listings` | `{ ok }` |
 | POST | …/link-building/run | `{ freeOnly }` (admin; 6 an hour): "Find opportunities now" → n8n `POST /webhook/seo-link-builder`; the report arrives through the callback (stage `link_builder`) | `{ ok, requestId }` |
 
@@ -508,6 +517,10 @@ Keyword-first fields (§14.5): `track` takes `timezone` (IANA; 400 when unknown)
 itself; the app never calls the Site Kickoff). `ladder` takes `chosenBy` (`client_typed` default, `client_picked`; `system_announced` only
 from the server's announcement) and `ladderMode` (`auto` | `manual`; a Manual ladder writes nothing at start; admins only, defaults to
 the flow's `ladderPrefs.mode`). `discover` never asks for a page (`receiveContent` is accepted and stored false).
+`track` lists (FX-SERVER, CR17 review R3 M2): `keywords`, `competitors` and `monitors.brandNames` are stored as sent, in the app row and in
+the engine (an empty list clears it; the engine body names the emptied lists in `clear_lists`, engine build section 201). Through
+`POST /api/v1/runs` and MCP `start_run`, a list the caller LEAVES OUT keeps the website's stored list (`keepTrackLists`); only an explicit
+`[]` clears it.
 `profile` (F-29, 2026-11-12): an author or reviewer job title that is not a title ("User", "Admin", "Member", "N/A", "-", "Job title",
 `shared/src/profile.ts` `isPlaceholderJobTitle`) is refused with 400; "Owner", "Administrator" and "Tester" are titles. An empty job
 title keeps the stored one (the engine's rule: an empty field keeps what is stored), except with `clearEmptyTitles: true` (sent by the
@@ -969,7 +982,8 @@ that fails answers `status: 'unreadable'` with a sentence, never an error, and n
   first `seo_index_runs` row of any website (before that it is not measured). Only the schedule's own fires count (mode `trigger`), and the
   execution history is paged by n8n's cursor back to the oldest week shown (fix wave 2), so one execution per website a day no longer hides
   older fires. Deleting a website deletes its rows in `seo_index_pages`,
-  `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays.
+  `seo_index_runs`, `seo_update_impact` and (by the engine site id) `seo_index_history`; `seo_google_events` is global and stays (CR17-B: part of
+  the one engine-history list every website delete runs).
 - Rollback (X11): before reverting the API to a build without this feature, delete or skip the `site_tasks` rows with `kind = 'indexing'`
   (an older build reads an unknown kind as a redirect step).
 - **Wave 2 (2026-10-30, `n8n/seo-agent/docs/indexing-2026-10-29/DESIGN_WAVE2.md` §3).** Engine columns read (all optional; an engine without
@@ -1046,8 +1060,8 @@ switch); filters, sort and paging run on the server. Shapes: `shared/src/ki-api.
 | GET | `` | viewer | `KiOverview` `{ mode, visible, killed? (platform admins, and everyone on an On website: the pages then say "paused"), canSwitch, canAct, maxCompetitors, credits: {competitors, research} (0 and 0 in Trial: our team's run is free for the company), lastRuns, summary }`: one request per page view, `summary` (null when not visible) holds the hero's counts (`keywords.headsByVerdict` = topics by verdict). A non-admin reads Trial as `off`. 240/min |
 | GET | `/competitors?market&status&class` | viewer | `{ market, maxCompetitors, chosen, items: KiCompetitorView[] }` chosen first, then score; listings and platforms are rows with their `class`. 240/min |
 | GET | `/competitors.csv` | viewer | CSV (streamed), every cell through `csvCell` (a leading `= + - @` is neutralised), basis + `fetched_at` columns. Header row in plain words (`KI_COMPETITOR_CSV_HEADERS`) in the stable machine order of `KI_COMPETITOR_CSV_COLUMNS` (new columns are only ever added at the end); values in the page's words. 30 / 10 min |
-| PATCH | `/competitors/:compDomain` `{status: chosen\|watch\|dismissed}` | member | `{ ok, compDomain, status, chosen, maxCompetitors }` through Site Admin `ki_competitor` (status_by user, never changed by a run); **409 `ki_max_competitors`** above `ki_max_competitors` (default 5); 404 unknown domain. Audited `site.ki_competitor`. 60 / 10 min |
-| GET | `/keywords?stage&verdict&source&cluster&min_volume&brand&gap_type&q&striking&heads&questions&market&sort&page&page_size&include=serp` | viewer | `{ market, total, page, pageSize, pages, sort, items: KiKeywordView[], facets }`; `gap_type` = `missing\|untapped\|weak\|striking\|strong`, matched on the website's current gap rows (so `total` is exact); `striking=1` = the quick wins (the engine's striking flag on a search that fits); `gateReason` is always plain words (from the code in `gate_reason`; `gate_detail` never leaves the server); only current rows (`KI_ROW_CURRENT`: the newest keyword-research run with status ok / partial); sort `score\|volume\|keyword\|position\|demand\|kd\|fetched` (`-` = descending, default `-score`, empty values last); `page_size` default 50, at most 200; unknown filter values ignored. 240/min |
+| PATCH | `/competitors/:compDomain` `{status: chosen\|watch\|dismissed\|not_competitor}` | member | `{ ok, compDomain, status, chosen, maxCompetitors }` through Site Admin `ki_competitor` (status_by user, never changed by a run; CR17-F: `not_competitor` is stored as `dismissed` in the KI set, and seo_monitors `competitors` / `not_competitors` follow); **409 `ki_max_competitors`** when THE one competitor list (below) would pass `ki_max_competitors` (default 5); 404 a domain not in the KI set. `chosen` = the one list's size after the change. Audited `site.ki_competitor`. 60 / 10 min |
+| GET | `/keywords?stage&verdict&source&cluster&min_volume&brand&gap_type&q&striking&heads&questions&market&sort&page&page_size&include=serp` | viewer | `{ market, total, page, pageSize, pages, sort, items: KiKeywordView[], facets }`; `gap_type` = `missing\|untapped\|weak\|striking\|strong`, matched on the website's current gap rows (so `total` is exact); `striking=1` = the quick wins (the engine's striking flag on a search that fits); `gateReason` is always plain words (from the code in `gate_reason`; `gate_detail` never leaves the server); only current rows (`KI_ROW_CURRENT`: the newest keyword-research run with status ok / partial); sort `score\|volume\|keyword\|position\|demand\|kd\|fetched` (`-` = descending, default `-score`, empty values last); `page_size` default 50, at most 200; unknown filter values ignored; CR17-F: `service=<name>` (or `_none`: the searches of none of the client's services) and, per item, `service` (null = none), plus `byService: [{service, count}]` over the market's rows. 240/min |
 | GET | `/keywords.csv` (same filters, every page) | viewer | CSV, streamed in chunks of 500 rows; plain-word headers (`KI_KEYWORD_CSV_HEADERS`) in the stable order of `KI_KEYWORD_CSV_COLUMNS`. 30 / 10 min |
 | GET | `/gaps?type&status&market&page&page_size` | viewer | `{ market, total, page, pageSize, pages, items: KiGapView[], byType, byStatus }`. 240/min |
 | GET | `/gaps.csv` | viewer | CSV; plain-word headers (`KI_GAP_CSV_HEADERS`) in the stable order of `KI_GAP_CSV_COLUMNS`; `How we know` per kind of gap. 30 / 10 min |
@@ -1056,6 +1070,17 @@ switch); filters, sort and paging run on the server. Shapes: `shared/src/ki-api.
 | POST | `/plan/:actionId/start` | member | **501** `{ error, code: 'not_available_yet' }` until the plan feeds the Pipeline (W2). The pages do not call it: each step links to the existing tool or page with the search filled in (`web/src/lib/ki.ts` `kiActionLink`) |
 | PATCH | `/mode` `{mode: off\|trial\|on}` | platform admin only (member of the company or not; 403 otherwise) | `{ ok, mode }`: Site Admin `monitors` `{ki_mode}` only, then read back from the engine (502 when it did not keep it). Audited `site.ki_mode`. 20 / 10 min |
 
+- **The one competitor list (CR17-F, 2026-11-17)**: `PATCH /api/orgs/:orgId/sites/:siteId/competitors/:compDomain` `{status: chosen|not_competitor|watch}`
+  (member, client portal roles 403, verified website; **not** gated by keyword intelligence: it works On, Trial or Off, and for a domain the KI
+  set does not hold). Answers `{ ok, compDomain, status, chosen, maxCompetitors }`, through the same Site Admin `ki_competitor` call: the KI row
+  takes the status when there is one (the market sent only then; `not_competitor` is stored as `dismissed`, status_by user); a domain outside
+  the KI set gets its own seo_ki_competitors row with market '' (shown in every market). THE list every page and monitor
+  reads = seo_monitors `competitors` + the KI rows `chosen` - the KI rows `dismissed` by the person (`competitorList` in
+  `shared/src/competitor-roles.ts`); **409 `ki_max_competitors`** when it would pass `ki_max_competitors` (default 5); 400 a bad address or
+  the website's own domain. Audited `site.ki_competitor`; 60 / 10 min. Used by "Not a competitor" on AI visibility and Rankings. Site settings
+  (`GET .../data/settings`) shows that list as `monitors.competitors` (`monitors.declaredCompetitors` = its own list);
+  saving it there (Site Admin `monitors`, up to 5) sets a KI-chosen domain the person removed to `watch` and chooses again a domain typed in
+  that was marked not a competitor.
 - **Runs**: `POST /api/orgs/:orgId/runs` with `mode: 'competitors'` or `'keyword_research'` (403 `ki_not_available` unless On, or Trial for a
   platform admin; 409 `ki_mode_unknown` when the engine cannot be read; 409 `ki_paused` while the kill switch is on, before anything is
   locked). A **Trial** run (the website's switch is Trial, so only a platform admin can start it) is quoted and charged **0 credits** to the
@@ -1336,3 +1361,30 @@ whose estimated credits exceed the balance minus what in-flight work holds is re
 left for this run …". A **suspended** account gets **403 `account_suspended`** ("This account is suspended. Contact support.") on every
 sign-in (password, Google → `/login?error=account_suspended`, SSO, the second step, portal hand-off) and **401 `account_suspended`** on a
 leftover session.
+
+## Recommendations you can finish (CR17-H, client report 2026-11-17 Q4)
+
+The list is still computed from the website's data on every read (`server/src/services/recommendations.ts` `recommend()`); its last pass
+(`finishQueue`) and a small table make each item answerable:
+
+- **One card per issue** (`issueKey`: `page:<host/path>`, `aiq:<search>`, `link:<domain>`, `kw:<search>`, else the id; `shared/src/recommendation-rules.ts`
+  `foldByIssue`). With Index coverage running, every "this page is not in Google" ask (the weekly site report's `engine:*:index:*`, the audit's
+  "not indexed by Google" finding, `ix:ask_google`) is ONE card `ix:not_indexed` listing its pages in `subjects`, opening the Indexing page.
+- **A rule per family** (`REC_RULES`, matched on the id prefix): why, how (its guide), how we check it (`check.kind`: `index`, `site_task`,
+  `finding`, `ai_target`, `link`, `content`, `ladder`, `search`, `rank`, `pitches`, `connection`, `schedule`) and when. A family nothing checks
+  is at most Low and never resolved. `ai:low` and `bl:spam` are measures, not tasks: they are left out (the AI visibility and Backlinks pages
+  show them).
+- **The badge comes from the queue score** (`shared/src/queue.ts` `priorityFromScore`: High from value 1.0, Medium from 0.35; rule-only at
+  most Medium unless an urgent family's source said High; the source's own priority can only lower it).
+- **States** (`recommendation_states`, migration 0028; one row per website and `rec_key`): `open`, `in_progress`, `waiting_for_google`,
+  `resolved`, `failed`, `dismissed`, `expired` (`nextRecState`). An item is resolved only when a check confirms it (`stateEvidence` + the date
+  of what the check saw: Google's `indexed_since`, a step's `done_at`, the audit date); one its source stops reporting that no check confirms
+  is `expired`, never resolved; a resolved item reported again is open ("It came back on ..."); a dismissed one comes back after 90 days if
+  still reported. The Overview's top six and the Pipeline's Improve stage read the To do tab (`todoRecommendations`); Needs you reads the
+  website steps, which a dismissal skips.
+- **Adapters** (`server/src/services/recommendationStates.ts`): `registerRecVerifier(kind, fn)` replaces the check of one kind
+  (`fn({ rec, present }, ctx) => { outcome, evidence?, at? }`); `setNotIndexedCard(fn)` replaces the folded index card;
+  `setIndexPageReader(fn)` the page reader the index check uses.
+- **Client copy** (`shared/src/client-copy.ts`): every title, detail and evidence passes `clientText` (no AI-ranking scoring line, lever
+  code, run id, table name, raw provider JSON, dollar figure, arrow, em dash, curly quote or ellipsis); titles never end mid-sentence
+  (`splitTitle`, the rest opens the detail).

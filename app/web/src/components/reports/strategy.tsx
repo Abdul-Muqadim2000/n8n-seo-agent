@@ -1,5 +1,5 @@
 import { BarChart3, Bot, CircleHelp, Flag, Globe, Layers, ListTree, MousePointerClick, PenLine, Search, Swords, Target, TrendingUp, Zap } from 'lucide-react';
-import { asDifficulty, asPlanChoice, PLAN_CHOICE_LABEL, type ReportDetail } from '@seo/shared';
+import { asDifficulty, asPlanChoice, clientText, PLAN_CHOICE_LABEL, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { Badge } from '@/components/ui/badge';
@@ -115,7 +115,8 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
   const serpClusters = objs(p.serp_clusters);
   const overlap = obj(p.serp_overlap);
   const followUps = obj(p.follow_ups);
-  const failures = arr2str(p.research_failures);
+  // CR17-H (F1): an older report may carry a provider's raw answer ('500 - {"version"...'): the client-copy guard makes it a sentence
+  const failures = arr2str(p.research_failures).map((f) => clientText(f)).filter(Boolean);
   const country = str(p.country);
   const siteId = report.siteId;
   const reach = num(obj(p.reach).reach);

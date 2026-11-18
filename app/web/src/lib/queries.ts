@@ -39,6 +39,7 @@ import type {
   PipelineData,
   RankingsData,
   Recommendation,
+  RecommendationBoard,
   RecommendedKeywords,
   Report,
   ReportDetail,
@@ -108,6 +109,7 @@ import type {
   adminMembershipSchema,
   adminUpdateUserSchema,
   platformSettingsSchema,
+  AutoTopUpView,
   BillingOverview,
   CreditActivityPage,
   CreditLimits,
@@ -268,6 +270,15 @@ export function useRequestCredits(orgId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: { packId: string; note?: string }) => api<CreditPurchaseRequest>(`/api/orgs/${orgId}/billing/requests`, { method: 'POST', body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
+  });
+}
+
+// CR17-I (2026-11-17): "when credits run low, ask for a top-up of this pack" (null = off)
+export function useSetAutoTopUp(orgId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (packId: string | null) => api<{ autoTopUp: AutoTopUpView | null }>(`/api/orgs/${orgId}/billing/auto-top-up`, { method: 'PUT', body: { packId } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'billing'] }),
   });
 }
@@ -771,6 +782,23 @@ export const useRecommendations = (orgId: string, siteId: string) =>
     retry: noRetryOn4xx,
     staleTime: 60_000,
   });
+/** CR17-H (client report 2026-11-17, Q4): the four tabs (To do, Waiting for Google, Resolved, Dismissed), from the same states as the Overview */
+export const useRecommendationBoard = (orgId: string, siteId: string) =>
+  useQuery({
+    queryKey: qk.siteData(siteId, 'recommendations-board'),
+    queryFn: () => api<RecommendationBoard>(`/api/orgs/${orgId}/sites/${siteId}/recommendations/board`),
+    retry: noRetryOn4xx,
+    staleTime: 60_000,
+  });
+/** CR17-H: dismiss with a reason, bring back, or check one recommendation now (members and above) */
+export function useRecommendationAction(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, action, reason, note }: { key: string; action: 'dismiss' | 'restore' | 'check'; reason?: string; note?: string }) =>
+      api<{ recommendation: Recommendation }>(`/api/orgs/${orgId}/sites/${siteId}/recommendations/${action}`, { method: 'POST', body: { key, ...(reason ? { reason } : {}), ...(note ? { note } : {}) } }).then((r) => ({ action, rec: r.recommendation })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['site', siteId] }),
+  });
+}
 
 // ---------- link building (v4.13, n8n/seo-agent/LINK_BUILDER_SPEC.md) ----------
 /** A company opt-out (the address itself is not kept: `hint` is masked). */
@@ -852,6 +880,14 @@ export function useDismissOutreach(orgId: string, siteId: string) {
   });
 }
 
+/** CR17-E (C4a): "I sent it myself" - the person sent the pitch from their own mail: the app records it, the follow-ups become reminders, the won check reads their page. 409 codes: not_written, draft_held, consent_needed, suppressed, weekly_limit (FX-LINKS: the same rules as approve). */
+export const useManualSent = (orgId: string, siteId: string) =>
+  useLinkMutation<{ prospectDomain: string; type: string; toEmail: string; consent?: boolean }, { ok: boolean; id: string }>(orgId, siteId, (body) => ({ method: 'POST', path: '/manual-sent', body }));
+
+/** CR17-E: the next follow-up of a pitch the person sends themselves went out. */
+export const useManualFollowupSent = (orgId: string, siteId: string) =>
+  useLinkMutation<{ id: string }>(orgId, siteId, ({ id }) => ({ method: 'POST', path: `/sequences/${id}/followup-sent` }));
+
 /** Edits the unsent steps (or the address before the first e-mail) of a sequence. */
 export const useUpdateSequence = (orgId: string, siteId: string) =>
   useLinkMutation<{ id: string; steps?: OutreachStep[]; toEmail?: string }>(orgId, siteId, ({ id, ...body }) => ({ method: 'PATCH', path: `/sequences/${id}`, body }));
@@ -864,7 +900,7 @@ export const useSequenceAction = (orgId: string, siteId: string) =>
 export const useSequenceReply = (orgId: string, siteId: string) =>
   useLinkMutation<{ id: string; body: string }>(orgId, siteId, ({ id, body }) => ({ method: 'POST', path: `/sequences/${id}/reply`, body: { body } }));
 
-/** Won (the link check confirms it) or not a fit. */
+/** "They linked" (a claim: our check counts it won once it finds the link on their page) or not a fit. */
 export const useSequenceOutcome = (orgId: string, siteId: string) =>
   useLinkMutation<{ id: string; status: 'won' | 'rejected' }>(orgId, siteId, ({ id, status }) => ({ method: 'POST', path: `/sequences/${id}/outcome`, body: { status } }));
 
@@ -1558,6 +1594,19 @@ export function useAskedGoogle(orgId: string, siteId: string) {
   });
 }
 
+/** CR17-D (2026-11-17): "Mark as seen" on one alert ({ id }, members and up). The alert stays listed, it leaves the open count. */
+export function useMarkAlertSeen(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<{ id: string; ackAt: string; ackBy: string }>(`/api/orgs/${orgId}/sites/${siteId}/data/alerts/seen`, { method: 'POST', body: { id } }),
+    onSuccess: () => {
+      // a prefix (the stored key ends with the query string, '' here): every read of the alerts and the overview of this website
+      void qc.invalidateQueries({ queryKey: ['site', siteId, 'data', 'alerts'] });
+      void qc.invalidateQueries({ queryKey: ['site', siteId, 'data', 'overview'] });
+    },
+  });
+}
+
 /** wave 3 (DESIGN_WAVE3 §3.4): the client's own mark on a page ('important', 'utility' = fine to leave out, '' = undo). The page reads the
  *  index check again at once: the row holds the mark, so the page shows the new state before the engine's next run. */
 export function usePageType(orgId: string, siteId: string) {
@@ -1676,6 +1725,19 @@ export function useKiCompetitorStatus(orgId: string, siteId: string) {
       if (ctx?.before) qc.setQueryData(key, ctx.before);
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: key }),
+  });
+}
+
+/**
+ * CR17-F: "Not a competitor" / "Mark as competitor" on any page (AI visibility, Rankings), for any domain, keyword intelligence on or off.
+ * Every page of the website reads the one competitor list, so the whole website's data is read again.
+ */
+export function useCompetitorStatus(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ domain, status }: { domain: string; status: 'chosen' | 'not_competitor' | 'watch' }) =>
+      api<{ ok: true; compDomain: string; status: string; chosen: number; maxCompetitors: number }>(`/api/orgs/${orgId}/sites/${siteId}/competitors/${encodeURIComponent(domain)}`, { method: 'PATCH', body: { status } }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: qk.site(siteId) }),
   });
 }
 

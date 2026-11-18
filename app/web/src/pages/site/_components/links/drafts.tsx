@@ -2,12 +2,12 @@
 // and the link text to ask for, the contact, and the review dialog (edit, consent, footer preview, approve).
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CircleSlash, Clock, ExternalLink as ExternalIcon, FileText, Mail, MailCheck, Send, ShieldCheck, UserRound } from 'lucide-react';
-import { consentGate, footerLines, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
+import { CircleSlash, Clock, Copy, ExternalLink as ExternalIcon, FileText, Mail, MailCheck, Send, ShieldCheck, UserRound } from 'lucide-react';
+import { addWorkingDays, consentGate, footerLines, leftOutWords, manualConsentGate, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage, toastError } from '@/lib/api';
 import { paths } from '@/lib/paths';
-import { useApproveOutreach, useDismissOutreach } from '@/lib/queries';
+import { useApproveOutreach, useDismissOutreach, useManualSent } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
 import { fmtDate } from '@/lib/utils';
 import { Collapsible, IconTile, InfoTip } from '@/components/insight';
@@ -21,24 +21,30 @@ import { Kind, SectionHeading, useSitePage } from '../kit';
 import { urlPath } from '../format';
 import { anchorLabel, ANCHOR_INFO, CONTACT_KIND, sendingMailbox, typeIcon, typeLabel, windowText, words } from './common';
 
+
+/** CR17-F (C5): why a site was left out, in one wording for every page (the competitor gate's words by its code: a directory, the platform
+ *  you build on, a software maker); a competitor keeps its own sentence because it names what their site sells */
+const leftOutLine = (x: Pick<OutreachDraft, 'reasonCode' | 'fitReason'>): string =>
+  (x.reasonCode && x.reasonCode !== 'competitor' ? leftOutWords(x.reasonCode) : '') || x.fitReason;
+
 /** Cards shown before "Show more". */
 const SHOWN = 6;
-/** prospects a person already settled (won, not a fit, ignored) do not come back as drafts */
-const SETTLED = new Set(['won', 'rejected', 'ignored']);
 
 export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => void }) {
   const [open, setOpen] = useState<OutreachDraft | null>(null);
   const day = useCycleDay();
-  const live = d.drafts.filter((x) => x.status !== 'not_fit' && !SETTLED.has(x.prospectStatus));
-  const notFit = d.drafts.filter((x) => x.status === 'not_fit');
-  const drafted = live.filter((x) => x.status === 'drafted' && x.steps.length).length;
+  // CR17-E (F9): the cards and the sites left out come from the one link status (the server's shared linkStates): a website that is
+  // left out is never also a card, and a pitch that went out is in "In progress", not here
+  const live = d.drafts.filter((x) => x.state !== 'left_out');
+  const notFit = d.drafts.filter((x) => x.state === 'left_out');
+  const drafted = d.counts.toReview;
 
   return (
     <section id="ready" className="scroll-mt-20">
       <SectionHeading
         icon={<Send />}
         title="Ready to send"
-        description={live.length ? `${drafted} ${drafted === 1 ? 'pitch' : 'pitches'} drafted · ${live.length - drafted} more ${live.length - drafted === 1 ? 'site' : 'sites'} found` : 'Pitches drafted for you to read, edit and approve'}
+        description={live.length ? [`${drafted} ${drafted === 1 ? 'pitch' : 'pitches'} ready for you`, d.counts.needsEdit ? `${d.counts.needsEdit} ${d.counts.needsEdit === 1 ? 'needs' : 'need'} your edit` : '', live.length - drafted - d.counts.needsEdit > 0 ? `${live.length - drafted - d.counts.needsEdit} more ${live.length - drafted - d.counts.needsEdit === 1 ? 'site' : 'sites'} found` : ''].filter(Boolean).join(' · ') : 'Pitches drafted for you to read, edit and approve'}
         info="Each site was checked first: the page answers, it does not sell links, it is on your topic and nobody contacted it in the last 90 days. A pitch is three short e-mails at most in one thread; it stops at the first reply."
       />
       {live.length ? (
@@ -82,7 +88,7 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
               <li key={`${x.prospectDomain}|${x.type}|${i}`} className="flex flex-col gap-0.5 px-4 py-2.5 sm:flex-row sm:items-baseline sm:gap-3">
                 <span className="shrink-0 font-medium text-ink">{x.prospectDomain}</span>
                 <span className="min-w-0 text-ink-3 [overflow-wrap:anywhere]">
-                  {typeLabel(x.type)} · {x.fitReason || 'not a fit'}
+                  {typeLabel(x.type)} · {leftOutLine(x) || 'not a fit'}
                 </span>
               </li>
             ))}
@@ -95,10 +101,70 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
 }
 
 function DraftStatus({ x }: { x: OutreachDraft }) {
-  if (x.status === 'drafted' && x.steps.length) return <StatusBadge tone="accent">Pitch ready</StatusBadge>;
-  if (x.status === 'needs_edit') return <StatusBadge tone="warning">Needs your edit</StatusBadge>;
-  if (x.status === 'needs_contact') return <StatusBadge tone="warning">No e-mail address</StatusBadge>;
+  if (x.state === 'to_review') return <StatusBadge tone="accent">Pitch ready</StatusBadge>;
+  if (x.state === 'needs_edit') return <StatusBadge tone="warning">Needs your edit</StatusBadge>;
+  if (x.state === 'needs_contact') return <StatusBadge tone="warning">No e-mail address</StatusBadge>;
+  if (x.state === 'no_page') return <StatusBadge tone="warning">Waiting for a page of yours</StatusBadge>;
   return <Badge>Pitch not written yet</Badge>;
+}
+
+/** CR17-E (C4a): the pitch as a person sends it from their own mail: the first e-mail with the lines the law asks for, the parts only
+ *  they know left in brackets (the app adds these itself when it sends from a connected mailbox) */
+export function manualText(x: OutreachDraft, d: Pick<LinkBuildingData, 'brand'>): { subject: string; body: string } {
+  const first = x.steps[0];
+  const lines = footerLines({ name: '[Your name]', title: '', company: d.brand || '[Your company]', postalAddress: '[Your postal address]' }, { firstEmail: true, country: x.country, foundOn: x.contacts[0]?.sourceUrl ?? '' });
+  return { subject: first?.subject ?? '', body: [(first?.body ?? '').trim(), ...lines].join('\n') };
+}
+
+/** CR17-E (C4a): Copy, Open in your e-mail, I sent it myself - every written pitch can be used without a connected mailbox.
+ *  FX-LINKS (review R2 M4): the same rules as approve: a pitch held for an edit is not recorded as sent, and a recipient the law protects
+ *  (Germany, Austria, Saudi Arabia, a named person in the UAE) needs the consent tick first. */
+function ManualSend({ x, d }: { x: OutreachDraft; d: LinkBuildingData }) {
+  const { org, site } = useSitePage();
+  const sent = useManualSent(org.id, site.id);
+  const [consent, setConsent] = useState(false);
+  const to = x.contacts[0]?.email ?? '';
+  const gate = manualConsentGate(x.country, to);
+  const held = x.status === 'needs_edit';
+  const t = manualText(x, d);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(`Subject: ${t.subject}\n\n${t.body}`); toast.success('Pitch copied: fill in the [brackets] before you send it'); } catch { toast.error('Copying is blocked in this browser: open it in your e-mail instead'); }
+  };
+  const mailto = `mailto:${to}?subject=${encodeURIComponent(t.subject)}&body=${encodeURIComponent(t.body)}`;
+  const mark = () =>
+    sent.mutate(
+      { prospectDomain: x.prospectDomain, type: x.type, toEmail: to, ...(gate.needed ? { consent } : {}) },
+      {
+        onSuccess: () => {
+          const wait = x.steps[1]?.waitDays;
+          toast.success(wait ? `Recorded. Follow-up 1 is due ${fmtDate(addWorkingDays(new Date(), wait).toISOString())}: we will remind you here.` : 'Recorded: we check their page every week for your link.');
+        },
+        onError: (e) => toastError(e),
+      },
+    );
+  return (
+    <>
+      <Button size="sm" variant="secondary" icon={<Copy className="size-3.5" />} onClick={copy}>
+        Copy
+      </Button>
+      {to && (
+        <a href={mailto} className={buttonClass('secondary', 'sm')}>
+          <Mail className="size-3.5" aria-hidden />
+          Open in your e-mail
+        </a>
+      )}
+      {!held && gate.needed && (
+        <Checkbox className="basis-full" checked={consent} onChange={(e) => setConsent(e.target.checked)} label="I have their consent or we already work together" />
+      )}
+      {held ? (
+        <span className="basis-full text-xs text-ink-3">Fix what this pitch says before you send it.</span>
+      ) : (
+        <Button size="sm" variant="ghost" icon={<MailCheck className="size-3.5" />} loading={sent.isPending} disabled={gate.needed && !consent} onClick={mark}>
+          I sent it myself
+        </Button>
+      )}
+    </>
+  );
 }
 
 function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; onOpen: () => void }) {
@@ -176,8 +242,8 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
           {x.targetReason && <span className="block text-xs text-ink-3 [overflow-wrap:anywhere]">{x.targetReason}</span>}
         </dd>
         <dt className="text-ink-3">Link text</dt>
-        <dd className="flex min-w-0 items-center gap-0.5 text-ink">
-          {anchorLabel(x.anchorHint)}
+        <dd className="flex min-w-0 items-center gap-0.5 text-ink [overflow-wrap:anywhere]">
+          {anchorLabel(x.anchorText, x.anchorHint)}
           <InfoTip label="Why not a keyword">{ANCHOR_INFO}</InfoTip>
         </dd>
         <dt className="text-ink-3">Contact</dt>
@@ -200,11 +266,17 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
       </dl>
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-        {pitch && !noEmail && (
+        {pitch && !noEmail && (d.canSend.ok || !member) && (
           <Button size="sm" variant={member ? 'primary' : 'secondary'} icon={<Mail className="size-3.5" />} onClick={onOpen}>
             {member ? 'Review & approve' : 'Read the pitch'}
           </Button>
         )}
+        {pitch && !noEmail && !d.canSend.ok && member && (
+          <Button size="sm" variant="secondary" icon={<FileText className="size-3.5" />} onClick={onOpen}>
+            Read the pitch
+          </Button>
+        )}
+        {pitch && member && <ManualSend x={x} d={d} />}
         {noEmail && x.contactFormUrl && (
           <a href={x.contactFormUrl} target="_blank" rel="noopener noreferrer" className={buttonClass('secondary', 'sm')}>
             <ExternalIcon className="size-3.5" aria-hidden />
@@ -221,11 +293,12 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
             Not a fit
           </Button>
         )}
-        {!pitch && x.status !== 'needs_contact' && <span className="text-xs text-ink-3">The pitch is written in a coming weekly run (up to 10 a week, best first).</span>}
-        {x.status === 'needs_edit' && <span className="text-xs text-warning-text">Every pitch is checked before it goes out: edit it and the checks run again on approval.</span>}
+        {!pitch && x.state === 'to_write' && <span className="text-xs text-ink-3">The pitch is written in a coming weekly run (up to 10 a week, best first).</span>}
+        {x.state === 'no_page' && <span className="text-xs text-ink-3">When a page of yours covers their topic, this pitch is aimed at it and written. We check every week.</span>}
+        {x.state === 'needs_edit' && <span className="text-xs text-warning-text">Every pitch is checked before it goes out: edit it and the checks run again on approval. Sending it yourself? Fill in the [brackets] first.</span>}
         {x.draftedAt && <span className="ml-auto text-xs text-ink-3">drafted {fmtDate(x.draftedAt)}</span>}
       </div>
-      {!d.canSend.ok && pitch && member && <p className="mt-2 text-xs text-warning-text">{d.canSend.why}</p>}
+      {!d.canSend.ok && pitch && member && <p className="mt-2 text-xs text-ink-3">{d.canSend.why} Or send it yourself: copy it, send it from your own e-mail and press "I sent it myself". We remind you of the follow-ups and check their page for your link.</p>}
     </li>
   );
 }
@@ -437,8 +510,9 @@ export function approvalLine(d: LinkBuildingData) {
     : 'Nothing goes out until someone approves it: every pitch is sent from your own mailbox, a few a day, and stops at the first reply.';
 }
 
+/** CR17-E (F9): the counts are the one link status (`d.counts`, shared link-status.ts); `drafted` is the pitches ready for the client */
 export const draftCounts = (d: LinkBuildingData) => {
-  const live = d.drafts.filter((x) => x.status !== 'not_fit' && !SETTLED.has(x.prospectStatus));
-  return { live: live.length, drafted: live.filter((x) => x.status === 'drafted' && x.steps.length).length, press: live.filter((x) => x.type === 'press').length };
+  const live = d.drafts.filter((x) => x.state !== 'left_out');
+  return { live: live.length, drafted: d.counts.toReview, needsEdit: d.counts.needsEdit, press: live.filter((x) => x.type === 'press').length };
 };
 

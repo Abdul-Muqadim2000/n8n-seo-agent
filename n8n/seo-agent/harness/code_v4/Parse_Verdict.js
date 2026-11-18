@@ -1022,9 +1022,114 @@ const LRU = (() => {
     }
     return null;
   };
-  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
-  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** the address a new page gets on the site: home + folder + slug(keyword), with the site's trailing-slash form. `folder` (client report
+   *  2026-11-17 F4): the site's folder for this kind of page (folderFor(...).folder, e.g. '/services/'); none or '/' = the root, as before */
+  const plannedUrl = (home, keyword, slash, folder) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const f = S(folder && typeof folder === 'object' ? folder.folder : folder).replace(/^\/*/, '/').replace(/\/+$/, '');
+    return h && sl ? h + (f && f !== '/' ? f : '') + '/' + sl + (slash ? '/' : '') : ''; };
+
+  // ---- client report 2026-11-17 (F4, devaicon.com): the address of a new page follows the site ----
+  // Every address our ladders planned for devaicon.com was at the root (/ai-app-development) while its service pages live under /services/ and
+  // its articles under /insights/: the client published five of six elsewhere and moved its own pages into /services/ with 301s. A new page
+  // now goes where the site puts that kind of page. Two kinds: `service` (service, product, landing, local, category and pillar pages, the
+  // main page of a ladder) and `article` (guides, blog posts, comparisons, case studies, FAQ and AI answer pages). Evidence, newest habit first:
+  //   1. where the client published the pages WE wrote of that kind (the content log's live address, after a permanent redirect the client
+  //      made) and where it moved its own pages (its 301s, the target's folder): the client's own choice;
+  //   2. else the live inventory (sitemap / seo_pages, pages answering): articles = the blog folder holding most of them, services = the
+  //      folder (or the root) holding most pages that are neither articles nor company pages (about, contact, careers, legal ...).
+  // A folder is used only with at least 3 pages behind it and 60% of them; else the root, as before (no change for a site we cannot read).
+  // A service page is never planned in a blog folder (rule 1). Pure: callers pass what they have read.
+  CFG.folder_min = 3; CFG.folder_share = 0.6;
+  CFG.company_segs = ['about', 'about-us', 'company', 'contact', 'contact-us', 'careers', 'career', 'jobs', 'team', 'people', 'privacy', 'privacy-policy', 'cookies',
+    'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'policies', 'imprint', 'impressum', 'disclaimer', 'accessibility', 'sitemap',
+    'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks', 'security', 'author', 'authors', 'tag', 'tags', 'category'];
+  // CR17 review R5 (M2): only a folder whose name says it holds what the business sells is a folder of SERVICE pages. Every other folder
+  // (case studies, portfolio, work, projects, clients, industries, docs, help, locations, events, press, careers ...) is neither kind, so it
+  // never decides where a new service page goes (9 /case-studies/ pages beside 3 /services/ pages planned "/case-studies/ai-app-development").
+  // The root still counts for service pages (techand.ai keeps them there). Evidence of 17 Nov 2026: devaicon.com /services/ (its service
+  // pages), /capabilities/ (its service groups), /industries/ (industry pages, not services); techand.ai /whatwedo/ and /capabilities/.
+  CFG.service_dirs = ['services', 'service', 'our-services', 'solutions', 'solution', 'products', 'product', 'capabilities', 'capability', 'offerings', 'offering',
+    'what-we-do', 'whatwedo', 'expertise', 'practice-areas'];
+  const ARTICLE_TYPE = /guide|blog|post|article|compar|case stud|faq|answer|news|how.?to|review/;
+  /** the kind of a page type: 'article' (guides, posts, comparisons, case studies, FAQ, AI answers) or 'service' (everything else) */
+  const classOf = (pageType) => (ARTICLE_TYPE.test(low(pageType)) ? 'article' : 'service');
+  /** the folder of an address: '/services/' for /services/x, '/' for /x ('' for no address or the home page) */
+  const folderOf = (u) => { const s = segs(u); if (!s.length) return ''; return '/' + s.slice(0, -1).map(x => x + '/').join(''); };
+  const blogFolder = (f) => { let s = S(f).split('/').filter(Boolean); if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 0 && CFG.blog_dirs.includes(s[0]); };
+  const companyPage = (u) => { const s = segs(u); if (!s.length) return true; let a = s; if (a.length > 1 && LOCALE.test(a[0])) a = a.slice(1);
+    return CFG.company_segs.includes(a[0]) || /^(?:about|contact)-/.test(a[0]); };
+  const gone = (st) => Number(st) >= 300;   // 0 / empty = never read (a sitemap page): it counts as live
+  /** the kind of page a folder holds: 'article' (a blog folder), 'service' (the root, or a folder of CFG.service_dirs), '' (neither: case
+   *  studies, industries, docs ... never decide where a new page goes). A language prefix is skipped. */
+  // a language root (/en/x beside /ar/x) is the root of that language: service pages there count as at the root (a two-letter folder that is
+  // not a common language, such as /ai/ or /hr/, is a folder like any other)
+  const LANG_ROOT = /^(?:en|ar|fr|de|es|it|nl|pt|ur|hi|zh|ja|ko|ru|tr)(?:-[a-z]{2})?$/;
+  const folderKind = (f) => { let s = S(f).split('/').filter(Boolean); if (!s.length || (s.length === 1 && LANG_ROOT.test(s[0]))) return 'service'; if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1);
+    return CFG.blog_dirs.includes(s[0]) ? 'article' : CFG.service_dirs.includes(s[0]) ? 'service' : ''; };
+  // review R5 (L5): a dated or category blog path (/blog/2024/05/x, /blog/news/x) votes for the blog folder itself, so the site's habit is
+  // not split by month or category; a language prefix stays (/en/blog/)
+  const voteFolder = (f) => { const s = S(f).split('/').filter(Boolean); if (!blogFolder(f)) return f; const n = s.length > 1 && LOCALE.test(s[0]) ? 2 : 1; return '/' + s.slice(0, n).join('/') + '/'; };
+  /** pageType: the new page's type; ev: { published: [{ url, page_type }] (our pages the client published: content log / published ladder rows),
+   *  moves: [{ from, to }] (the client's permanent redirects), pages: [{ url, http_status? } | url] (the live inventory) }
+   *  -> { folder ('/' = the root), kind ('service' | 'article'), basis ('published' | 'inventory' | 'default'), votes, of, why ('' at the root) } */
+  const folderFor = (pageType, ev) => {
+    const x = ev || {}; const kind = classOf(pageType);
+    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => p && typeof p === 'object' ? { url: S(p.url), st: p.http_status } : { url: S(p), st: null }).filter(p => p.url);
+    const bad = new Set(pages.filter(p => gone(p.st)).map(p => urlKey(p.url)));
+    const moveTo = new Map();
+    // review R5 (L4): only the site's own permanent moves (301 / 308 on the same host; a move with no status given is taken as read): a
+    // redirect to another website or a temporary one says nothing about where this site keeps its pages
+    const hostK = (k) => k.split('/')[0];
+    for (const m of (Array.isArray(x.moves) ? x.moves : [])) { const a = urlKey(m && m.from), b = urlKey(m && m.to); const st = m && m.status != null && S(m.status) !== '' ? Number(m.status) : 0;
+      if (a && b && hostK(a) === hostK(b) && pathOf(a) !== pathOf(b) && pathOf(b) && (!st || st === 301 || st === 308)) moveTo.set(a, S(m.to)); }
+    const fits = (f) => kind === 'article' || !blogFolder(f);
+    const pick = (votes, basis) => {   // votes: Map(url key -> folder)
+      const by = new Map(); for (const f of votes.values()) by.set(f, (by.get(f) || 0) + 1);
+      const of = votes.size; const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+      if (!top || of < CFG.folder_min || top[1] < CFG.folder_share * of) return null;
+      const what = kind === 'article' ? 'guides and articles' : 'service pages';
+      const where = top[0] === '/' ? 'at the top level of the site' : 'under ' + top[0];
+      return { folder: top[0], kind, basis, votes: top[1], of,
+        why: top[0] === '/' ? '' : 'your ' + what + ' live ' + where + ' (' + top[1] + ' of the ' + of + (basis === 'published' ? ' you published or moved' : ' on your website') + ')' };
+    };
+    // 1. the client's own choices: our pages it published (at the address they answer now) and its own moves
+    const direct = new Map();
+    for (const p of (Array.isArray(x.published) ? x.published : [])) {
+      if (!p || classOf(p.page_type) !== kind) continue;
+      const k0 = urlKey(p.url); if (!k0) continue;
+      const u = moveTo.get(k0) || S(p.url); const k = urlKey(u);
+      if (!pathOf(u) || (bad.has(k) && !moveTo.has(k0))) continue;   // a page that no longer answers (and was not moved) says nothing
+      const f = folderOf(u); if (f && fits(f)) direct.set(k, voteFolder(f));
+    }
+    for (const [from, to] of moveTo) { const f = folderOf(to); if (!f || companyPage(to) || folderOf(from) === f) continue;
+      if (folderKind(f) !== kind) continue; direct.set(urlKey(to), voteFolder(f)); }
+    const d = pick(direct, 'published'); if (d) return d;
+    // 2. the live inventory: a folder index page (/insights beside /insights/x) and company pages are not pages of either kind
+    const live = pages.filter(p => !gone(p.st) && pathOf(p.url));
+    const dirs = new Set(live.map(p => folderOf(p.url)).filter(f => f && f !== '/'));
+    const inv = new Map();
+    for (const p of live) { const k = urlKey(p.url); if (inv.has(k) || companyPage(p.url) || dirs.has(pathOf(p.url) + '/')) continue;
+      const f = folderOf(p.url); if (!f || folderKind(f) !== kind) continue; inv.set(k, voteFolder(f)); }
+    const i = pick(inv, 'inventory'); if (i) return i;
+    return { folder: '/', kind, basis: 'default', votes: 0, of: direct.size || inv.size, why: '' };
+  };
+  /** review R5 (M1): the evidence folderFor reads, built ONE way by every caller (Cadence Plan, the app's cadence mirror and its Write now):
+   *  logs: the website's content-log rows, ladders: its ladder rows, pages: its page inventory (seo_pages rows). Ladder Plan adds the moves. */
+  const folderEvidence = (logs, ladders, pages) => ({
+    published: [...(Array.isArray(logs) ? logs : []).filter(l => l && S(l.status) === 'published' && S(l.published_url)).map(l => ({ url: S(l.published_url), page_type: S(l.page_type) })),
+      ...(Array.isArray(ladders) ? ladders : []).filter(r => r && S(r.status) === 'published' && S(r.target_url)).map(r => ({ url: S(r.target_url), page_type: S(r.page_type) }))],
+    pages: (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url)).map(p => ({ url: S(p.url), http_status: p.http_status })) });
+  /** the page type a ladder row is placed by: its main page (rung 4) is the page people choose a provider on, a service page */
+  const rowType = (r) => (Number((r || {}).rung) === 4 ? 'Service Page' : S((r || {}).page_type) || 'Service Page');
+  /** review R5 (M1): a rung planned at the ROOT (its address is the root address of its keyword) before the folder rule, not written, not
+   *  published, not merged, on a site that keeps that kind of page in a folder: -> its folder address (`fo`: folderFor for its kind), or ''
+   *  when it keeps its address. The one rule for the weekly pages, their hub and sibling links, "Write now" and "Coming up". */
+  const folderAddress = (row, fo) => { const r = row || {}; const was = S(r.target_url); const exists = r.page_exists === true || r.page_exists === 'true';
+    const f = S(fo && typeof fo === 'object' ? fo.folder : fo);
+    if (!was || exists || !f || f === '/' || ['published', 'merged'].includes(S(r.status))) return '';
+    const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0]; const slash = /\/$/.test(was);
+    if (!home || urlKey(was) !== urlKey(plannedUrl(home, r.keyword, slash))) return '';
+    const nu = plannedUrl(home, r.keyword, slash, f); return nu && urlKey(nu) !== urlKey(was) ? nu : ''; };
   /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
    *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
    *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
@@ -1254,7 +1359,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, classOf, folderOf, folderFor, folderKind, folderEvidence, rowType, folderAddress, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text

@@ -82,7 +82,7 @@ describe('the body that goes over the wire', () => {
 
   it('carries the figures, the share link and what was held', () => {
     const b = deliveryWebhookBody(payload) as { text: string; held: { code: string }[]; reports: { figures: Record<string, unknown> }[] };
-    expect(b.text).toContain('Health score: 83');
+    expect(b.text).toContain('Technical health: 83');   // CR17-C (client report 2026-11-17 C3): the audit score's name
     expect(b.text).toContain('https://app.example.com/share/tok');
     expect(b.text).toMatch(/Not sent(?: \u2014|:|,) Page: erp software uae/);
     expect(b.held[0]!.code).toBe('not_ready');

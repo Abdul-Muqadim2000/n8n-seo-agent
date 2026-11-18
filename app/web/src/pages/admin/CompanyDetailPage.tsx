@@ -180,7 +180,7 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
             label="Credits balance"
             icon={<Coins />}
             tone={c.credits.balance < 0 ? 'critical' : 'blue'}
-            value={units === 'usd' ? <CountUp value={c.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} /> : <CountUp value={c.credits.balance} format={credits} />}
+            value={units === 'usd' ? <CountUp value={c.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} animate={false} /> : <CountUp value={c.credits.balance} format={credits} animate={false} />}
             meta={
               <SplitLine
                 items={
@@ -200,7 +200,7 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
           <MetricCard
             label="Cost to us"
             icon={<Wallet />}
-            value={<CountUp value={m.cost.totalUsd} format={(v) => money(v)} />}
+            value={<CountUp value={m.cost.totalUsd} format={(v) => money(v)} animate={false} />}
             meta={
               <SplitLine
                 items={[
@@ -210,12 +210,12 @@ function CompanyDetail({ c, loading }: { c: AdminCompanyDetail; loading: boolean
               />
             }
           />
-          <MetricCard label="Revenue" icon={<TrendingUp />} value={<CountUp value={m.revenueUsd} format={(v) => money(v, { digits: 2 })} />} meta={<SplitLine items={[{ label: 'list value', value: money(m.listValueUsd) }]} />} />
+          <MetricCard label="Revenue" icon={<TrendingUp />} value={<CountUp value={m.revenueUsd} format={(v) => money(v, { digits: 2 })} animate={false} />} meta={<SplitLine items={[{ label: 'list value', value: money(m.listValueUsd) }]} />} />
           <MetricCard
             label="Margin"
             icon={<Coins />}
             tone={m.marginUsd < 0 ? 'critical' : 'blue'}
-            value={<CountUp value={m.marginUsd} format={(v) => money(v, { digits: 2 })} />}
+            value={<CountUp value={m.marginUsd} format={(v) => money(v, { digits: 2 })} animate={false} />}
             meta={m.marginPct == null ? 'No revenue in this period' : <SplitLine items={[{ label: 'margin', value: marginPct(m.marginPct) }]} />}
           />
           <MetricCard

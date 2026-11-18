@@ -37,7 +37,7 @@ import { autopilotGuideVars } from '@/lib/guide-vars';
 import { errorMessage, toastError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { qk, useDeleteSite, useIndexing, useSiteAdmin, useSiteData, useStartRun, useUpdateSite } from '@/lib/queries';
+import { qk, useDeleteSite, useIndexing, useKi, useSiteAdmin, useSiteData, useStartRun, useUpdateSite } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { SiteWarnings } from '@/components/warnings/SiteWarnings';
 
@@ -233,9 +233,11 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
   const defaults = trackDefaults(site, {
     monitors: data.monitors ?? undefined,
     blogsPerWeek: data.cadence?.pagesPerWeek,
-    keywords: t.keywords.length ? t.keywords : undefined,
+    // CR17-I (F8): the website's own list is the app's (pushed to the engine on every save): a keyword the client deleted is never re-filled
+    keywords: site.keywords ?? [],
     ga4PropertyId: site.ga4PropertyId || t.ga4PropertyId || undefined,
-    competitors: data.monitors?.competitors.length ? data.monitors.competitors : undefined,
+    // CR17-F: Track my site keeps the Site settings list itself (the Competitors page choices stay where they are)
+    competitors: (data.monitors?.declaredCompetitors ?? data.monitors?.competitors)?.length ? (data.monitors?.declaredCompetitors ?? data.monitors?.competitors) : undefined,
   });
 
   if (!tracked)
@@ -340,6 +342,9 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
   const day = useCycleDay();
   const action = useSiteAdmin(org.id, site.id);
   const t = data.tracking;
+  // CR17-I (F8): "tracked keywords" by the one definition (ladder keywords + your list, each once), as the Overview counts them
+  const rankings = useSiteData(org.id, site.id, 'rankings');
+  const tracked = rankings.data?.tracked;
   // no weekly report here: the engine row against the live check on Verification & Google, the newer wins
   const gsc = gscConnectionState({ tracking: t });
   const toggle = () =>
@@ -371,7 +376,16 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
             { label: 'Last report', value: t.lastRunAt ? fmtAgo(t.lastRunAt) : 'None yet' },
             { label: 'Search Console', value: gsc.connected ? (gsc.property ?? 'connected') : <span className="text-warning-text">not connected</span> },
             { label: 'GA4 property', value: t.ga4PropertyId || site.ga4PropertyId || <span className="text-ink-3">detected automatically</span> },
-            { label: 'Keywords', value: t.keywords.length ? `${t.keywords.length} tracked` : <span className="text-ink-3">Search Console queries only</span> },
+            {
+              label: 'Keywords',
+              value: tracked ? (
+                tracked.total ? tracked.line : <span className="text-ink-3">{tracked.line}</span>
+              ) : site.keywords?.length ? (
+                `${site.keywords.length} of your own`
+              ) : (
+                <span className="text-ink-3">Search Console queries only</span>
+              ),
+            },
           ]}
         />
       </CardBody>
@@ -466,6 +480,7 @@ function MonitorsCard({
   const [monitors, setMonitors] = useState(initial);
   const [competitors, setCompetitors] = useState(initialCompetitors);
   const [enginesError, setEnginesError] = useState<string | undefined>();
+  const kiQ = useKi(org.id, site.id);   // CR17-F: say the list is the Competitors page's own where that page is shown
   const ai = useSiteData(org.id, site.id, 'ai');   // B8-7: the precision table reads the latest run's measured sample
   const pipelineQ = useSiteData(org.id, site.id, 'pipeline');   // B4: the forecast's plan (level, keyword pages, rank checks)
   // wave 2 (DESIGN_WAVE2 §3.2): the access Google reports for us, read by the daily index check (shown next to the sitemap switch)
@@ -502,7 +517,7 @@ function MonitorsCard({
             <Field
               label="Competitors"
               optional
-              hint="Up to 3. Compared in AI answers (share of voice), the backlink gap and reports."
+              hint={`Up to 5. Compared in AI answers (share of voice), the backlink gap and reports. ${kiQ.data?.visible ? 'This is the same list as the Competitors page: a choice made there shows here too.' : '"Not a competitor" on any page takes a site off this list.'}`}
               labelAction={<GuideButton id="competitors" vars={{ domain: site.domain }} variant="link" label="Who counts as a competitor?" />}
             >
               {(p) => (
@@ -511,7 +526,7 @@ function MonitorsCard({
                   describedBy={p['aria-describedby']}
                   value={competitors}
                   onChange={setCompetitors}
-                  max={3}
+                  max={5}
                   normalize={cleanDomain}
                   validate={competitorValidator(site.domain)}
                   placeholder="competitor.com, then Enter"
@@ -747,8 +762,9 @@ function DangerTab() {
       <CardHeader title="Delete this website" icon={<HeaderTile icon={<Trash2 />} tone="critical" />} />
       <CardBody className="space-y-3 text-sm leading-relaxed text-ink-2">
         <p>
-          This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name} and stops its weekly tracking, monitors and pages in the SEO
-          engine. To add it again later you would need to verify it again.
+          This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name}, stops its weekly tracking, monitors and pages in the SEO engine,
+          and deletes the history the engine kept for it: rankings, Search Console data, AI answers, link prospects and contacts, audits. Reports already in this app
+          stay with the company. To add it again later you would need to verify it again.
         </p>
         <Note>
           Only want a break? <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="link">Pause tracking instead</ButtonLink>.

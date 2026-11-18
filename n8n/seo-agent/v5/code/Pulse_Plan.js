@@ -114,7 +114,8 @@ for (const s of todo) {
   const label = s.domain.split('.')[0];
   const brand_names = AIE.brandNames({ domain: s.domain, business_name: s.business_name || '', brand_names: s.settings.brand_names || [] });   // F1a (E5): the same names as the weekly run, with the business name
   const prev = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
-  const autoRivals = prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
+  const SM_SVC = (x) => { try { return (typeof SM === 'object' && SM && SM.stored) ? SM.services(SM.stored(x) || { domain: x.domain, canonical_host: x.domain }) : (typeof AIE === 'object' ? AIE.servicesOf(x) : []); } catch (e) { return []; } };   // CR17-F
+    const autoRivals = (prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : []).filter(d => CMP.role(d, { own_domain: s.domain, services: SM_SVC(s), not_competitors: s.settings.not_competitors || [] }).role === 'competitor');   // CR17-F (section 196): last week's auto competitors pass the one role classifier (SAP, Salesforce, Oracle are software makers)
   const aliasRow = cache.find(c => c.key === 'ai_brands:' + s.site_id);
   // A5 / R95 (2026-10-16): `seo_ai_daily` now keeps a scheduled AND an on-demand reading for one date, so the baseline is the last
   // `baseline_days` DAYS (every reading of them), not the last 7 rows — two readings of one morning would have pushed a day out.
@@ -129,7 +130,7 @@ for (const s of todo) {
         rule_version: String(d.rule_version || '') }; });   // F1b (2026-10-23): a morning counted under another rule is not a baseline for today
   const location_code = Number(s.location_code) || 2840;
   out.push({ json: { site_id: s.site_id, domain: s.domain, fit_input, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
-    on_demand, business_name: s.profile.business_name || '', brand_names, services: AIE.servicesOf(s), business_facts: String(s.business_facts || '').slice(0, 900),   /* F1a: what the client sells, so its own platform is never read as a rival */ competitors: [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8), configured_competitors: s.settings.competitors, aliases: aliasRow ? parse(aliasRow.value, {}) : {},
+    on_demand, business_name: s.profile.business_name || '', brand_names, services: AIE.servicesOf(s), business_facts: String(s.business_facts || '').slice(0, 900),   /* F1a: what the client sells, so its own platform is never read as a rival */ competitors: [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8), configured_competitors: s.settings.competitors, ...(s.settings.not_competitors ? { not_competitors: s.settings.not_competitors } : {}), aliases: aliasRow ? parse(aliasRow.value, {}) : {},
     engines: s.settings.engines, pulse_engines: engines, prompts, prompts_max: s.settings.prompts_max, pulse_run: true, full_due: false, run_kind: 'pulse', monthly_engines: [], baseline, date: today,
     // G6: the morning's sample, the markets its questions are asked in, and what this morning is priced at (the run ledger reserves it)
     sample, panel_size: panel.length, markets, markets_map, own_market: ownMarket, cost_model: { pulse_day: { dfs: pulse_est, ai: 0, usd: pulse_est }, month: costModel.month, per_week: pw.per_week },

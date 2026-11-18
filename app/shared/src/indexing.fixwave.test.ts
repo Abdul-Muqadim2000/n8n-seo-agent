@@ -154,7 +154,7 @@ describe('A9 / A10 / A11 / A12 / A19: the figures', () => {
     const rows = [page('/', { state: 'indexed', action: 'none' }), page('/a', { cause: 'discovered_not_crawled', action: 'links' }), ...Array.from({ length: 50 }, (_, i) => page(`/u${i}`, { state: 'unknown', cause: '', action: '' }))];
     const d = buildIndexingData({ rows, runs: [], events: [], impacts: [], settings: S });
     expect(d.totals.shouldBe).toBe(2);
-    expect(indexInSearchLine({ indexed: d.totals.indexed, shouldBe: d.totals.shouldBe, known: d.totals.known, notChecked: d.totals.unknown + d.totals.errors })).toBe('Google has 1 of the 2 pages we checked that should be in search (50 not checked yet)');
+    expect(indexInSearchLine({ indexed: d.totals.indexed, shouldBe: d.totals.shouldBe, known: d.totals.known, notChecked: d.totals.unknown + d.totals.errors })).toBe('Google has 1 of the 2 pages that should be in Google (50 not checked yet)');
   });
   it('A10: days to finish from the configured cap, not a run that stopped at the quota after 2 probes', () => {
     const rows = Array.from({ length: 3000 }, (_, i) => page(`/p${i}`, { state: 'unknown' }));

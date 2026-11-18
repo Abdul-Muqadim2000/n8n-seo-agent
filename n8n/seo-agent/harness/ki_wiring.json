@@ -124,7 +124,8 @@
    "striking",
    "run_id",
    "fetched_at",
-   "updated_at"
+   "updated_at",
+   "service"
   ],
   "KI_RUNS": [
    "site_id",

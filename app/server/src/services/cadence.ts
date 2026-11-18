@@ -410,6 +410,8 @@ export interface CadenceItem extends QueueItem {
   mainPage?: boolean;
   /** P1: written once the author profile and the business facts are on file */
   held?: 'profile';
+  /** CR17 (F4): a ladder page written as a new page: the address it is written at (in the website's own folder for its kind) */
+  plannedUrl?: string;
 }
 
 export interface CadenceRefusal { keyword: string; source: TopicSource; reason: string; detail: string; note: string; targetId?: string }
@@ -747,11 +749,25 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     return [...m.values()];
   })();
   const pagesQ = (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)).map((p) => ({ url: S(p.url), queries: (() => { try { const q = JSON.parse(S(p.queries_json) || '[]'); return Array.isArray(q) ? q : []; } catch { return []; } })() }));
+  // client report 2026-11-17 (F4, mirror of Cadence_Plan.js): a page that gets its own address gets it in the site's folder for its kind
+  // (LRU.folderFor), and a rung planned at the root of a site that keeps that kind of page in a folder is written at the folder address
+  // review R5 (M1): the evidence and the folder move are the kit's (LRU.folderEvidence / LRU.folderAddress), as in Cadence Plan and Write now
+  const folderEvC = LRU.folderEvidence(slog, lrows, (input.pages ?? []).filter((p) => p && p.url && (!p.site_id || p.site_id === siteId)));
+  const folderMemoC = new Map<string, ReturnType<typeof LRU.folderFor>>();
+  const folderC = (type: string) => {
+    const k = LRU.classOf(type);
+    if (!folderMemoC.has(k)) folderMemoC.set(k, LRU.folderFor(type, folderEvC));
+    return folderMemoC.get(k)!;
+  };
   const addressOf = (l: LadderRow, x?: Info): { existing: string; target: string } => {
     const was = S(l.target_url);
     const exists = l.page_exists === true || String(l.page_exists) === 'true';
     const home = (was.match(/^https?:\/\/[^/?#]+/i) || [''])[0];
-    const own = (u: string) => LRU.plannedUrl(home, l.keyword, /\/$/.test(was)) || u;
+    const slash = /\/$/.test(was);
+    const fo = folderC(LRU.rowType(l));
+    const own = (u: string) => LRU.plannedUrl(home, l.keyword, slash, fo.folder) || u;
+    const moved = LRU.folderAddress(l, fo);
+    if (moved) return { existing: '', target: moved };
     if (num(l.rung) === 4) {
       const orig = exists ? LRU.copyOf(was, knownC) : '';
       if (orig) return { existing: orig, target: orig };
@@ -1335,8 +1351,9 @@ export function planCadence(input: CadenceInput, now: number, trigger: CadenceTr
     headSetAside: x.headSetAside,
   }));
   const clean = (c: Cand): CadenceItem => {
-    const { targetId: _t, head: _h, targetUrl: _u, air: _a, airHonoured: _ah, ...rest } = c;
-    return rest;
+    const { targetId: _t, head: _h, targetUrl, air: _a, airHonoured: _ah, ...rest } = c;
+    // CR17 (F4): a ladder page written as a new page says the address it is written at (the site's folder, LRU.folderFor)
+    return { ...rest, ...(rest.source === 'ladder' && targetUrl && !rest.existingPageUrl ? { plannedUrl: targetUrl } : {}) };
   };
   const items = preview
     ? [
@@ -1601,4 +1618,24 @@ export function chosenLadderWriting(ladders: LadderRow[], settings: LadderSettin
     if (mode === 'auto' && (status === 'active' || status === 'queued') && (CLIENT_CHOSEN.has(chosen) || (chosen === 'system_announced' && level === 3))) return true;
   }
   return false;
+}
+
+/**
+ * CR17-I (client report 2026-11-17, M2): how many pages the keyword ladders the autopilot writes on its own (the ones chosenLadderWriting
+ * counts) still have to write: their planned rungs. The credit forecast never forecasts more pages than this from the ladders (it was two a
+ * week whatever was left). Pure.
+ */
+export function chosenLadderPagesLeft(ladders: LadderRow[], settings: LadderSettingsRow[], level: AutopilotLevel): number {
+  const cfg = cadenceSiteConfig(settings);
+  const settingOf = new Map(settings.filter((r) => r.ladder_id && String(r.ladder_id) !== LADDER_SITE_ROW).map((r) => [String(r.ladder_id), r]));
+  let left = 0;
+  for (const id of new Set(ladders.filter((l) => l && l.ladder_id && l.keyword).map((l) => String(l.ladder_id)))) {
+    const st = settingOf.get(id);
+    const mode = st && (lc(st.mode) === 'auto' || lc(st.mode) === 'manual') ? lc(st.mode) : cfg.mode;
+    const status = st && (STATUSES as readonly string[]).includes(lc(st.status)) ? lc(st.status) : 'active';
+    const chosen = lc(st?.chosen_by) || (ladders.filter((l) => l && String(l.ladder_id) === id).map((l) => lc(l.chosen_by)).find(Boolean) ?? '');
+    if (!(mode === 'auto' && (status === 'active' || status === 'queued') && (CLIENT_CHOSEN.has(chosen) || (chosen === 'system_announced' && level === 3)))) continue;
+    left += ladders.filter((l) => l && String(l.ladder_id) === id && l.keyword && S(l.status || 'planned') === 'planned').length;
+  }
+  return left;
 }

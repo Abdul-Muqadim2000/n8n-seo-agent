@@ -1,4 +1,4 @@
-import { BadgeCheck, Bug, Building2, Check, Fingerprint, KeyRound, Minus, Plug, ScrollText, ShieldCheck, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { BadgeCheck, Bug, Building2, Check, CircleDashed, Fingerprint, KeyRound, MapPin, Minus, Plug, ScrollText, ShieldCheck, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CtaBand, Faq, IconTile, Reveal, Section, SectionHeading } from '../components';
@@ -6,10 +6,13 @@ import { ArrowLink, PageHero } from '../components/company/PageHero';
 import { LayeredShield } from '../components/company/LayeredShield';
 import type { FaqItem } from '../content/features';
 import { site } from '../content/site';
+import { dataLocation, notYet, TRUST_FACTS_AS_OF } from '../content/trust';
+import { fmtLongDate } from '../components/company/changelog-utils';
 import { useSeo } from '../useSeo';
 
-// Every line on this page describes how the app works today (app/server: auth, sessions, CSP, CSRF, roles, credits).
-// No certifications, audits, hosting or data-residency claims.
+// Every line on this page describes how the app works today (app/server: auth, sessions, CSP, CSRF, roles, credits). Hosting and
+// backup facts come from content/trust.ts (checked against deploy/gcp on TRUST_FACTS_AS_OF). No certification or audit claims: the
+// "Not yet" list says what does not exist.
 
 const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
   {
@@ -67,7 +70,7 @@ const GROUPS: { icon: LucideIcon; title: string; items: string[] }[] = [
     items: [
       'Each company\'s websites, runs, reports and files are kept apart',
       'Website data appears only after ownership is verified',
-      'Deleting a website or company also removes its plans from the automation engine',
+      'Deleting a website or company also deletes the history our SEO engine kept for it',
       'Server logs you send keep crawler requests only: visits by people are dropped as the file is read, no address is stored, and the file is deleted once read',
     ],
   },
@@ -149,7 +152,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'How do we remove a person or a website?',
-    a: 'Admins remove people and revoke open invitations from the team settings, and remove websites from the website settings. Deleting a website also removes its plans from the automation engine.',
+    a: 'Admins remove people and revoke open invitations from the team settings, and remove websites from the website settings. Deleting a website also deletes the history our SEO engine kept for it, and any person can delete their own account from the Account page.',
   },
   {
     q: 'Do you support single sign-on and SCIM?',
@@ -195,6 +198,47 @@ function Groups() {
             </article>
           </Reveal>
         ))}
+      </div>
+    </Section>
+  );
+}
+
+/** C1 / M1 (2026-11-17): where the data is and how long backups are kept, dated, with what does not exist yet beside it */
+function DataLocation() {
+  return (
+    <Section tone="page" id="data-location" aria-labelledby="data-location-title">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16">
+        <div>
+          <SectionHeading id="data-location-title" eyebrow="Where your data lives" title="Hosting, backups and the services we use." lead={`Facts as of ${fmtLongDate(TRUST_FACTS_AS_OF)}, checked against how Alaventra is deployed.`} />
+          <ul className="mt-8 space-y-3">
+            {dataLocation.map((t) => (
+              <li key={t} className="flex gap-3 text-[15px] leading-relaxed text-ink-2">
+                <MapPin className="mt-1 size-4 shrink-0 text-accent-text" aria-hidden />
+                {t}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3">
+            <ArrowLink to="/subprocessors">See the subprocessors</ArrowLink>
+            <ArrowLink to="/data-retention">See how long data is kept</ArrowLink>
+          </div>
+        </div>
+        <Reveal index={1} className="h-full">
+          <div className="h-full rounded-xl border border-line bg-surface p-6 sm:p-7">
+            <IconTile icon={CircleDashed} />
+            <h3 className="mt-5 font-display text-lg font-semibold tracking-[-0.01em] text-ink">Not yet</h3>
+            <p className="mt-2 text-[14px] leading-relaxed text-ink-2">What a security review often asks for and Alaventra does not have today:</p>
+            <ul className="mt-4 space-y-2.5">
+              {notYet.map((t) => (
+                <li key={t} className="flex gap-2.5 text-[14px] leading-snug text-ink-2">
+                  <Minus className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
+                  {t}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-5 text-[14px] leading-relaxed text-ink-2">A person on the team answers security questionnaires directly.</p>
+          </div>
+        </Reveal>
       </div>
     </Section>
   );
@@ -365,8 +409,11 @@ export default function SecurityPage() {
           </>
         }
         aside={<LayeredShield />}
-      />
+      >
+        <p className="mt-6 font-mono text-[12px] text-ink-3">Facts as of {fmtLongDate(TRUST_FACTS_AS_OF)}</p>
+      </PageHero>
       <Groups />
+      <DataLocation />
       <GoogleAccess />
       <RoleMatrix />
       <Disclosure />

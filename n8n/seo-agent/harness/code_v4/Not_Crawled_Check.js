@@ -293,17 +293,26 @@ const not_crawled_check = {
 // "Add them to the sitemap" and "rewrite the titles" for pages that answer 404 are work on pages that no longer exist; the gone ones move
 // to the redirect finding. The coverage line called a complete crawl a crawl limit when every address it missed is gone or redirects.
 const goneKeys = new Set(by('gone').map(p => ukey(p.url)));
+// CR17-C (build section 193, F3): an address that redirects does not belong in a sitemap either - the page it redirects to does. It leaves
+// "missing from the sitemap" with that advice; the old address stays out of the sitemap.
+const movedKeys = new Set(by('redirect').map(p => ukey(p.url)));
 const RECONCILE = { 'Pages Google shows in search are missing from the sitemap': { min: 3, unit: 'page(s) with impressions are not in sitemap.xml' },
   'Pages shown in Google but never clicked': { min: 1, unit: 'page(s) with 50+ impressions and 0 clicks in 28 days' } };
 const earlier = [];
 for (const f of (prev.extra_findings || [])) {
   const rule = f && RECONCILE[f.title];
-  if (rule && goneKeys.size && Array.isArray(f.urls_all) && f.urls_all.length) {
-    const keep = f.urls_all.filter(u => !goneKeys.has(ukey(u))); const moved = f.urls_all.length - keep.length;
-    if (!moved) { earlier.push(f); continue; }
+  const isSm = !!rule && f.title === 'Pages Google shows in search are missing from the sitemap';
+  if (rule && (goneKeys.size || (isSm && movedKeys.size)) && Array.isArray(f.urls_all) && f.urls_all.length) {
+    const keep = f.urls_all.filter(u => !goneKeys.has(ukey(u)) && !(isSm && movedKeys.has(ukey(u))));
+    const moved = f.urls_all.filter(u => goneKeys.has(ukey(u))).length;
+    const redirected = f.urls_all.length - keep.length - moved;
+    if (!moved && !redirected) { earlier.push(f); continue; }
     if (keep.length < rule.min) continue;   // what is left is not worth the finding: the gone pages are in the redirect finding
+    const notes = [];
+    if (moved) notes.push(moved + ' more no longer answer and are in the redirect finding, not here');
+    if (redirected) notes.push(redirected + ' more now redirect to another page: list the page they redirect to in the sitemap, never the old address');
     earlier.push({ ...f, urls_all: keep, sample_urls: keep.slice(0, 5), affected_count: keep.length,
-      evidence: keep.length + ' ' + rule.unit + ' (' + moved + ' more no longer answer and are in the redirect finding, not here)' });
+      evidence: keep.length + ' ' + rule.unit + ' (' + notes.join('; ') + ')' });
     continue;
   }
   if (f && f.title === 'The crawl covered only part of the site' && crawlComplete && available && checked.length) {

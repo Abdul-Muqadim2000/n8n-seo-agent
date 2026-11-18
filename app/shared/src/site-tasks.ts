@@ -29,6 +29,8 @@ import {
   type IndexSiteFixCause,
 } from './indexing';
 import { aiExportTaskKey, aiRankAddressLabel, aiRankAddressNeed, aiRankGuideOf, aiRankLeverLabel, type AiRankStep } from './ai-rank';
+import { aiRankWhyPlain } from './ai-rank-client';
+import { clientText } from './client-copy';
 
 /** `index_links` (wave 2, DESIGN_WAVE2 §3.2): the one step `indexing:links`, pages that need a link from another page of the website */
 /** AIR (2026-11-06, docs/ai-ranking-2026-11-05/DESIGN.md §6.7): `ai_rank` = a step the AI-ranking plan needs from the client on their website or
@@ -58,6 +60,9 @@ export interface SiteTaskCheck {
   /** prod 2026-11-10 (`index_merge` only): what the check found for each old address, so a page that is already one page again can say so
    *  while the step waits for the others (absent on readings from before) */
   pairs?: SiteTaskPairCheck[];
+  /** CR17-C (client report 2026-11-17 F3): with ok, the step closed because it is not needed any more (the address now redirects
+   *  permanently to another page of the website), not because it was done: the step reads "Not needed any more" with `message` */
+  notNeeded?: boolean;
 }
 export interface SiteTaskPairCheck {
   from: string;
@@ -98,7 +103,15 @@ export interface SiteTask {
   /** RC-3 (AIR): a step checked on an address the client pastes on it (an article, a post, a profile). `required`: the step cannot be
    *  checked without it; `value`: the address given last ('' = none yet). Absent for every other step. */
   address?: { required: boolean; label: string; value: string };
+  /** CR17-H (Q4): done on the website, Google has not read the pages again yet (an indexing step our fetch saw fixed): Recommendations
+   *  shows it under "Waiting for Google", not "Resolved". Absent on every other step. */
+  waitingForGoogle?: boolean;
+  /** CR17-C (client report 2026-11-17 F3): a done step that closed because it was not needed any more (distinct from "done by you") */
+  notNeeded?: boolean;
 }
+
+/** CR17-C: the label of a step closed because it was not needed any more (the web shows it instead of "Done"). */
+export const SITE_TASK_NOT_NEEDED_LABEL = 'Not needed any more';
 
 /** The engine's readings of one website, as the app's data layer already has them. */
 export interface SiteTaskInputs {
@@ -732,7 +745,9 @@ function presentMerge(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'det
 function presentAiRank(p: Record<string, unknown>): Pick<SiteTask, 'title' | 'detail' | 'values' | 'guide' | 'guideVars'> {
   const lever = str(p.lever);
   const url = str(p.url);
-  const why = str(p.why);
+  // CR17-H (client report 2026-11-17, F1): the stored why may be the engine's scoring line ("6 cell(s), expected gain 0.0082 over (client time
+  // at an hour)"): it becomes the lever's own sentence here, at render time, so the stored rows need no repair
+  const why = clientText(aiRankWhyPlain(str(p.why), lever), { lever });
   const need = aiRankAddressNeed(lever);
   // RC-3: a step checked on an address says how, in the words of the field the client fills in
   const check =
@@ -836,10 +851,13 @@ export function deriveSiteTasks(inputs: SiteTaskInputs, stored: StoredSiteTask[]
       lastCheck: decided,
       severity: state === 'todo' && (reopened || searchBlocked || googleSees) ? 'warning' : 'info',
       ...shown,
-      detail: state === 'done' ? doneDetail(d, inputs.domain) : shown.detail,
+      // CR17-C (F3): a step closed as not needed says why (the address now redirects), never "your sitemap lists these pages"
+      detail: state === 'done' ? (decided?.notNeeded && decided.message ? decided.message : doneDetail(d, inputs.domain)) : shown.detail,
+      ...(state === 'done' && decided?.notNeeded ? { notNeeded: true } : {}),
       guideVars: { domain: inputs.domain, ...shown.guideVars },
       skipped: s?.skippedAt ? { at: s.skippedAt, who: s.skippedBy ?? '' } : null,
       ...addressOf(d),
+      ...(state === 'done' && d.pendingGoogle ? { waitingForGoogle: true } : {}),
     };
   });
   const rank = (t: SiteTask) => (t.state === 'todo' ? (t.severity === 'warning' ? 0 : 1) : t.state === 'done' ? 2 : 3);

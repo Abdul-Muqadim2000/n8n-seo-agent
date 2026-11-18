@@ -3,6 +3,7 @@
 // from the customer's own mailbox, 3 e-mails at most in one thread, stop on any reply, plain text, identity + postal address + a working
 // opt-out in every e-mail, consent where the law asks for it (Germany, Austria, Saudi Arabia, named people in the UAE).
 import type { DtRow } from './tables';
+import type { LinkState, LinkStatusCounts } from './link-status';
 
 // ---- n8n Data Tables written by the Link Builder workflow (SEOagentLinkBld1) ----
 export interface LinkOutreachRow extends DtRow {
@@ -11,6 +12,8 @@ export interface LinkOutreachRow extends DtRow {
   status: string; score: number | null; fit: number | null; fit_reason: string; checks_json: string; page_url: string; page_title: string; evidence: string;
   contacts_json: string; contact_email: string; contact_form_url: string; country: string; language: string; target_url: string; target_reason: string;
   anchor_hint: string; sequence_json: string; deadline: string; drafted_at: string; checked_at: string; request_id: string;
+  /** CR17-E (2026-11-17): the link text itself (never a keyword) and the verdict's code (OK.reasonCode); empty on rows written before */
+  anchor_text?: string; reason_code?: string;
 }
 export interface ListingRow extends DtRow {
   site_id: string; domain: string; listing_id: string; name: string; category: string;
@@ -29,7 +32,7 @@ export interface LinkImpactRow extends DtRow {
   change?: string;
 }
 export const LINK_OUTREACH_TABLE_COLUMNS = ['site_id', 'domain', 'prospect_domain', 'type', 'status', 'score', 'fit', 'fit_reason', 'checks_json', 'page_url', 'page_title', 'evidence', 'contacts_json',
-  'contact_email', 'contact_form_url', 'country', 'language', 'target_url', 'target_reason', 'anchor_hint', 'sequence_json', 'deadline', 'drafted_at', 'checked_at', 'request_id'] as const;
+  'contact_email', 'contact_form_url', 'country', 'language', 'target_url', 'target_reason', 'anchor_hint', 'sequence_json', 'deadline', 'drafted_at', 'checked_at', 'request_id', 'anchor_text', 'reason_code'] as const;
 
 // ---- labels ----
 export const OPPORTUNITY_LABEL: Record<string, string> = { lost: 'Link to restore', mention: 'Mentions you without a link', list: 'List that leaves you out', comp_new: 'Just linked to a competitor', gap: 'Links to your competitors',
@@ -39,9 +42,13 @@ export type ReplyClass = (typeof REPLY_CLASSES)[number];
 export const REPLY_LABEL: Record<ReplyClass, string> = { says_linked: 'Says the link is live', interested: 'Interested', question: 'Has a question', wants_payment: 'Asks for payment', link_swap: 'Asks for a link swap',
   not_now: 'Not now', declined: 'Declined', unsubscribe: 'Asked not to be contacted', wrong_person: 'Wrong person', out_of_office: 'Out of office', other: 'Replied' };
 /** scheduled (approved, waiting for the window) -> active (sent, waiting for the next step) -> replied | bounced | stopped | won | finished (no reply) | failed */
-export const SEQUENCE_STATUSES = ['scheduled', 'active', 'paused', 'replied', 'bounced', 'stopped', 'won', 'finished', 'failed'] as const;
+/** FX-LINKS (review R2 M5): claimed = a person marked it won ("they linked"); it waits for our check of their page, which makes it won. Nothing
+ *  is sent in it and it is not a reply waiting for an answer. */
+export const SEQUENCE_STATUSES = ['scheduled', 'active', 'paused', 'replied', 'claimed', 'bounced', 'stopped', 'won', 'finished', 'failed'] as const;
 export type SequenceStatus = (typeof SEQUENCE_STATUSES)[number];
-export const SEQUENCE_LABEL: Record<SequenceStatus, string> = { scheduled: 'Scheduled', active: 'Sent, waiting', paused: 'Paused', replied: 'Replied', bounced: 'Bounced', stopped: 'Stopped', won: 'Won', finished: 'No reply', failed: 'Failed' };
+export const SEQUENCE_LABEL: Record<SequenceStatus, string> = { scheduled: 'Scheduled', active: 'Sent, waiting', paused: 'Paused', replied: 'Replied', claimed: 'Link claimed, checking', bounced: 'Bounced', stopped: 'Stopped', won: 'Won', finished: 'No reply', failed: 'Failed' };
+/** an open conversation with a site: no second pitch to it while one of these is going on */
+export const OPEN_SEQUENCE_STATUSES: readonly SequenceStatus[] = ['scheduled', 'active', 'paused', 'replied', 'claimed'];
 
 // ---- API shapes ----
 export interface OutreachStep {
@@ -57,6 +64,10 @@ export interface OutreachDraft {
   pageUrl: string; pageTitle: string; evidence: string; contacts: OutreachContact[]; contactFormUrl: string; country: string; language: string;
   targetUrl: string; targetReason: string; anchorHint: string; steps: OutreachStep[]; deadline: string; draftedAt: string; checkedAt: string;
   deadLink: { url: string; anchor: string } | null; consent: ConsentGate;
+  /** CR17-E: the link text itself ("Devaicon", "Open edX Services", "devaicon.com"), never a kind label */
+  anchorText: string;
+  /** CR17-E: the one link-building state (shared link-status.ts) and the verdict's code */
+  state: LinkState; reasonCode: string;
 }
 export interface OutreachMessageView { id: string; direction: 'out' | 'in'; step: number; kind: string; subject: string; body: string; from: string; to: string; at: string; error: string | null }
 export interface OutreachSequence {
@@ -66,6 +77,8 @@ export interface OutreachSequence {
   nextAt: string | null; approvedAt: string | null; startedAt: string | null; lastSentAt: string | null; targetUrl: string; pageUrl: string;
   replyAt: string | null; replyClass: ReplyClass | null; replySummary: string; suggestedReply: string; replyFrom: string; oooUntil: string | null; wonAt: string | null; error: string;
   messages: OutreachMessageView[];
+  /** CR17-E: sent by a person from their own mail ("I sent it myself"): the app sends nothing in it and reminds them of the follow-ups */
+  manual?: boolean;
 }
 // ---- L4: how a mailbox is connected ----
 /** `smtp`: SMTP + IMAP with an app password. The others are OAuth: no password is stored and the provider's API does the sending. */
@@ -109,6 +122,12 @@ export interface LinkBuildingData {
   /** L7: the reply rate per subject style, or why it may not be read yet */
   subjectAb: SubjectAbRead;
   lastRun: string | null; suppressed: number; canSend: { ok: boolean; why: string };
+  /** CR17-E (F9): every count on the page, from the one status model (shared link-status.ts) */
+  counts: LinkStatusCounts;
+  /** CR17-E: the business name the pitches use (the profile, else ''), for the link text and the e-mail a person sends by hand */
+  brand: string;
+  /** CR17-E: first e-mails sent by hand this week and the weekly limit they count against (owner decision: the same limit as the app's sender) */
+  manualWeek: { sent: number; limit: number };
 }
 
 // ---- L7: subject-line A/B (mirrors n8n/seo-agent/v5/code/_ab.js, the two must change together) ----
@@ -201,6 +220,9 @@ export function consentGate(country: string, email: string): ConsentGate {
   if (c === 'AE' && !role) return { needed: true, why: "The UAE's data law is consent-based: write to a named person only with their consent or an existing relationship (editor@ or info@ inboxes are fine)." };
   return { needed: false, why: '' };
 }
+/** FX-LINKS (review R2 M4): the consent rule for a pitch a person sends by hand ("I sent it myself"): by the address, or for a contact form
+ *  (no address) by the country alone, since a form is not a named person */
+export const manualConsentGate = (country: string, to: string): ConsentGate => consentGate(country, String(to || '').trim() || 'info@contact-form.invalid');
 /** the lines every e-mail ends with: who is writing, from where, and how to stop it (CAN-SPAM, GDPR Art. 14, PECR)
  *
  *  **B11-3 (2026-10-15, benchmark area 11).** The postal address used to go out on the FIRST e-mail only, and the two follow-ups

@@ -659,6 +659,7 @@
     "ok": true,
     "state": "published",
     "tables": [
+     "seo_ai_targets",
      "seo_case_studies",
      "seo_content_log",
      "seo_ladders",
@@ -927,6 +928,9 @@
    "caught": true,
    "fail": "",
    "ok": true
+  },
+  "the_settle_kit_drops_its_proof": {
+   "caught": true
   },
   "the_verdict_field_list_goes_stale": {
    "caught": true

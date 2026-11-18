@@ -90,3 +90,19 @@ describe('/api through the proxy', () => {
     expect(middleware(req('https://app.alaventra.com/api/me')).status).toBe(503);
   });
 });
+
+// C2 (2026-11-17): the public pages are prerendered, and index.html is the marketing home. app.<domain>/ is where signed-in people open
+// the app, so it gets the plain app shell (no marketing home first); www keeps the home, and every other path is left to the build.
+describe('the app host root', () => {
+  it('serves the app shell at app.<domain>/ with the page CSP, and leaves www and other paths alone', () => {
+    vi.stubEnv('API_ORIGIN', 'https://api.alaventra.com');
+    const app = middleware(req('https://app.alaventra.com/'));
+    expect(app.headers.get('x-middleware-rewrite')).toBe('https://app.alaventra.com/app');
+    expect(app.headers.get('content-security-policy')).toContain("script-src 'self'");
+    for (const url of ['https://www.alaventra.com/', 'https://app.alaventra.com/pricing', 'https://app.alaventra.com/o/x']) {
+      const r = middleware(req(url));
+      expect(r.headers.get('x-middleware-rewrite'), url).toBeNull();
+      expect(r.headers.get('x-middleware-next'), url).toBe('1');
+    }
+  });
+});

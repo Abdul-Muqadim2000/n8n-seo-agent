@@ -140,6 +140,34 @@
               {
                 "name": "source",
                 "type": "string"
+              },
+              {
+                "name": "condition_key",
+                "type": "string"
+              },
+              {
+                "name": "last_seen_at",
+                "type": "string"
+              },
+              {
+                "name": "count",
+                "type": "number"
+              },
+              {
+                "name": "resolved_at",
+                "type": "string"
+              },
+              {
+                "name": "resolution",
+                "type": "string"
+              },
+              {
+                "name": "ack_by",
+                "type": "string"
+              },
+              {
+                "name": "ack_at",
+                "type": "string"
               }
             ]
           },
@@ -335,6 +363,76 @@
               {
                 "id": "source",
                 "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "condition_key",
+                "displayName": "condition_key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen_at",
+                "displayName": "last_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "count",
+                "displayName": "count",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "resolved_at",
+                "displayName": "resolved_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "resolution",
+                "displayName": "resolution",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ack_by",
+                "displayName": "ack_by",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ack_at",
+                "displayName": "ack_at",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

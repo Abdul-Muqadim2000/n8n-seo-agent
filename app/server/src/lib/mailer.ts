@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { figureLines, type DeliveryItem } from '@seo/shared';
+import { figureLines, legalUrl, type DeliveryItem } from '@seo/shared';
 import { config } from '../config';
 
 // Account e-mails (verification, password reset, invitations). Sent only with ACCOUNT_EMAILS=true and SMTP settings (the n8n Gmail
@@ -95,6 +95,8 @@ interface Look {
   /** where a reader with a problem goes: a page and / or an address */
   helpUrl: string | null;
   helpEmail: string | null;
+  /** CR17-B (2026-11-17): our Privacy Policy and Terms in the footer of our own mails (a white-label agency's mails carry nothing of ours) */
+  legal: { privacy: string; terms: string } | null;
 }
 
 function lookOf(sender: MailSender | undefined): Look {
@@ -113,7 +115,13 @@ function lookOf(sender: MailSender | undefined): Look {
     footerText: whiteLabel ? (sender?.footerText ?? null) : null,
     helpUrl: whiteLabel ? null : config.support.url || null,
     helpEmail: whiteLabel ? (sender?.supportEmail ?? null) : config.support.email || null,
+    legal: whiteLabel ? null : { privacy: legalUrl(config.appUrl, 'privacy'), terms: legalUrl(config.appUrl, 'terms') },
   };
+}
+
+/** CR17-B: the footer's legal links, as text (the plain-text part of every mail) */
+function legalText(l: Look): string {
+  return l.legal ? `Privacy Policy: ${l.legal.privacy} | Terms: ${l.legal.terms}` : '';
 }
 
 function logoHtml(l: Look): string {
@@ -152,6 +160,9 @@ function shell(l: Look, o: { preheader: string; card: string; reason: string; wi
   const foot = [
     l.footerText ? `<p style="margin:0 0 8px">${esc(l.footerText)}</p>` : '',
     o.reason ? `<p style="margin:0 0 8px">${esc(o.reason)}</p>` : '',
+    l.legal
+      ? `<p style="margin:0 0 8px"><a href="${esc(l.legal.privacy)}" target="_blank" style="color:${C.mist};text-decoration:underline">Privacy Policy</a> &middot; <a href="${esc(l.legal.terms)}" target="_blank" style="color:${C.mist};text-decoration:underline">Terms</a></p>`
+      : '',
     l.whiteLabel ? '' : `<p style="margin:0">&copy; ${new Date().getFullYear()} ${esc(config.brand)}</p>`,
   ].join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(l.brandName)}</title></head>
@@ -194,7 +205,7 @@ ${m.lines.map(p).join('\n')}${details}${action}`;
     m.action ? `${m.action.label}: ${m.action.url}` : '',
     helpText(l),
     '',
-    m.footer ?? '',
+    [m.footer ?? '', legalText(l)].filter(Boolean).join('\n\n'),
   ]
     .filter((x, i, a) => x || i < a.length - 1)
     .join('\n\n');
@@ -280,7 +291,7 @@ export async function sendReportMail(
   log: { info: (o: object, msg: string) => void; error: (o: object, msg: string) => void },
 ): Promise<boolean> {
   const l = lookOf(m.sender);
-  const text = [...m.lines, helpText(l), m.footer ?? ''].filter(Boolean).join('\n\n');
+  const text = [...m.lines, helpText(l), m.footer ?? '', legalText(l)].filter(Boolean).join('\n\n');
   const t = reportTransport();
   if (!t && !m.sender?.via) {
     log.info({ to: m.to, subject: m.subject, reports: m.reports.length }, 'report not e-mailed (no SMTP configured)');

@@ -52,13 +52,13 @@ reqsAll.forEach((q, i) => {
   let j = judge(q, answers[i]);
   if (j.redirect) {
     const own = bare(hostOf(j.redirect)) === bare(hostOf(q.url));
-    if (!own) { results.push({ q, redirected: { url: q.url, to: j.redirect, reason: 'redirects to another website' } }); return; }
-    if (!samePage(j.redirect, q.url)) { results.push({ q, redirected: { url: q.url, to: j.redirect, reason: 'redirects to another page of the site' } }); return; }
+    if (!own) { results.push({ q, redirected: { url: q.url, to: j.redirect, reason: 'redirects to another website', status: j.code || 0 } }); return; }
+    if (!samePage(j.redirect, q.url)) { results.push({ q, redirected: { url: q.url, to: j.redirect, reason: 'redirects to another page of the site', status: j.code || 0 } }); return; }
     const hi = hops.findIndex(h => h.of_url === q.url);
     const j2 = hi >= 0 ? judge(q, hopAnswers[hi]) : { fail: true, reason: 'redirects to ' + j.redirect + ', not followed' };
-    if (j2.redirect) j = samePage(j2.redirect, q.url) ? { fail: true, reason: 'redirects more than once' } : { redirect: j2.redirect };
+    if (j2.redirect) j = samePage(j2.redirect, q.url) ? { fail: true, reason: 'redirects more than once' } : { redirect: j2.redirect, code: [301, 308].includes(j.code) ? j2.code : j.code };   // review R5 (L4): a chain is permanent only when every hop is
     else j = j2;
-    if (j.redirect) { results.push({ q, redirected: { url: q.url, to: j.redirect, reason: 'redirects to another page of the site' } }); return; }
+    if (j.redirect) { results.push({ q, redirected: { url: q.url, to: j.redirect, reason: 'redirects to another page of the site', status: j.code || 0 } }); return; }
   }
   results.push({ q, j });
 });

@@ -195,7 +195,9 @@ describe('recommend', () => {
         }),
       );
       expect(recs.find((x) => x.id === 'search:striking:erp implementation dubai')?.action).toMatchObject({ label: 'Improve the existing page', prefill: { existingPageUrl: 'https://northwind-erp.com/erp-implementation/' } });
-      expect(recs.find((x) => x.id === 'content:trend:erp implementation dubai')?.action).toMatchObject({ label: 'Improve the existing page' });
+      // CR17-H (Q4): the rising-search item is the same issue as the striking one (one search, one page): one card, "also reported by" the trend
+      expect(recs.find((x) => x.id === 'content:trend:erp implementation dubai')).toBeUndefined();
+      expect(recs.find((x) => x.id === 'search:striking:erp implementation dubai')?.alsoFrom).toEqual(['Google Trends']);
       expect(recs.some((x) => x.id === 'search:striking:erp support dubai' || x.id === 'content:trend:erp support dubai')).toBe(false);
     });
   });
@@ -315,11 +317,11 @@ describe('actionFromApiBody', () => {
 // A16 (2026-10-23, AI visibility app audit): "AI names you in X%" is a finding only on enough answers, and it quotes its range
 describe('A16: the low-visibility recommendation has a floor', () => {
   const ai = (samples: number) => ({ ...bundle().ai, runs: [{ ...bundle().ai.runs[0], mentionRate: 5, samples, answers: samples, mentionLo: null, mentionHi: null }] });
-  it('9 answers raise nothing; 40 answers raise it with the 95% range in its basis', () => {
+  // CR17-H (client report 2026-11-17, Q4): "AI names you in 0%" is a measure, not a step anyone can finish: it is the AI visibility page's KPI
+  // and never a to-do (owner decision noted in HANDOFF_H.md). The A16 floor still decides what the AI page calls a finding.
+  it('is never a to-do, on 9 answers or on 40', () => {
     expect(recommend(site, bundle({ ai: ai(9) })).some((r) => r.id === 'ai:low')).toBe(false);
-    const r = recommend(site, bundle({ ai: ai(40) })).find((x) => x.id === 'ai:low');
-    expect(r).toBeTruthy();
-    expect(JSON.stringify(r)).toMatch(/95% range/);
+    expect(recommend(site, bundle({ ai: ai(40) })).some((r) => r.id === 'ai:low')).toBe(false);
   });
 });
 

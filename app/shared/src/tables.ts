@@ -81,6 +81,8 @@ export interface SitePageRow extends DtRow {
    */
   clicks?: number; impressions?: number; position?: number; prev_clicks?: number; yoy_clicks?: number;
   decay_state?: string; decay_pct?: number; decay_lost?: number; decay_kind?: string; decay_basis?: string; measured_at?: string;
+  /** RV-1: what the address answered when last read (0 = never read); CR17 F4 reads it for the site's folders (LRU.folderFor) */
+  http_status?: number; status_at?: string;
 }
 export interface CadenceRow extends DtRow {
   site_id: string; domain: string; pages_per_week: number; status: string; updated_at: string; request_id: string;
@@ -88,6 +90,8 @@ export interface CadenceRow extends DtRow {
 export interface ConsoleAlertRow extends DtRow {
   site_id: string; domain: string; kind: string; severity: string; subject: string; summary: string; received_at: string;
   message_id: string; status: string; source: string;
+  // CR17-D (build section 194): the alert lifecycle; absent on rows written before it and on an engine whose table was not synced yet
+  condition_key?: string; last_seen_at?: string; count?: number; resolved_at?: string; resolution?: string; ack_by?: string; ack_at?: string;
 }
 export interface CheckinRow extends DtRow {
   site_id: string; domain: string; month: string; manual_action: boolean; security_issue: boolean; notes: string;
@@ -137,6 +141,9 @@ export interface MonitorsRow extends DtRow {
   /** KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md §1; absent before the engine adds them, empty = off): keyword intelligence per
    *  site (off | trial | on), the monthly refresh when On (empty = yes), competitors the client may choose (1-5, empty = 5). Read with kiModeOf */
   ki_mode?: string | null; ki_refresh?: boolean | string | null; ki_max_competitors?: number | string | null;
+  /** CR17-F (2026-11-17): reserved, never written by the engine (a "Not a competitor" choice is a seo_ki_competitors row, status dismissed,
+   *  status_by user); read tolerantly so a hand-entered comma list still counts. THE list: competitorList in ./competitor-roles */
+  not_competitors?: string | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -187,6 +194,8 @@ export interface AiVisibilityRow extends DtRow {
   /** W2 §2 (absent on older rows; an absent block keeps today's view) */
   urls_json?: string; shopping_json?: string; ads_local_json?: string; ci_json?: string; sov_json?: string; sentiment_json?: string; impact_json?: string;
   alerts_rules_json?: string; fanout_gap_json?: string; demand_json?: string; imports_json?: string; exec_ids?: string; notes_json?: string;
+  /** CR17-F (absent on older rows): the software makers and platforms AI names, [{domain, name, answers, role}]: never competitors */
+  software_json?: string;
 }
 /** W2 §5: the owner's Bing AI Performance / Search Console AI uploads, written by the app, read by the engine */
 export interface AiImportRow extends DtRow {
@@ -244,6 +253,8 @@ export interface ProspectRow extends DtRow {
   /** P34-1 (2026-10-12): when the stored draft was written. Empty, or before DRAFT_GATES_AT, means it was written without the current
    *  outreach gates: it is superseded and must not be offered (see prospectDraft in ./outreach). */
   drafted_at: string;
+  /** CR17-F (absent before the engine adds it): when the AI question this prospect came from was retired; the row is kept, never offered */
+  retired_at?: string | null;
 }
 /** v4.10: the link ledger, one row per site and referring site, merged from every source and checked on the linking page */
 export interface BacklinkRow extends DtRow {
@@ -367,6 +378,8 @@ export interface PageWatchRow extends DtRow {
   robots_blocked: boolean; robots_hash: string; state: string; changes: string; last_change_at: string; changed_count: number; error: string;
   inspect_at: string; index_state: string; indexed: string; coverage: string; google_canonical: string; last_crawl: string;
   mobile: string; rich_results: string; inspect_error: string;
+  /** CR17-D (build section 194): the address this page moved to permanently ('' = it did not move) */
+  moved_to?: string;
 }
 
 /** Index coverage (2026-10-29, n8n/seo-agent/docs/indexing-2026-10-29/DESIGN.md §2): written by the engine's daily `SEOagentIndexCv1`,

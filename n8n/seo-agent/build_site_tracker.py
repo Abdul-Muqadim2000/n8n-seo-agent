@@ -18,6 +18,7 @@ from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, m
 from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R29 (2026-10-14)
 from ladder_common import site_time_src, CYCLES_TABLE, CYCLE_JOBS_TABLE   # 2026-10-19: the website's calendar (ST) and its cycle row (seo_cycles)
 from ladder_common import KI_RUNS_TABLE, KI_COMP_TABLE, KI_COMP_COLS, KI_KW_TABLE, KI_GAPS_TABLE, KI_GAPS_COLS   # KI E2 (2026-11-08, CONTRACTS.md §5): Site Admin's KI actions
+from ladder_common import INDEX_PAGES_TABLE, dt_delete_where_params   # build section 194 (client report 2026-11-17, F5 / F10): moves Steps on your website asked for; rows that follow a move
 from ladder_common import SKIPS_TABLE, SKIPS_COLS   # keyword-first (2026-10-19, SCHEDULING_KEYWORDS_PLAN.md §5.7): the client's skips / approvals on the "Coming up" plan
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
@@ -68,13 +69,14 @@ GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scrape
 SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
 SERP_URL_SRC = _rdt('code/_serp_url.js').rstrip('\n')   # SERP-GOTO (2026-11-08): the real host behind a Google redirect, and the unread-reading rules (SU)
 RANK_SERP_SRC = SERP_URL_SRC + '\n' + _rdt('code/_rank_serp.js').rstrip('\n')   # SERP-GOTO (2026-11-08): RS reads hosts through SU      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
+MOVES_SRC = _rdt('code/_moves.js').rstrip('\n')    # build section 194 (client report 2026-11-17, F10): a page that moved permanently, and the rows that follow it (MV)
 PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
 WAITING_SRC = _rdt('code/_waiting.js').rstrip('\n')          # F-A1 / A-12 (2026-10-17): the pile-up count and the ladders being written, one rule shared with the ladder mode
 READINESS_SRC = _rdt('code/_readiness.js').rstrip('\n')     # P1 (2026-10-20): author profile + business facts before a written page, one rule with Ladder Plan and the app
 AI_PANEL_SRC = _rdt('code/_ai_panel.js').rstrip('\n')     # F2 (2026-10-23): the question ids and search phrases of the AI panel (AIP.promptId / keywordOf), one rule with the Prompt Writer's path
 FIT_GATE_SRC = _rdt('code/_fit_gate.js').rstrip('\n')        # R16 (build_v4.py section 53): the fit gate, also over the rungs stored before it existed (fitStored)
 rd = lambda p: (seo_events.inline(_rdt(p)).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
-                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC)
+                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__SERP_URL__*/', SERP_URL_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC).replace('/*__MOVES__*/', MOVES_SRC)
                 .replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__AI_PANEL__*/', AI_PANEL_SRC).replace('/*__WAITING__*/', WAITING_SRC).replace('/*__READINESS__*/', READINESS_SRC)
                 .replace('/*__SITE_TIME__*/', site_time_src()).replace('/*__GONE__*/', _rdt('code/_gone.js').rstrip('\n'))
                 .replace('/*__AI_QUESTION__*/', _rdt('code/_ai_question.js').rstrip('\n'))   # client reports 2026-11-16 (INV1): AQ, the plain reasons of an AI question's state
@@ -412,6 +414,19 @@ for _n in ('Inspect Requests', 'Parse Inspection', 'Inspect Rows (Site)', 'Site 
 assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch placeholder left in the Site Tracker'
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
+# ---- client report 2026-11-17 (CR17 Q3, build_v4.py section 197): a page publish detection records live settles the AI questions it answers
+# at once ($0, AQ.settleOnPublish): a branch beside the detection chain (after it, in n8n's order), reading what Detect Published recorded ----
+N.append(node('Load AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_TARGETS_TABLE), at(22, -7), **LOAD))
+N.append(code('AI Target Settle (Publish)', rd('code/AI_Target_Publish_Settle.js'), at(23, -7), **SAFE))
+N.append(iff('Any AI Settles (Publish)?', '{{ !$json.skip && !!$json.target_id }}', at(24, -7)))
+N.append(node('Settle AI Targets (Publish)', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')],
+    {'status': '={{ $json.status }}', 'written_at': '={{ $json.written_at }}', 'updated_at': '={{ $json.at }}', 'reason': '={{ $json.reason }}', 'reason_code': '={{ $json.reason_code }}', 'reason_args': '={{ $json.reason_args }}', 'request_id': '={{ $json.request_id }}'}),
+    at(25, -7), alwaysOutputData=True, onError='continueRegularOutput'))
+link(C, 'Detect Published', 'Load AI Targets (Publish)'); link(C, 'Load AI Targets (Publish)', 'AI Target Settle (Publish)'); link(C, 'AI Target Settle (Publish)', 'Any AI Settles (Publish)?')
+link(C, 'Any AI Settles (Publish)?', 'Settle AI Targets (Publish)', 0)
+assert [t['node'] for t in C['Detect Published']['main'][0]] == ['Detected Log Rows', 'Load AI Targets (Publish)'], 'CR17 Q3: the publish settle must hang after the detection chain'
+_cpub = next(n for n in N if n['name'] == 'AI Target Settle (Publish)')['parameters']['jsCode']
+assert _cpub.count('const AQ = (() => {') == 1 and _cpub.count('const LRU = (() => {') == 1 and 'AQ.settleOnPublish(' in _cpub, 'CR17 Q3: the publish settle lacks its kits'
 LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9),
                                                          measured='!SERP Check (Site) Answers|Google Trends Answers')
 # ---- B-A10 (2026-10-15, INVARIANTS rule 3): the two paid DataForSEO calls of the week go through the in-200 retry gate ----
@@ -424,6 +439,11 @@ for _h10, _w10, _u10 in (('Google Trends', 'the 12-month search interest for thi
     _gs10 = dfs_gate.splice(_wf_site, _h10, V5, what=_w10, unit=_u10, code_dir=CODE)
     retry_lint.record_gate('SEO Agent — Site Tracker', _gs10['chain'])
 retry_lint.check_in200(_wf_site)
+# CR17-I (section 199, client report 2026-11-17, F8): the weekly report counts tracked keywords by the app's one definition (ladder keywords + the
+# client's own list, each search once) and the other written pages apart (app/shared/src/tracked-keywords.ts; harness CR17I1)
+_sr199 = next(n_['parameters']['jsCode'] for n_ in _wf_site['nodes'] if n_['name'] == 'Site Report')
+assert "'Tracked keywords: '" in _sr199 and "'Your other pages: '" in _sr199 and "h3('Tracked keywords')" not in _sr199, 'section 199: the Site Report still mixes ladder keywords and written pages in one "Tracked keywords" table'
+print('CR17-I (section 199): the weekly report counts the searches checked on Google once and the other written pages apart')
 write(_wf_site, 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================
@@ -446,7 +466,7 @@ N.append(node('Load Monitors (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(
 N.append(code('Monitor Row (Admin)', rd('code/Monitor_Row_Admin.js'), [1000, 400]))
 N.append(node('Set Monitors', DT_TYPE, DT_VERSION, dt_upsert_params(MONITORS_TABLE, MONITORS_COLS, 'site_id'), [1240, 400], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Load Link Prospects (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(PROSPECT_TABLE, 'site_id', 'eq', '={{ $json.site_id }}'), [760, 560], **ALOAD))
-N.append(code('Prospect Rows (Admin)', rd('code/Prospect_Rows_Admin.js'), [1000, 560]))
+N.append(code('Prospect Rows (Admin)', rd('code/Prospect_Rows_Admin.js').replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')), [1000, 560]))   # FX-LINKS: LK.noteWith (a person's note is never overwritten)
 N.append(node('Set Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), [1240, 560], alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(node('Load AI Prompts (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_PROMPTS_TABLE, 'site_id', 'eq', '={{ $json.site_id }}'), [760, 720], **ALOAD))
 N.append(code('AI Prompt Rows (Admin)', rd('code/AI_Prompt_Rows_Admin.js'), [1000, 720]))
@@ -457,7 +477,10 @@ N.append(switch('Admin Route', [('delete', "{{ $json.action === 'delete' }}"), (
 # site row so Admin Result still counts the site rows; every delete reads the site id from Admin Action and runs once. A domain that still
 # has ladders is adopted again by the dispatcher as a rank-tracking-only cycle, as the Monday Rank Tracker used to check every ladder.
 _adm_sid = "={{ $('Admin Action').first().json.site_id }}"
-_adm_del = lambda table: {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'site_id', 'condition': 'eq', 'keyValue': _adm_sid}]}, 'options': {}}
+# FX-SERVER (review R5 M5): every delete of the `delete` action keyed by the engine site id matches Admin Action's purge_id: the site id, or a
+# value no row holds when the app says another domain holds that id (purge_ids: false); the other website's rows are never touched
+_adm_pid = "={{ $('Admin Action').first().json.purge_id }}"
+_adm_del = lambda table: {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'site_id', 'condition': 'eq', 'keyValue': _adm_pid}]}, 'options': {}}
 N.append(node('Delete Cycle (Admin)', DT_TYPE, DT_VERSION, _adm_del(CYCLES_TABLE), [620, -400], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
 N.append(node('Delete Cycle Jobs (Admin)', DT_TYPE, DT_VERSION, _adm_del(CYCLE_JOBS_TABLE), [690, -320], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
 # KI E2 (2026-11-08, CONTRACTS.md §5): a deleted website takes its keyword-intelligence rows with it (runs, competitors, keywords, gaps), before the site row
@@ -467,7 +490,15 @@ for _i, (_nm, _t) in enumerate(_ADM_KI):
     _p = _adm_del(_t)
     if _t == CACHE_TABLE: _p['filters']['conditions'].append({'keyName': 'kind', 'condition': 'eq', 'keyValue': 'ki'})
     N.append(node(_nm, DT_TYPE, DT_VERSION, _p, [700 + _i * 20, -300 + _i * 15], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
-N.append(node('Delete Site', DT_TYPE, DT_VERSION, _adm_del(SITES_TABLE), [760, -240], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
+# FX-SERVER (R5 M5): the site row by its id (purge_id), or, for a vouched domain, by that domain (bare or www.): a website whose id another
+# domain also holds still loses its own row (its weekly runs stop), never the other one's. Without a vouched domain the domain conditions
+# match a value no row holds.
+_DS_NONE = "(no vouched domain)"
+_ds = _adm_del(SITES_TABLE)
+_ds['matchType'] = 'anyCondition'
+_ds['filters']['conditions'] += [{'keyName': 'domain', 'condition': 'eq', 'keyValue': "={{ $('Admin Action').first().json.purge_domain || '%s' }}" % _DS_NONE},
+                                 {'keyName': 'domain', 'condition': 'eq', 'keyValue': "={{ $('Admin Action').first().json.purge_domain ? 'www.' + $('Admin Action').first().json.purge_domain : '%s' }}" % _DS_NONE}]
+N.append(node('Delete Site', DT_TYPE, DT_VERSION, _ds, [760, -240], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
 # KI E2: the client's choice on one competitor (status_by user, at most ki_max_competitors chosen) and the state of one gap
 N.append(node('Load KI Competitors (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(KI_COMP_TABLE, 'site_id', 'eq', "={{ $('Admin Action').first().json.site_id }}"), [760, 1360], **ALOAD))
 N.append(node('Load KI Monitors (Admin)', DT_TYPE, DT_VERSION, dt_get_where_params(MONITORS_TABLE, 'site_id', 'eq', "={{ $('Admin Action').first().json.site_id }}"), [880, 1360], **ALOAD))
@@ -494,16 +525,57 @@ N.append(node('Set Market', DT_TYPE, DT_VERSION, dt_update_params(SITES_TABLE, S
 N.append(code('Admin Result', rd('code/Admin_Result.js'), [1240, 0]))
 N.append(sticky('Note', """## SEO Agent — Site Admin
 Manages a tracked site without the n8n UI. Body: `{ action, site_id | domain, ... }` through the Test Runner (`workflow: SEOagentSiteAdm1`) or an Execute Workflow node:
-`pause` / `resume` set `status` in `seo_sites` (the weekly runs skip paused sites; on-demand runs still work) · `delete` removes the site row (history stays) · `cadence` + `pages_per_week` (0-3) sets the Content Cadence for the site (`seo_cadence`) · `unpublish` + `keyword` reverts a published page to "started" (content log + ladder row) · `monitors` (v4.5) sets the growth monitors (`ai_visibility`, `ai_engines`, `ai_prompts_max` (3-50), `ai_pulse` (daily AI Pulse), `backlinks`, `audit_monthly`, `audit_pages`, `audit_js`, `competitors`, `brand_names`; given fields replace, others kept) · `prospect` + `prospect_domain` + `status` (new / contacted / won / rejected / ignored) and/or `note` updates the link-prospect pipeline · `ai_prompts` + `add` (questions) / `remove` (prompt ids or texts) manages the tracked AI questions · `market` + `country` (name or ISO-2) moves the weekly checks to that market (`seo_sites` country / location_code / language_code; history stays).
+`pause` / `resume` set `status` in `seo_sites` (the weekly runs skip paused sites; on-demand runs still work) · `delete` removes the site row and, with the `domain`, the website's whole engine history (CR17-B: every table of `ladder_common.SITE_PURGE`) · `cadence` + `pages_per_week` (0-3) sets the Content Cadence for the site (`seo_cadence`) · `unpublish` + `keyword` reverts a published page to "started" (content log + ladder row) · `monitors` (v4.5) sets the growth monitors (`ai_visibility`, `ai_engines`, `ai_prompts_max` (3-50), `ai_pulse` (daily AI Pulse), `backlinks`, `audit_monthly`, `audit_pages`, `audit_js`, `competitors`, `brand_names`; given fields replace, others kept) · `prospect` + `prospect_domain` + `status` (new / contacted / won / rejected / ignored) and/or `note` updates the link-prospect pipeline · `ai_prompts` + `add` (questions) / `remove` (prompt ids or texts) manages the tracked AI questions · `market` + `country` (name or ISO-2) moves the weekly checks to that market (`seo_sites` country / location_code / language_code; history stays).
 **Must be published** (n8n 2.x refuses to execute an unpublished sub-workflow: live finding 2026-10-02).""", [-40, -520], 900, 240, 7))
 for a, b in [('Admin Run', 'Ensure Cadence Table (Admin)'), ('Ensure Cadence Table (Admin)', 'Ensure Log Table (Admin)'), ('Ensure Log Table (Admin)', 'Ensure Sites Table (Admin)'), ('Ensure Sites Table (Admin)', 'Ensure Monitors Table (Admin)'), ('Ensure Monitors Table (Admin)', 'Ensure Prospects Table (Admin)'), ('Ensure Prospects Table (Admin)', 'Ensure AI Prompts Table (Admin)'), ('Ensure AI Prompts Table (Admin)', 'Admin Action'), ('Admin Action', 'Admin Route'), ('Delete Site', 'Admin Result'), ('Set Site Status', 'Admin Result'), ('Cadence Row (Admin)', 'Set Cadence'), ('Set Cadence', 'Admin Result'), ('Unpublish Log', 'Unpublish Ladder'), ('Unpublish Ladder', 'Admin Result')]: link(C, a, b)
 link(C, 'Admin Route', 'Delete Cycle (Admin)', 0); link(C, 'Delete Cycle (Admin)', 'Delete Cycle Jobs (Admin)'); link(C, 'Delete Cycle Jobs (Admin)', _ADM_KI[0][0]);
-for _a, _b in zip([x[0] for x in _ADM_KI], [x[0] for x in _ADM_KI[1:]] + ['Delete Site']): link(C, _a, _b)
+for _a, _b in zip([x[0] for x in _ADM_KI], [x[0] for x in _ADM_KI[1:]] + ['Purge History? (Admin)']): link(C, _a, _b)
+# CR17-B (client report 2026-11-17, C1; build section 200): a deleted website takes its whole engine history with it, every table of
+# ladder_common.SITE_PURGE (the one list the app's backstop and the backfill script read too), matched by EXACT equality on the domain
+# (bare and www.) or the site id; one node per table, before the site row so Admin Result still counts it. Only when Admin Action vouches
+# for the domain (purge_domain: named by the caller, and its id is this site id); otherwise the site row goes as before and nothing else.
+from ladder_common import SITE_PURGE as _SP200, purge_registry_check as _prc200
+_prc200()
+_v200 = {'domain': ["={{ $('Admin Action').first().json.purge_domain }}", "={{ 'www.' + $('Admin Action').first().json.purge_domain }}"], 'id': [_adm_pid]}   # FX-SERVER (R5 M5): purge_id
+N.append(iff('Purge History? (Admin)', "{{ $('Admin Action').first().json.purge_domain !== '' && $('Admin Action').first().json.action === 'delete' }}", [880, -560]))
+_PURGE200 = []
+for _i, (_t, _keys) in enumerate([x for x in _SP200 if x[0] != SITES_TABLE]):   # the site row is the chain's last step (Delete Site), as before
+    _nm = 'Purge %s (Admin)' % _t
+    _conds = [{'keyName': _c, 'condition': 'eq', 'keyValue': _v} for _c, _k in _keys for _v in _v200[_k]]
+    _p = {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': _t}, 'matchType': 'anyCondition', 'filters': {'conditions': _conds}, 'options': {}}
+    N.append(node(_nm, DT_TYPE, DT_VERSION, _p, [1000 + (_i % 10) * 120, -760 - (_i // 10) * 120], alwaysOutputData=True, onError='continueRegularOutput', executeOnce=True))
+    _PURGE200.append(_nm)
+link(C, 'Purge History? (Admin)', _PURGE200[0], 0); link(C, 'Purge History? (Admin)', 'Delete Site', 1)
+for _a, _b in zip(_PURGE200, _PURGE200[1:] + ['Delete Site']): link(C, _a, _b)
 link(C, 'Admin Route', 'Load KI Competitors (Admin)', 10); link(C, 'Load KI Competitors (Admin)', 'Load KI Monitors (Admin)'); link(C, 'Load KI Monitors (Admin)', 'KI Competitor (Admin)'); link(C, 'KI Competitor (Admin)', 'KI Competitor OK? (Admin)'); link(C, 'KI Competitor OK? (Admin)', 'Set KI Competitor', 0); link(C, 'KI Competitor OK? (Admin)', 'Admin Result', 1); link(C, 'Set KI Competitor', 'Admin Result'); link(C, 'Admin Route', 'Set KI Gap', 11); link(C, 'Set KI Gap', 'Admin Result')
 link(C, 'Admin Route', 'Set Site Status', 1); link(C, 'Admin Route', 'Cadence Row (Admin)', 2); link(C, 'Admin Route', 'Unpublish Log', 3); link(C, 'Admin Route', 'Load Monitors (Admin)', 4); link(C, 'Admin Route', 'Load Link Prospects (Admin)', 5); link(C, 'Admin Route', 'Load AI Prompts (Admin)', 6); link(C, 'Admin Route', 'Set Content Groups', 7); link(C, 'Set Content Groups', 'Admin Result'); link(C, 'Admin Route', 'Set Business Facts', 8); link(C, 'Set Business Facts', 'Fact Answers Sent?'); link(C, 'Fact Answers Sent?', 'Set Fact Answers', 0); link(C, 'Fact Answers Sent?', 'Admin Result', 1); link(C, 'Set Fact Answers', 'Admin Result'); link(C, 'Admin Route', 'Set Market', 9); link(C, 'Set Market', 'Admin Result')
-_adm_chain = [t['node'] for t in C['Admin Route']['main'][0]] + [t['node'] for t in C['Delete Cycle (Admin)']['main'][0]] + [t['node'] for t in C['Delete Cycle Jobs (Admin)']['main'][0]] + [t['node'] for _k in _ADM_KI for t in C[_k[0]]['main'][0]] + [t['node'] for t in C['Delete Site']['main'][0]]
-assert _adm_chain == ['Delete Cycle (Admin)', 'Delete Cycle Jobs (Admin)', 'Delete KI Runs (Admin)', 'Delete KI Competitors (Admin)', 'Delete KI Keywords (Admin)', 'Delete KI Gaps (Admin)', 'Delete KI Cache (Admin)', 'Delete Site', 'Admin Result'], 'Site Admin delete: the cycle and KI rows must go before the site row, then Admin Result: ' + str(_adm_chain)
+_adm_chain = [t['node'] for t in C['Admin Route']['main'][0]] + [t['node'] for t in C['Delete Cycle (Admin)']['main'][0]] + [t['node'] for t in C['Delete Cycle Jobs (Admin)']['main'][0]] + [t['node'] for _k in _ADM_KI for t in C[_k[0]]['main'][0]] + [t['node'] for t in C['Purge History? (Admin)']['main'][0]] + [t['node'] for _k in _PURGE200 for t in C[_k]['main'][0]] + [t['node'] for t in C['Delete Site']['main'][0]]
+assert _adm_chain == ['Delete Cycle (Admin)', 'Delete Cycle Jobs (Admin)', 'Delete KI Runs (Admin)', 'Delete KI Competitors (Admin)', 'Delete KI Keywords (Admin)', 'Delete KI Gaps (Admin)', 'Delete KI Cache (Admin)', 'Purge History? (Admin)'] + _PURGE200 + ['Delete Site', 'Admin Result'], 'Site Admin delete: the cycle, KI and history rows must go before the site row, then Admin Result: ' + str(_adm_chain)
+assert [t['node'] for t in C['Purge History? (Admin)']['main'][1]] == ['Delete Site'], 'CR17-B: without a vouched domain the delete still removes the site row'
 for a, b in [('Load Monitors (Admin)', 'Monitor Row (Admin)'), ('Monitor Row (Admin)', 'Set Monitors'), ('Set Monitors', 'Admin Result'), ('Load Link Prospects (Admin)', 'Prospect Rows (Admin)'), ('Prospect Rows (Admin)', 'Set Prospects'), ('Set Prospects', 'Admin Result'), ('Load AI Prompts (Admin)', 'AI Prompt Rows (Admin)'), ('AI Prompt Rows (Admin)', 'Set AI Prompts'), ('Set AI Prompts', 'Admin Result')]: link(C, a, b)
+# ---- CR17-F (2026-11-17, client report C5, build section 196): ONE competitor list per site. "Not a competitor" / "Mark as competitor" work for any
+# domain, KI on or off: the KI set's row takes the status when there is one; a domain outside the set gets its own market-less row (status_by user).
+# Site settings (seo_monitors.competitors), the Competitors page and every monitor (CMP.oneList in _monitor_sites.js) read the same list.
+def _unlink196(src, dst):
+    for _o in C.get(src, {}).get('main', []): _o[:] = [t for t in _o if t['node'] != dst]
+_unlink196('KI Competitor OK? (Admin)', 'Set KI Competitor')
+for _n196 in N:
+    if _n196['name'] == 'KI Competitor (Admin)': _n196['parameters']['jsCode'] = _n196['parameters']['jsCode'].replace('__KI_COMP_COLS__', json.dumps([c for c, _ in KI_COMP_COLS]))
+assert all('__KI_COMP_COLS__' not in _n['parameters'].get('jsCode', '') for _n in N if _n.get('type') == 'n8n-nodes-base.code'), 'section 196: KI_COMP_COLS not baked'
+# FX-LINKS (review R2 M3, 2026-11-18): the client's choice is one decision per domain: Set KI Competitor updates EVERY row of the domain for the
+# site (every market and the market-less row), so an older "not a competitor" stored on another row can never outvote a later choice
+for _n196 in N:
+    if _n196['name'] == 'Set KI Competitor':
+        _n196['parameters'] = dt_update_params(KI_COMP_TABLE, KI_COMP_COLS, [('site_id', '={{ $json.site_id }}'), ('comp_domain', '={{ $json.comp_domain }}')],
+            {'status': '={{ $json.status }}', 'status_by': 'user', 'updated_at': '={{ $json.updated_at }}'})
+assert [c.get('keyName') for c in next(_n for _n in N if _n['name'] == 'Set KI Competitor')['parameters']['filters']['conditions']] == ['site_id', 'comp_domain'], 'FX-LINKS M3: the KI choice must update every row of the domain'
+N.append(iff('KI Row? (Admin)', '{{ $json.ki_row === true }}', [1180, 1360]))
+N.append(code('KI Choice Row (Admin)', "// CR17-F: the market-less row of a domain outside the KI set (exact seo_ki_competitors columns)\nreturn [{ json: $('KI Competitor (Admin)').first().json.own_row }];", [1240, 1440]))
+N.append(node('Save KI Choice (Admin)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(KI_COMP_TABLE, KI_COMP_COLS, ['site_id', 'market', 'comp_domain']), [1360, 1440], alwaysOutputData=True, onError='continueRegularOutput'))
+link(C, 'KI Competitor OK? (Admin)', 'KI Row? (Admin)', 0); link(C, 'KI Row? (Admin)', 'Set KI Competitor', 0); link(C, 'KI Row? (Admin)', 'KI Choice Row (Admin)', 1)
+link(C, 'KI Choice Row (Admin)', 'Save KI Choice (Admin)'); link(C, 'Save KI Choice (Admin)', 'Admin Result')
+assert [t['node'] for t in C['KI Competitor OK? (Admin)']['main'][0]] == ['KI Row? (Admin)'], 'section 196: the KI choice must go through the one-list chain'
+print('section 196 (CR17-F): Site Admin ki_competitor works for any domain, KI on or off (a market-less seo_ki_competitors row outside the KI set)')
 write(wf('SEOagentSiteAdm1', 'SEO Agent — Site Admin', N, C), 'SEO_Agent_Site_Admin.json')
 
 # =============================================================================
@@ -577,7 +649,9 @@ N.append(code('Log Rows', rd('code/Log_Rows.js'), at(14, 0)))
 N.append(node('Save Content Log', DT_TYPE, DT_VERSION, dt_insert_params(LOG_TABLE, LOG_COLS), at(15, 0), onError='continueRegularOutput'))
 N.append(code('Ladder Marks', rd('code/Ladder_Marks.js'), at(16, 0)))
 N.append(iff('Any Ladder Marks?', '{{ !$json.skip }}', at(17, 0)))
-N.append(node('Mark Ladder Writing', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}'}), at(18, 0), alwaysOutputData=True, onError='continueRegularOutput'))
+# CR17 review R5 (M1): the row also takes the address its page is written at (Ladder Marks: the folder address of a rung planned at the root, or
+# the row's own address unchanged) and whether a page lives there, so the hub's links, the app's Write now and Coming up read one address
+N.append(node('Mark Ladder Writing', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}', 'target_url': '={{ $json.target_url }}', 'page_exists': '={{ $json.page_exists }}'}), at(18, 0), alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(code('AI Target Marks', rd('code/AI_Target_Marks.js'), at(18, 1)))
 N.append(iff('Any AI Marks?', '{{ !$json.skip }}', at(18, 2)))
 # B9-6: the status and the reason come from the item now - a spawn that failed writes the row back to `queued` instead of
@@ -795,17 +869,47 @@ N.append(node('Load Watch Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE
 # only the findings somebody asked about: the filter runs in n8n, so a big findings table costs nothing here
 N.append(node('Load Recheck Requests', DT_TYPE, DT_VERSION, dt_get_where_params(AUDIT_FINDINGS_TABLE, 'recheck_state', 'eq', 'requested'), at(13, 0), **WLOAD))
 N.append(node('Load Ops Alerts (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(OPS_ALERTS_TABLE), at(14, 0), **WLOAD))
+# build section 194 (client report 2026-11-17, devaicon.com F5 / F10): what the alert lifecycle, the redirect verdict and the moves read. All
+# small, all read once: the moves Steps on your website asked for (Index coverage's improved_to / merge_into), the pages we published (a new
+# title of ours is Info), the rows that follow a page that moved, and the site's open Page Watch alerts (one alert per condition).
+N.append(node('Load Index Pages (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(INDEX_PAGES_TABLE), at(14, 2), **WLOAD))
+N.append(node('Load Content Log (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(LOG_TABLE), at(15, 2), **WLOAD))
+N.append(node('Load AI Targets (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_TARGETS_TABLE), at(16, 2), **WLOAD))
+N.append(node('Load AI Pages (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_PAGES_TABLE), at(17, 2), **WLOAD))
+N.append(node('Load Console Alerts (Watch)', DT_TYPE, DT_VERSION, dt_get_where_params(ALERTS_TABLE, 'source', 'eq', 'page_watch'), at(18, 2), **WLOAD))
 N.append(code('Watch Plan', rd('code/Watch_Plan.js'), at(15, 0)))
 N.append(iff('Any Watch Targets?', '{{ !$json.skip }}', at(16, 0)))
 N.append(node('Nothing To Watch', 'n8n-nodes-base.noOp', 1, {}, at(17, 1)))
 N.append(node('Fetch Watch Page', 'n8n-nodes-base.httpRequest', 4.5, WATCH_GET, at(17, 0), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Watch Read', rd('code/Watch_Read.js'), at(18, 0)))
+# build section 194 (F5): where a redirecting key page (or robots.txt) lands, one plain GET per redirect with the redirects followed (up to
+# five, as Google follows them). Only same-site targets; the verdict and the confirmed move are decided in Watch Compare.
+N.append(code('Watch Hop Plan', rd('code/Watch_Hop_Plan.js'), at(18, 1)))
+N.append(iff('Any Watch Hops?', '{{ !$json.skip }}', at(19, 1)))
+WATCH_HOP_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': WATCH_GET['headerParameters'],
+                 'options': {'batching': {'batch': {'batchSize': 5, 'batchInterval': 250}}, 'timeout': 20000,
+                             'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+N.append(node('Fetch Watch Hop', 'n8n-nodes-base.httpRequest', 4.5, WATCH_HOP_GET, at(20, 1), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Watch Compare', rd('code/Watch_Compare.js'), at(19, 0)))
 N.append(code('Watch Rows', rd('code/Watch_Rows.js'), at(20, 0), **SAFE))
 N.append(iff('Any Watch Rows?', '{{ !$json.skip }}', at(21, 0)))
 N.append(node('Save Page Watch', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PAGE_WATCH_TABLE, PAGE_WATCH_COLS, ['site_id', 'url']), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Watch Cache Rows', rd('code/Watch_Cache_Rows.js'), at(23, 0), **SAFE))
 N.append(node('Save Watch Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(24, 0), onError='continueRegularOutput', alwaysOutputData=True))
+# build section 194 (client report 2026-11-17, F10): the stored rows follow a confirmed move (Watch Moves, MV.plan), table by table. Each update
+# matches the row AND its old address, so a row somebody changed in between is left alone; the AI readiness row of the old address is dropped
+# when the new address already has its own.
+N.append(code('Watch Moves', rd('code/Watch_Moves.js'), at(24, 2), **SAFE))
+_MOVE194 = [('ladders', 'Ladder', dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}'), ('target_url', '={{ $json.from }}')], {'target_url': '={{ $json.target_url }}'})),
+            ('logs', 'Content Log', dt_update_params(LOG_TABLE, LOG_COLS, [('site_id', '={{ $json.site_id }}'), ('keyword', '={{ $json.keyword }}'), ('published_url', '={{ $json.from }}')], {'published_url': '={{ $json.published_url }}'})),
+            ('targets', 'AI Target', dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}'), ('page_url', '={{ $json.from }}')], {'page_url': '={{ $json.page_url }}'})),
+            ('ai_pages_update', 'AI Page', dt_update_params(AI_PAGES_TABLE, AI_PAGES_COLS, [('site_id', '={{ $json.site_id }}'), ('url', '={{ $json.from }}')], {'url': '={{ $json.url }}'})),
+            ('ai_pages_delete', 'Old AI Page', dt_delete_where_params(AI_PAGES_TABLE, [('site_id', 'eq', '={{ $json.site_id }}'), ('url', 'eq', '={{ $json.url }}')]))]
+for _i194, (_k194, _t194, _p194) in enumerate(_MOVE194):
+    _rows194, _if194, _save194 = 'Move Rows (' + _t194 + ')', 'Any Moves (' + _t194 + ')?', ('Delete ' if _k194 == 'ai_pages_delete' else 'Save ') + _t194 + ' Moves'
+    N.append(code(_rows194, rd('code/Watch_Move_Rows.js').replace('__MOVE_KIND__', _k194), at(25 + 3 * _i194, 2), **SAFE))
+    N.append(iff(_if194, '{{ !$json.skip }}', at(26 + 3 * _i194, 2)))
+    N.append(node(_save194, DT_TYPE, DT_VERSION, _p194, at(27 + 3 * _i194, 2), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Watch Recheck Rows', rd('code/Watch_Recheck_Rows.js'), at(25, 0), **SAFE))
 N.append(iff('Any Rechecks?', '{{ !$json.skip }}', at(26, 0)))
 N.append(node('Save Finding Recheck', DT_TYPE, DT_VERSION, dt_update_params(AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS,
@@ -845,15 +949,24 @@ for a, b in [('Daily Schedule', 'Ensure Sites Table (Watch)'), ('Watch Run', 'En
              ('Ensure Alerts Table (Watch)', 'Ensure Findings Table (Watch)'), ('Ensure Findings Table (Watch)', 'Ensure Ops Alerts Table (Watch)'),
              ('Ensure Ops Alerts Table (Watch)', 'Load Sites (Watch)'), ('Load Sites (Watch)', 'Load Ladders (Watch)'), ('Load Ladders (Watch)', 'Load Pages (Watch)'),
              ('Load Pages (Watch)', 'Load Page Watch'), ('Load Page Watch', 'Load Watch Cache'), ('Load Watch Cache', 'Load Recheck Requests'),
-             ('Load Recheck Requests', 'Load Ops Alerts (Watch)'), ('Load Ops Alerts (Watch)', 'Watch Plan'), ('Watch Plan', 'Any Watch Targets?'),
-             ('Fetch Watch Page', 'Watch Read'), ('Watch Read', 'Watch Compare'), ('Watch Compare', 'Watch Rows'), ('Watch Rows', 'Any Watch Rows?'),
-             ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Recheck Rows'),
+             ('Load Recheck Requests', 'Load Ops Alerts (Watch)'), ('Load Ops Alerts (Watch)', 'Load Index Pages (Watch)'), ('Load Index Pages (Watch)', 'Load Content Log (Watch)'),
+             ('Load Content Log (Watch)', 'Load AI Targets (Watch)'), ('Load AI Targets (Watch)', 'Load AI Pages (Watch)'), ('Load AI Pages (Watch)', 'Load Console Alerts (Watch)'),
+             ('Load Console Alerts (Watch)', 'Watch Plan'), ('Watch Plan', 'Any Watch Targets?'),
+             ('Fetch Watch Page', 'Watch Read'), ('Watch Read', 'Watch Hop Plan'), ('Watch Hop Plan', 'Any Watch Hops?'), ('Fetch Watch Hop', 'Watch Compare'),
+             ('Watch Compare', 'Watch Rows'), ('Watch Rows', 'Any Watch Rows?'),
+             ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Moves'),
              ('Watch Recheck Rows', 'Any Rechecks?'), ('Save Finding Recheck', 'Watch Alerts'), ('Watch Alerts', 'Any Watch Alerts?'),
              ('Save Watch Alerts', 'Watch Ops Alert'), ('Watch Ops Alert', 'Any Ops Alerts (Watch)?'), ('Save Watch Ops Alert', 'Watch Ops Channels'),
              ('Watch Ops Channels', 'Send Watch Webhook?'), ('Post Watch Alert', 'Watch Ops Delivery'), ('Watch Ops Delivery', 'Save Watch Ops Delivery')]:
     link(C, a, b)
 link(C, 'Any Watch Targets?', 'Fetch Watch Page', 0); link(C, 'Any Watch Targets?', 'Nothing To Watch', 1)
 link(C, 'Any Watch Rows?', 'Save Page Watch', 0); link(C, 'Any Watch Rows?', 'Watch Cache Rows', 1)
+link(C, 'Any Watch Hops?', 'Fetch Watch Hop', 0); link(C, 'Any Watch Hops?', 'Watch Compare', 1)   # build section 194
+for _i194, (_k194, _t194, _p194) in enumerate(_MOVE194):   # build section 194: Watch Moves -> each table in turn -> Watch Recheck Rows
+    _rows194, _if194, _save194 = 'Move Rows (' + _t194 + ')', 'Any Moves (' + _t194 + ')?', ('Delete ' if _k194 == 'ai_pages_delete' else 'Save ') + _t194 + ' Moves'
+    _next194 = ('Move Rows (' + _MOVE194[_i194 + 1][1] + ')') if _i194 + 1 < len(_MOVE194) else 'Watch Recheck Rows'
+    if _i194 == 0: link(C, 'Watch Moves', _rows194)   # the later ones are reached from the one before (its IF's false branch and its save)
+    link(C, _rows194, _if194); link(C, _if194, _save194, 0); link(C, _if194, _next194, 1); link(C, _save194, _next194)
 link(C, 'Any Rechecks?', 'Save Finding Recheck', 0); link(C, 'Any Rechecks?', 'Watch Alerts', 1)
 link(C, 'Any Watch Alerts?', 'Save Watch Alerts', 0); link(C, 'Any Watch Alerts?', 'Watch Ops Alert', 1)
 link(C, 'Any Ops Alerts (Watch)?', 'Save Watch Ops Alert', 0); link(C, 'Any Ops Alerts (Watch)?', 'Watched', 1)
@@ -865,8 +978,11 @@ link(C, 'Send Watch Webhook?', 'Post Watch Alert', 0); link(C, 'Send Watch Webho
 LEDGER_WIRING['SEO Agent — Page Watch'] = ledger_nodes(N, C, 'page_watch', 'Watch', 'Watch Plan',
                                                        ['Watched', 'Nothing To Watch', 'Save Watch Ops Delivery'], at(15, 4))
 _wcode = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
-for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts'):
+for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts', 'Watch Hop Plan'):
     assert 'const PW = (() => {' in _wcode[_n], _n + ': the page-watch kit is not inlined'
+for _n in ('Watch Plan', 'Watch Compare', 'Watch Moves'):   # build section 194
+    assert _wcode[_n].count('const MV = (() => {') == 1 and '/*__MOVES__*/' not in _wcode[_n], _n + ': the moves kit is not inlined once'
+assert all('__MOVE_KIND__' not in c_ for c_ in _wcode.values()), 'section 194: a Move Rows node kept its placeholder'
 assert 'const SM = (() => {' in _wcode['Watch Plan'], 'Watch Plan: the site model kit is not inlined'
 for _n in ('Watch Ops Alert', 'Watch Ops Channels', 'Watch Ops Delivery'):
     assert 'const OA = (() => {' in _wcode[_n], _n + ': the ops-alert kit is not inlined'
@@ -881,6 +997,7 @@ json.dump({'workflow': 'SEOagentPageWch1', 'table': PAGE_WATCH_TABLE, 'cache_kin
            'nodes': [n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote'],
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in C.items()},
            'fetch': {'name': 'Fetch Watch Page', 'follows_redirects': False, 'response_format': 'text', 'retries': retry_lint.RETRY['maxTries']},
+           'hop': {'name': 'Fetch Watch Hop', 'follows_redirects': True, 'max_redirects': 5, 'response_format': 'text'},   # build section 194
            'site_tracker_inspections': {'cap': 150, 'quota_per_day': 2000, 'rotation': 'oldest inspection first'}},
           open(os.path.join(HERE, 'harness', 'page_watch_wiring.json'), 'w'), indent=1, sort_keys=True)
 

@@ -79,7 +79,7 @@ for _ in range(30):
 O = None; tids = {}
 try:
     a = Api(args.base); me = f'lb-owner-{TAG}@example.org'
-    s, _ = a.post('/api/auth/signup', {'name': 'Link Owner', 'email': me, 'password': 'link-builder-pass-1'})
+    s, _ = a.post('/api/auth/signup', {'acceptTerms': True, 'name': 'Link Owner', 'email': me, 'password': 'link-builder-pass-1'})
     sql(f"update users set email_verified_at=now() where email='{me}'")
     s, org = a.post('/api/orgs', {'name': f'LB Test {TAG}', 'size': '2-10'}); O = org['id']
     s, site = a.post(f'/api/orgs/{O}/sites', {'domain': DOMAIN, 'country': 'United Arab Emirates'}); S = site['id']

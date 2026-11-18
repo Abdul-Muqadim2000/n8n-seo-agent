@@ -442,6 +442,13 @@ export function CreditDialog({
             request fulfilled.
           </Callout>
         )}
+        {/* CR17-I: four requests for the 2,000 pack were confirmed with 1,000 credits; say it before it happens (the customer's page shows what was added) */}
+        {request && has && (amount !== request.credits || paid !== request.priceUsd) && (
+          <Callout tone="warning">
+            You are adding {credits(amount)} for {money(Number.isFinite(paid) ? paid : 0, { digits: 2 })}, not the {credits(request.credits)} for {money(request.priceUsd, { digits: 2 })} the customer
+            asked for. Their Credits page will show what was added.
+          </Callout>
+        )}
         <div className={cn('grid gap-4', kind === 'grant' && 'sm:grid-cols-2')}>
           <Field label="Credits" error={err.credits?.message} hint={kind === 'adjust' ? 'Negative to take credits away.' : undefined}>
             {(p) => <Input {...p} type="number" inputMode="decimal" step="any" autoFocus className="font-mono" {...form.register('credits', { valueAsNumber: true })} />}

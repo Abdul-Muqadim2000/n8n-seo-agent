@@ -1589,9 +1589,114 @@ const LRU = (() => {
     }
     return null;
   };
-  /** the address a new page gets on the site: home + slug(keyword), with the site's trailing-slash form */
-  const plannedUrl = (home, keyword, slash) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return h && sl ? h + '/' + sl + (slash ? '/' : '') : ''; };
+  /** the address a new page gets on the site: home + folder + slug(keyword), with the site's trailing-slash form. `folder` (client report
+   *  2026-11-17 F4): the site's folder for this kind of page (folderFor(...).folder, e.g. '/services/'); none or '/' = the root, as before */
+  const plannedUrl = (home, keyword, slash, folder) => { const h = S(home).replace(/\/+$/, ''); const sl = low(keyword).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const f = S(folder && typeof folder === 'object' ? folder.folder : folder).replace(/^\/*/, '/').replace(/\/+$/, '');
+    return h && sl ? h + (f && f !== '/' ? f : '') + '/' + sl + (slash ? '/' : '') : ''; };
+
+  // ---- client report 2026-11-17 (F4, devaicon.com): the address of a new page follows the site ----
+  // Every address our ladders planned for devaicon.com was at the root (/ai-app-development) while its service pages live under /services/ and
+  // its articles under /insights/: the client published five of six elsewhere and moved its own pages into /services/ with 301s. A new page
+  // now goes where the site puts that kind of page. Two kinds: `service` (service, product, landing, local, category and pillar pages, the
+  // main page of a ladder) and `article` (guides, blog posts, comparisons, case studies, FAQ and AI answer pages). Evidence, newest habit first:
+  //   1. where the client published the pages WE wrote of that kind (the content log's live address, after a permanent redirect the client
+  //      made) and where it moved its own pages (its 301s, the target's folder): the client's own choice;
+  //   2. else the live inventory (sitemap / seo_pages, pages answering): articles = the blog folder holding most of them, services = the
+  //      folder (or the root) holding most pages that are neither articles nor company pages (about, contact, careers, legal ...).
+  // A folder is used only with at least 3 pages behind it and 60% of them; else the root, as before (no change for a site we cannot read).
+  // A service page is never planned in a blog folder (rule 1). Pure: callers pass what they have read.
+  CFG.folder_min = 3; CFG.folder_share = 0.6;
+  CFG.company_segs = ['about', 'about-us', 'company', 'contact', 'contact-us', 'careers', 'career', 'jobs', 'team', 'people', 'privacy', 'privacy-policy', 'cookies',
+    'cookie-policy', 'terms', 'terms-of-service', 'terms-and-conditions', 'legal', 'policies', 'imprint', 'impressum', 'disclaimer', 'accessibility', 'sitemap',
+    'login', 'signin', 'sign-in', 'register', 'signup', 'account', 'cart', 'checkout', 'search', 'thank-you', 'thanks', 'security', 'author', 'authors', 'tag', 'tags', 'category'];
+  // CR17 review R5 (M2): only a folder whose name says it holds what the business sells is a folder of SERVICE pages. Every other folder
+  // (case studies, portfolio, work, projects, clients, industries, docs, help, locations, events, press, careers ...) is neither kind, so it
+  // never decides where a new service page goes (9 /case-studies/ pages beside 3 /services/ pages planned "/case-studies/ai-app-development").
+  // The root still counts for service pages (techand.ai keeps them there). Evidence of 17 Nov 2026: devaicon.com /services/ (its service
+  // pages), /capabilities/ (its service groups), /industries/ (industry pages, not services); techand.ai /whatwedo/ and /capabilities/.
+  CFG.service_dirs = ['services', 'service', 'our-services', 'solutions', 'solution', 'products', 'product', 'capabilities', 'capability', 'offerings', 'offering',
+    'what-we-do', 'whatwedo', 'expertise', 'practice-areas'];
+  const ARTICLE_TYPE = /guide|blog|post|article|compar|case stud|faq|answer|news|how.?to|review/;
+  /** the kind of a page type: 'article' (guides, posts, comparisons, case studies, FAQ, AI answers) or 'service' (everything else) */
+  const classOf = (pageType) => (ARTICLE_TYPE.test(low(pageType)) ? 'article' : 'service');
+  /** the folder of an address: '/services/' for /services/x, '/' for /x ('' for no address or the home page) */
+  const folderOf = (u) => { const s = segs(u); if (!s.length) return ''; return '/' + s.slice(0, -1).map(x => x + '/').join(''); };
+  const blogFolder = (f) => { let s = S(f).split('/').filter(Boolean); if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1); return s.length > 0 && CFG.blog_dirs.includes(s[0]); };
+  const companyPage = (u) => { const s = segs(u); if (!s.length) return true; let a = s; if (a.length > 1 && LOCALE.test(a[0])) a = a.slice(1);
+    return CFG.company_segs.includes(a[0]) || /^(?:about|contact)-/.test(a[0]); };
+  const gone = (st) => Number(st) >= 300;   // 0 / empty = never read (a sitemap page): it counts as live
+  /** the kind of page a folder holds: 'article' (a blog folder), 'service' (the root, or a folder of CFG.service_dirs), '' (neither: case
+   *  studies, industries, docs ... never decide where a new page goes). A language prefix is skipped. */
+  // a language root (/en/x beside /ar/x) is the root of that language: service pages there count as at the root (a two-letter folder that is
+  // not a common language, such as /ai/ or /hr/, is a folder like any other)
+  const LANG_ROOT = /^(?:en|ar|fr|de|es|it|nl|pt|ur|hi|zh|ja|ko|ru|tr)(?:-[a-z]{2})?$/;
+  const folderKind = (f) => { let s = S(f).split('/').filter(Boolean); if (!s.length || (s.length === 1 && LANG_ROOT.test(s[0]))) return 'service'; if (s.length > 1 && LOCALE.test(s[0])) s = s.slice(1);
+    return CFG.blog_dirs.includes(s[0]) ? 'article' : CFG.service_dirs.includes(s[0]) ? 'service' : ''; };
+  // review R5 (L5): a dated or category blog path (/blog/2024/05/x, /blog/news/x) votes for the blog folder itself, so the site's habit is
+  // not split by month or category; a language prefix stays (/en/blog/)
+  const voteFolder = (f) => { const s = S(f).split('/').filter(Boolean); if (!blogFolder(f)) return f; const n = s.length > 1 && LOCALE.test(s[0]) ? 2 : 1; return '/' + s.slice(0, n).join('/') + '/'; };
+  /** pageType: the new page's type; ev: { published: [{ url, page_type }] (our pages the client published: content log / published ladder rows),
+   *  moves: [{ from, to }] (the client's permanent redirects), pages: [{ url, http_status? } | url] (the live inventory) }
+   *  -> { folder ('/' = the root), kind ('service' | 'article'), basis ('published' | 'inventory' | 'default'), votes, of, why ('' at the root) } */
+  const folderFor = (pageType, ev) => {
+    const x = ev || {}; const kind = classOf(pageType);
+    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => p && typeof p === 'object' ? { url: S(p.url), st: p.http_status } : { url: S(p), st: null }).filter(p => p.url);
+    const bad = new Set(pages.filter(p => gone(p.st)).map(p => urlKey(p.url)));
+    const moveTo = new Map();
+    // review R5 (L4): only the site's own permanent moves (301 / 308 on the same host; a move with no status given is taken as read): a
+    // redirect to another website or a temporary one says nothing about where this site keeps its pages
+    const hostK = (k) => k.split('/')[0];
+    for (const m of (Array.isArray(x.moves) ? x.moves : [])) { const a = urlKey(m && m.from), b = urlKey(m && m.to); const st = m && m.status != null && S(m.status) !== '' ? Number(m.status) : 0;
+      if (a && b && hostK(a) === hostK(b) && pathOf(a) !== pathOf(b) && pathOf(b) && (!st || st === 301 || st === 308)) moveTo.set(a, S(m.to)); }
+    const fits = (f) => kind === 'article' || !blogFolder(f);
+    const pick = (votes, basis) => {   // votes: Map(url key -> folder)
+      const by = new Map(); for (const f of votes.values()) by.set(f, (by.get(f) || 0) + 1);
+      const of = votes.size; const top = [...by.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+      if (!top || of < CFG.folder_min || top[1] < CFG.folder_share * of) return null;
+      const what = kind === 'article' ? 'guides and articles' : 'service pages';
+      const where = top[0] === '/' ? 'at the top level of the site' : 'under ' + top[0];
+      return { folder: top[0], kind, basis, votes: top[1], of,
+        why: top[0] === '/' ? '' : 'your ' + what + ' live ' + where + ' (' + top[1] + ' of the ' + of + (basis === 'published' ? ' you published or moved' : ' on your website') + ')' };
+    };
+    // 1. the client's own choices: our pages it published (at the address they answer now) and its own moves
+    const direct = new Map();
+    for (const p of (Array.isArray(x.published) ? x.published : [])) {
+      if (!p || classOf(p.page_type) !== kind) continue;
+      const k0 = urlKey(p.url); if (!k0) continue;
+      const u = moveTo.get(k0) || S(p.url); const k = urlKey(u);
+      if (!pathOf(u) || (bad.has(k) && !moveTo.has(k0))) continue;   // a page that no longer answers (and was not moved) says nothing
+      const f = folderOf(u); if (f && fits(f)) direct.set(k, voteFolder(f));
+    }
+    for (const [from, to] of moveTo) { const f = folderOf(to); if (!f || companyPage(to) || folderOf(from) === f) continue;
+      if (folderKind(f) !== kind) continue; direct.set(urlKey(to), voteFolder(f)); }
+    const d = pick(direct, 'published'); if (d) return d;
+    // 2. the live inventory: a folder index page (/insights beside /insights/x) and company pages are not pages of either kind
+    const live = pages.filter(p => !gone(p.st) && pathOf(p.url));
+    const dirs = new Set(live.map(p => folderOf(p.url)).filter(f => f && f !== '/'));
+    const inv = new Map();
+    for (const p of live) { const k = urlKey(p.url); if (inv.has(k) || companyPage(p.url) || dirs.has(pathOf(p.url) + '/')) continue;
+      const f = folderOf(p.url); if (!f || folderKind(f) !== kind) continue; inv.set(k, voteFolder(f)); }
+    const i = pick(inv, 'inventory'); if (i) return i;
+    return { folder: '/', kind, basis: 'default', votes: 0, of: direct.size || inv.size, why: '' };
+  };
+  /** review R5 (M1): the evidence folderFor reads, built ONE way by every caller (Cadence Plan, the app's cadence mirror and its Write now):
+   *  logs: the website's content-log rows, ladders: its ladder rows, pages: its page inventory (seo_pages rows). Ladder Plan adds the moves. */
+  const folderEvidence = (logs, ladders, pages) => ({
+    published: [...(Array.isArray(logs) ? logs : []).filter(l => l && S(l.status) === 'published' && S(l.published_url)).map(l => ({ url: S(l.published_url), page_type: S(l.page_type) })),
+      ...(Array.isArray(ladders) ? ladders : []).filter(r => r && S(r.status) === 'published' && S(r.target_url)).map(r => ({ url: S(r.target_url), page_type: S(r.page_type) }))],
+    pages: (Array.isArray(pages) ? pages : []).filter(p => p && S(p.url)).map(p => ({ url: S(p.url), http_status: p.http_status })) });
+  /** the page type a ladder row is placed by: its main page (rung 4) is the page people choose a provider on, a service page */
+  const rowType = (r) => (Number((r || {}).rung) === 4 ? 'Service Page' : S((r || {}).page_type) || 'Service Page');
+  /** review R5 (M1): a rung planned at the ROOT (its address is the root address of its keyword) before the folder rule, not written, not
+   *  published, not merged, on a site that keeps that kind of page in a folder: -> its folder address (`fo`: folderFor for its kind), or ''
+   *  when it keeps its address. The one rule for the weekly pages, their hub and sibling links, "Write now" and "Coming up". */
+  const folderAddress = (row, fo) => { const r = row || {}; const was = S(r.target_url); const exists = r.page_exists === true || r.page_exists === 'true';
+    const f = S(fo && typeof fo === 'object' ? fo.folder : fo);
+    if (!was || exists || !f || f === '/' || ['published', 'merged'].includes(S(r.status))) return '';
+    const home = (was.match(/^https?:\/\/[^\/?#]+/i) || [''])[0]; const slash = /\/$/.test(was);
+    if (!home || urlKey(was) !== urlKey(plannedUrl(home, r.keyword, slash))) return '';
+    const nu = plannedUrl(home, r.keyword, slash, f); return nu && urlKey(nu) !== urlKey(was) ? nu : ''; };
   /** review H5: does this address already rank for the main keyword? o: { rank: { position, url } (the rank check or the ranked pull),
    *  pages: [{ url, queries: [{ query, impressions, position }] }] (Search Console per page) } -> true when the rank reading puts this
    *  address at position <= 30, or Search Console shows it for a search holding every word of the keyword at position <= 30 or with
@@ -1821,7 +1926,7 @@ const LRU = (() => {
       note: 'The supporting pages come from keyword intelligence: ' + heads.length + ' search groups of its last keyword research (' + cur + '), one search per group, with its verdict, page action and Search Console position.' };
   };
 
-  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, headTarget, oneUrl,
+  return { CFG, STAGES, COMMERCIAL, kiPool, ranksFor, urlKey, pathOf, isBlog, copyOf, wordsKey, sameSearch, ownerOf, plannedUrl, classOf, folderOf, folderFor, folderKind, folderEvidence, rowType, folderAddress, headTarget, oneUrl,
     stageOf, isCommercial, isDefinitional, definitionalOk, stageText, countryName, market, marketRefusal, verdictStop, stuck, rungState, qWords, sameQuestion, coversHead, isHeadRow, questionPage };
 })();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
@@ -2603,6 +2708,172 @@ const FITR = {
       + '. A page that is already written is kept and only flagged.';
   }
 };
+// ---- a page that moved permanently: our own rows follow it (client report 2026-11-17, devaicon.com F10; build section 194) ----
+// The client moved its service pages to /services/... with permanent (301) redirects. Page Watch, Index coverage and the page inventory all
+// saw the move, and nothing followed it: the ladder row, the content log, the AI question and the AI readiness row kept the old address, so
+// every screen showed a page that redirects as the page that answers its search, and the Rank Tracker would have called the moved page "a
+// different page of yours" once Google ranked it. One rule, used by the daily Page Watch (which writes the follow) and the Rank Tracker
+// (which compares addresses):
+//   * a move is a 301 or 308 seen on TWO reads (the stored reading and today's), to an address on the same site that answers 200, asks to be
+//     indexed and names itself as its main version (the watch's redirect verdict says `moved`);
+//   * never to the home page (Google treats a deep page sent to the home page like a page that is gone), never to another site;
+//   * a move only of the host (bare -> www) changes no stored row: addresses are compared host-agnostically everywhere already;
+//   * a ladder or content-log row never follows onto an address another search already owns (one search, one page): it is refused and named.
+// The address is kept exactly as the server serves it (capital letters included). The n8n Code sandbox has no URL constructor: regexes only.
+const MV = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
+  const bare = (h) => S(h).toLowerCase().replace(/^www\./, '');
+  const pathOf = (u) => { const p = S(u).replace(/^https?:\/\/[^\/]*/i, '').replace(/[?#].*$/, ''); return p || '/'; };
+  const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
+  const norm = (k) => S(k).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const PERMANENT = [301, 308];
+  /** A Location header made absolute against the address that sent it ('' when there is none). */
+  const abs = (location, base) => {
+    const l = S(location); if (!l) return '';
+    if (/^https?:\/\//i.test(l)) return l;
+    const origin = (S(base).match(/^(https?:\/\/[^\/?#]+)/i) || [])[1] || '';
+    if (!origin) return '';
+    if (/^\/\//.test(l)) return (S(base).match(/^(https?:)/i) || ['', 'https:'])[1] + l;
+    if (l.charAt(0) === '/') return origin + l;
+    const dir = pathOf(base).replace(/[^\/]*$/, '');
+    return origin + (dir || '/') + l;
+  };
+  const sameSite = (a, b) => !!hostOf(a) && bare(hostOf(a)) === bare(hostOf(b));
+  const isHome = (u) => pathOf(u).replace(/\/+$/, '') === '';
+  // >>> LOCALE RULE (CR17-FX-INDEX, review R1 M4): ONE text in _index_kit.js, _page_watch.js and _moves.js (build_v4.py section 194 checks they are the
+  // same). A same-site redirect that only adds a language / country prefix (/x -> /ae/x, / -> /en/), or sends a deep page to a bare locale root,
+  // answers where OUR server sits (Doha), not what Google's crawler sees: never a move, never a cause.
+  const localeRedirect = (from, to) => {
+    const LOC = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+    const pa = (u) => String(u == null ? '' : u).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '') || '/';
+    const f = pa(from), t = pa(to);
+    if (!LOC.test(t) || LOC.test(f)) return false;
+    if ((t.replace(LOC, '') || '/').replace(/\/+$/, '').toLowerCase() === f.replace(/\/+$/, '').toLowerCase()) return true;
+    return /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(t) && f !== '/';
+  };
+  // <<< LOCALE RULE
+  /**
+   * Is this redirect a confirmed move? `now` / `prev`: { url, status, location } (prev = the stored reading), `verdict`: the watch's redirect
+   * verdict of today's target ('moved' = answers 200, indexable, its own main version). -> { ok, to, host_only, reason }
+   * CR17-FX-INDEX (review R1 L2): ctx { reads: Map ukey(url) -> today's own read (no redirect followed), moves: confirmed moves (fromWatch) }:
+   * the move goes to where the redirects END. A target that is itself confirmed as moved is followed to its end; a target whose own read today
+   * is another redirect is a chain not yet ended: refused until that hop is confirmed too (our rows never land on an address that redirects).
+   * M4: a language / country redirect for our server's location is never a move.
+   */
+  const confirm = (now, prev, verdict, ctx) => {
+    const n = now || {}, p = prev || {}; const c = ctx || {};
+    const st = Number(n.status) || 0, pst = Number(p.status) || 0;
+    const to = abs(n.location, n.url);
+    const no = (reason) => ({ ok: false, to, host_only: false, reason });
+    if (!PERMANENT.includes(st)) return no('not a permanent redirect (' + (st || 'no answer') + ')');
+    if (!to) return no('the redirect names no address');
+    if (!sameSite(to, n.url)) return no('the redirect leaves the site');
+    if (isHome(to) && !isHome(n.url)) return no('a deep page sent to the home page is not a move');
+    if (localeRedirect(n.url, to)) return no('a language or country redirect for where our server is, not a move');
+    if (S(verdict) !== 'moved') return no('the new address does not work as a page of its own yet');
+    if (!PERMANENT.includes(pst) || ukey(abs(p.location, p.url || n.url)) !== ukey(to)) return no('seen once so far; a move is confirmed on the second read');
+    // ctx values may be Maps (Watch Compare) or plain lists (rows: { url, moved_to } / reads: { url, status, location })
+    const mvs = c.moves && typeof c.moves.get === 'function' ? c.moves : Array.isArray(c.moves) ? fromWatch(c.moves) : null;
+    const end = (mvs && finalOf(to, mvs)) || to;
+    if (!sameSite(end, n.url) || (isHome(end) && !isHome(n.url))) return no('the redirects end on a page that is not a move');
+    const tr = !c.reads ? null : typeof c.reads.get === 'function' ? c.reads.get(ukey(end)) : (Array.isArray(c.reads) ? c.reads : []).find(x => x && ukey(x.url) === ukey(end)) || null;
+    const ts = tr && tr.ok !== false ? Number(tr.status) || 0 : 0;
+    if (ts >= 300 && ts < 400 && ukey(abs(tr.location, end)) !== ukey(end)) return no('the new address redirects again (to ' + pathOf(abs(tr.location, end)) + '); a move is confirmed where the redirects end');
+    return { ok: true, to: end, host_only: ukey(end) === ukey(n.url), reason: '' };
+  };
+  /**
+   * The moves known from the watch's stored rows: a confirmed `moved_to`, or a permanent redirect with its target (enough to say two
+   * addresses are one page). -> Map ukey(from) -> { from, to, confirmed }
+   */
+  const fromWatch = (rows) => {
+    const m = new Map();
+    for (const r of (rows || [])) {
+      const from = S(r && r.url); if (!from) continue;
+      const confirmed = S(r.moved_to);
+      const to = confirmed || (PERMANENT.includes(Number(r.status) || 0) ? abs(r.location, from) : '');
+      if (!to || !sameSite(to, from) || ukey(to) === ukey(from)) continue;
+      if (isHome(to) && !isHome(from)) continue;
+      if (!confirmed && localeRedirect(from, to)) continue;   // CR17-FX-INDEX (M4): a language / country redirect is not a move
+      m.set(ukey(from), { from, to, confirmed: !!confirmed });
+    }
+    return m;
+  };
+  /** Where an address ends after the known moves (up to 5 hops, as Google follows them); '' when it did not move. */
+  const finalOf = (url, moves) => {
+    let cur = S(url), seen = new Set(), hops = 0;
+    while (moves && moves.get(ukey(cur)) && hops < 5) {
+      const k = ukey(cur); if (seen.has(k)) return ''; seen.add(k);
+      cur = moves.get(k).to; hops += 1;
+    }
+    return hops ? cur : '';
+  };
+  /** Two addresses are one page when they are the same address or one moved (permanently) to the other. */
+  const samePage = (a, b, moves) => {
+    if (!S(a) || !S(b)) return false;
+    if (ukey(a) === ukey(b)) return true;
+    const fa = finalOf(a, moves) || S(a), fb = finalOf(b, moves) || S(b);
+    return ukey(fa) === ukey(fb);
+  };
+  /**
+   * The stored rows that follow a set of confirmed moves on one site. `moves`: [{ from, to }] (confirmed, not host-only).
+   * rows: { ladders, logs, targets, aiPages } (n8n Data Table rows). -> { ladders, logs, targets, ai_pages_update, ai_pages_delete, refused }
+   * Ownership (one search, one page): the address a row moves to must not already be the page of ANOTHER search in the ladders or the content
+   * log; an AI question and an AI readiness row follow the page whatever it answers (they describe the page, they do not claim it).
+   */
+  const plan = (moves, rows, o) => {
+    const opts = o || {};
+    const R = rows || {};
+    const domain = bare(S(opts.domain));
+    const onSite = (r) => !domain || bare(S(r.domain).replace(/^https?:\/\//, '').replace(/[\/?#].*$/, '')) === domain || S(r.site_id) === S(opts.site_id);
+    const ladders = (R.ladders || []).filter(r => r && onSite(r));
+    const logs = (R.logs || []).filter(r => r && onSite(r));
+    const out = { ladders: [], logs: [], targets: [], ai_pages_update: [], ai_pages_delete: [], refused: [] };
+    // who owns an address today: the keyword of every ladder page and published content-log page there
+    // CR17-FX-INDEX (review R1 M3): plus every keyword this run already moved onto it (`claimed`), so two searches' pages moved onto ONE new
+    // address the same day are treated like two days apart: the first follows, the second is refused and named
+    const claimed = new Map();
+    const claim = (url, kw) => { const k = ukey(url); if (!claimed.has(k)) claimed.set(k, new Set()); claimed.get(k).add(norm(kw)); };
+    const owners = (url) => {
+      const k = ukey(url); const set = new Set(claimed.get(k) || []);
+      for (const l of ladders) if (S(l.target_url) && ukey(l.target_url) === k) set.add(norm(l.keyword));
+      for (const l of logs) if (S(l.published_url) && ukey(l.published_url) === k) set.add(norm(l.keyword));
+      return set;
+    };
+    for (const mv of (moves || [])) {
+      const from = S(mv.from), to = S(mv.to);
+      if (!from || !to || ukey(from) === ukey(to)) continue;
+      if (!sameSite(to, from) || (isHome(to) && !isHome(from))) { out.refused.push({ table: 'all', key: from, from, to, reason: 'not a move we follow' }); continue; }
+      const otherOwner = (kw) => [...owners(to)].find(x => x && x !== norm(kw)) || '';
+      for (const l of ladders) {
+        if (!S(l.target_url) || ukey(l.target_url) !== ukey(from)) continue;
+        if (!(S(l.status) === 'published' || l.page_exists === true || l.page_exists === 'true')) continue;
+        const other = otherOwner(l.keyword);
+        if (other) { out.refused.push({ table: 'seo_ladders', key: S(l.ladder_id) + ' / ' + S(l.keyword), from, to, reason: 'the new address is already the page of "' + other + '"' }); continue; }
+        out.ladders.push({ ladder_id: S(l.ladder_id), keyword: S(l.keyword), from: S(l.target_url), target_url: to }); claim(to, l.keyword);
+      }
+      for (const l of logs) {
+        if (!S(l.published_url) || ukey(l.published_url) !== ukey(from)) continue;
+        const other = otherOwner(l.keyword);
+        if (other) { out.refused.push({ table: 'seo_content_log', key: S(l.site_id) + ' / ' + S(l.keyword), from, to, reason: 'the new address is already the page of "' + other + '"' }); continue; }
+        out.logs.push({ site_id: S(l.site_id), keyword: S(l.keyword), from: S(l.published_url), published_url: to }); claim(to, l.keyword);
+      }
+      for (const t of (R.targets || [])) {
+        if (!t || !onSite(t) || !S(t.page_url) || ukey(t.page_url) !== ukey(from)) continue;
+        out.targets.push({ target_id: S(t.target_id), from: S(t.page_url), page_url: to });
+      }
+      const pages = (R.aiPages || []).filter(p => p && onSite(p));
+      const old = pages.filter(p => ukey(p.url) === ukey(from));
+      const hasNew = pages.some(p => ukey(p.url) === ukey(to));
+      for (const p of old) {
+        if (hasNew) out.ai_pages_delete.push({ site_id: S(p.site_id), url: S(p.url), to });
+        else out.ai_pages_update.push({ site_id: S(p.site_id), from: S(p.url), url: to });
+      }
+    }
+    return out;
+  };
+  return { abs, confirm, fromWatch, finalOf, samePage, plan, localeRedirect, helpers: { ukey, hostOf, bare, pathOf, sameSite, isHome, norm }, PERMANENT };
+})();
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 // G32 (2026-10-13, FIX_PLAN): a ladder that has not moved for the configured number of weeks (`seo_monitors.stuck_weeks`, empty = 8)
 // no longer only says "stuck": RP (v5/code/_replan.js) turns the same facts into a re-plan PROPOSAL — a different rung order, an easier
@@ -2619,6 +2890,10 @@ const checkEvidence = (() => { try { return $('SERP With Cache (Tracker)').first
 const pos = $('Parse Positions').all().map(i => i.json);
 let history = []; try { history = $('Load History').all().map(i => i.json).filter(r => r && r.ladder_id); } catch (e) {}
 // v4.8 display-only flags for the app (nothing in the e-mail changes): won / stuck per ladder; published dates from the content log, page facts from the ladder rows
+// build section 194 (client report 2026-11-17, F10): an address and the address it moved to permanently are ONE page (MV.samePage), so a moved
+// page Google ranks at its new address (or still at its old one) is never "a different page of yours" for its own search
+let watchRowsT = []; try { watchRowsT = $('Load Page Watch (Tracker)').all().map(i => i.json).filter(r => r && r.url && !r.error); } catch (e) {}
+const movesT = MV.fromWatch(watchRowsT);
 let logRows = []; try { logRows = $('Load Content Log (Tracker)').all().map(i => i.json).filter(r => r && r.keyword && !r.error); } catch (e) {}
 const pubLog = logRows.filter(r => r.published_url);
 // R1 (2026-10-13, re-rating): a ladder row saying `writing` is a promise, not a page. Live, 90 seconds after the budget guard refused the page
@@ -2796,7 +3071,7 @@ for (const [id, items] of byLadder) {
   const invKnown = invModel ? SM.pages(invModel).map(p => ({ url: p.url, title: p.title })) : [];
   const coveredBy = (r) => { if (!invModel) return null; let m = SM.matchPage(invModel, r.keyword); if (!m) return null;
     const orig = LRU.copyOf(m.url, invKnown); if (orig) { const o = SM.pages(invModel).find(p => ukeyT(p.url) === ukeyT(orig) && !SM.isGone(p) && !SM.isMoved(p)); m = o ? { ...m, url: o.url, title: o.title, copy_of: m.url } : null; }
-    return (m && ukeyT(m.url) !== ukeyT(r.target_url)) ? m : null; };
+    return (m && ukeyT(m.url) !== ukeyT(r.target_url) && !MV.samePage(m.url, r.target_url, movesT)) ? m : null; };
   const liveOf = (r) => { const lr = rowOf(r.keyword); return r.status === 'published' || !!logOf(r.keyword) || lr.page_exists === true || lr.page_exists === 'true' || r.current > 0 || !!coveredBy(r); };
   const writtenOf = (kw) => writtenLog.some(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain)));   // R1
   const notReadyOf = (kw) => (writtenOf(kw) ? null : notReadyLog.filter(l => normK(l.keyword) === normK(kw) && (!l.domain || normD(l.domain) === normD(head.domain))).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0]) || null;   // R111
@@ -2836,7 +3111,7 @@ for (const [id, items] of byLadder) {
   } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
     next = { action: 'improve_top', rung: 4, main_page: 'live',
       text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + (() => { const ru = String((topRow && topRow.url) || ''), rp = topRow ? Number(topRow.current) : 0;   // C-13: the page Google ranks, when it is another one
-        return ru && rp > 0 && ukeyT(ru) !== ukeyT(cTop ? cTop.url : (topRow.target_url || '')) ? '. Google ranks a different page of yours for this search: ' + ru + ' (#' + rp + '). Decide which of the two answers it, improve that one and link the other to it (one search, one page)' : ''; })() + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
+        return ru && rp > 0 && ukeyT(ru) !== ukeyT(cTop ? cTop.url : (topRow.target_url || '')) && !MV.samePage(ru, cTop ? cTop.url : (topRow.target_url || ''), movesT) ? '. Google ranks a different page of yours for this search: ' + ru + ' (#' + rp + '). Decide which of the two answers it, improve that one and link the other to it (one search, one page)' : ''; })() + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
       pages: topRow ? [cTop ? { ...pageOf(topRow), status: 'improve', target_url: cTop.url, covered_by: cTop.url } : pageOf(topRow)] : [] }; }
   // won: the main keyword in the top 3 in each of the last 4 checks, this one included (failed checks skipped)
   const histOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));

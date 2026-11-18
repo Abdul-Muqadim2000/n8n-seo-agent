@@ -55,7 +55,7 @@ describe('Indexing page', () => {
   it('with data: hero, lanes, a group with its three sentences and its step, drop-outs, updates, settings', () => {
     const html = wrap(<Indexing d={data()} {...props} member />);
     const t = text(html);
-    expect(t).toContain('Google has 1 of the 5 pages we checked that should be in search (1 not checked yet)');
+    expect(t).toContain('Google has 1 of the 4 pages that should be in Google (1 not checked yet)');   // CR17-C (F6): /old answers 404, an address, not a page that should be in Google
     expect(t).toContain('Existing pages checked: 5 of 6, about 1 day to check the rest at 300 a day');
     for (const s of ['New pages', 'Existing pages', 'Your page tells Google to leave it out', 'What it means', 'What we do', 'What you do', 'Open the step', '/services', 'Dropped out of Google search', '/old', 'Google updates', 'August 2026 core update', 'lost ground', 'Pages checked with Google a day', '300']) expect(t).toContain(s);
     expect(t).toContain('Improve this page');
@@ -100,7 +100,7 @@ describe('index_coverage report', () => {
         }),
       ),
     );
-    for (const s of ['Google has 31 of the 37 pages we checked that should be in search (3 not checked yet)', '4 pages need you', '1 dropped out', '/pricing', 'Your page tells Google to leave it out', 'October 2026 core update is rolling out', 'The report as text']) expect(t).toContain(s);
+    for (const s of ['Google has 31 of the 37 pages that should be in Google (3 not checked yet)', '4 pages need you', '1 dropped out', '/pricing', 'Your page tells Google to leave it out', 'October 2026 core update is rolling out', 'The report as text']) expect(t).toContain(s);
     expect(t).not.toContain('NaN');
   });
 });

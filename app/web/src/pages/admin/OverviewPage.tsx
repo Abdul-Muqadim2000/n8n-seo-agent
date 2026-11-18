@@ -78,14 +78,14 @@ export default function AdminOverviewPage() {
             <MetricCard
               label="Revenue"
               icon={<TrendingUp />}
-              value={<CountUp value={o.money.revenueUsd} format={(v) => money(v, { digits: 2 })} />}
+              value={<CountUp value={o.money.revenueUsd} format={(v) => money(v, { digits: 2 })} animate={false} />}
               info="Payments recorded when credits were granted. There is no card billing yet."
               meta={<SplitLine items={[{ label: 'list value', value: money(o.money.listValueUsd, { digits: 2 }) }]} />}
             />
             <MetricCard
               label="Cost to us"
               icon={<Wallet />}
-              value={<CountUp value={o.money.cost.totalUsd} format={(v) => money(v, { digits: 2 })} />}
+              value={<CountUp value={o.money.cost.totalUsd} format={(v) => money(v, { digits: 2 })} animate={false} />}
               info={
                 <>
                   What customers' runs cost at Claude and DataForSEO, attributed run by run. {money(o.money.cost.claudeEstimatedUsd)} of the Claude part is estimated (
@@ -105,14 +105,14 @@ export default function AdminOverviewPage() {
               label="Margin"
               icon={<Coins />}
               tone={o.money.marginUsd < 0 ? 'critical' : 'blue'}
-              value={<CountUp value={o.money.marginUsd} format={(v) => money(v, { digits: 2 })} />}
+              value={<CountUp value={o.money.marginUsd} format={(v) => money(v, { digits: 2 })} animate={false} />}
               info="Revenue minus cost to us, for this period."
               meta={o.money.marginPct == null ? 'No revenue in this period' : <SplitLine items={[{ label: 'margin', value: marginPct(o.money.marginPct) }]} />}
             />
             <MetricCard
               label="Credits outstanding"
               icon={<Coins />}
-              value={units === 'usd' ? <CountUp value={o.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} /> : <CountUp value={o.credits.outstanding} format={credits} />}
+              value={units === 'usd' ? <CountUp value={o.credits.book?.remainingListUsd ?? 0} format={(v) => money(v, { digits: 2 })} animate={false} /> : <CountUp value={o.credits.outstanding} format={credits} animate={false} />}
               info={units === 'usd' ? 'Every company\'s balance now at list price: what customers can still spend. Serving it will cost us about a third of it.' : 'The sum of every company\'s balance now: credits granted and not yet used.'}
               meta={
                 <SplitLine

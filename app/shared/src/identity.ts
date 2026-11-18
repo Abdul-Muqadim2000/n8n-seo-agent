@@ -548,6 +548,7 @@ export const AUDIT_ACTIONS = {
   'company.updated': { label: 'Changed company details', category: 'settings' },
   'company.budget_changed': { label: 'Changed the platform spending guard', category: 'settings' },
   'company.credit_limits_changed': { label: 'Changed the credit limits', category: 'settings' },
+  'company.auto_top_up_changed': { label: 'Changed the automatic top-up request', category: 'settings' },
   'company.credits_requested': { label: 'Asked for credits', category: 'settings' },
   'company.delivery_changed': { label: 'Changed report delivery', category: 'settings' },
   'company.hook_token_rotated': { label: 'Renewed the address the SEO engine reports to', category: 'settings' },
@@ -622,9 +623,14 @@ export const AUDIT_ACTIONS = {
   'site_task.checked': { label: 'Checked a step on the website', category: 'websites' },
   'site_task.skipped': { label: 'Skipped a step on the website', category: 'websites' },
   'site_task.restored': { label: 'Brought back a skipped step on the website', category: 'websites' },
+  // CR17-H (client report 2026-11-17, Q4): recommendations you can finish
+  'recommendation.dismissed': { label: 'Dismissed a recommendation', category: 'websites' },
+  'recommendation.restored': { label: 'Brought back a dismissed recommendation', category: 'websites' },
+  'recommendation.checked': { label: 'Checked a recommendation now', category: 'websites' },
   // Index coverage wave 2 (DESIGN_WAVE2 §3.2): the client says they asked Google (in Search Console) to read a page again
   'indexing.asked_google': { label: 'Said Google was asked to read a page again', category: 'websites' },
   'indexing.page_type': { label: 'Marked a page as important or as fine to leave out of Google', category: 'websites' },
+  'alerts.seen': { label: 'Marked an alert as seen', category: 'websites' },   // CR17-D (2026-11-17): the alert stays listed, it leaves the open count
   'crawler.push_key_created': { label: 'Made a crawler log push key', category: 'integrations' },
   'crawler.push_key_revoked': { label: 'Switched crawler log pushes off', category: 'integrations' },
   'crawler.log_uploaded': { label: 'Uploaded a server log', category: 'integrations' },

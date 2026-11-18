@@ -153,6 +153,10 @@ export const creditRules: { title: string; body: string }[] = [
     body: 'New analyses are refused and each website\'s automatic work pauses, and picks up again by itself as soon as credits are added. Owners and admins are told before it happens.',
   },
   {
+    title: 'A forecast from your own use',
+    body: 'The Credits page forecasts the next 30 days from what your work really used: how long your credits last for the automatic work alone and with your own analyses, and what each kind of work has typically cost you. Owners and admins are warned two weeks ahead, and you can choose a pack to be requested for you when credits run low.',
+  },
+  {
     title: 'Soonest-expiring first',
     body: 'Packs last 12 months. A plan\'s monthly credits roll over for one month. Credits are always used soonest-expiring first, so none are wasted.',
   },

@@ -30,7 +30,7 @@ import { outbound, safeError, type OutResponse } from '../lib/netGuard';
 import { seal, unseal } from '../lib/secretBox';
 import { siteRows } from '../n8n/client';
 import { integrationOf, requireSecrets, toIntegrationView, toIssueView } from './integrations';
-import { loadBundle, recommend } from './recommendations';
+import { loadBundle, recommendQueue } from './recommendations';
 
 /**
  * G4 (2026-10-17), issue trackers: an audit finding or a recommendation becomes ONE ticket in Jira Cloud, Linear or Asana, with the
@@ -321,7 +321,8 @@ async function findingContent(org: OrgRow, site: SiteRow, auditId: string, findi
 }
 
 async function recommendationContent(org: OrgRow, site: SiteRow, id: string): Promise<{ title: string; content: TicketContent }> {
-  const r = recommend(site, await loadBundle(org, site)).find((x) => x.id === id);
+  // FX-SERVER (R3 L2): any item, a source folded under another card too
+  const r = recommendQueue(site, await loadBundle(org, site)).find((x) => x.id === id);
   if (!r) throw notFound('That recommendation is not open for this website any more');
   const body = [r.detail, r.evidence ? `Evidence: ${r.evidence}` : ''].filter(Boolean).join('\n\n');
   return { title: r.title, content: recommendationTicket({ title: r.title, body, action: r.action?.label ?? null }, site.domain, appLink(`/o/${org.id}/sites/${site.id}/recommendations`)) };

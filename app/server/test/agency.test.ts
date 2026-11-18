@@ -39,7 +39,7 @@ async function join(inviter: C, orgId: string, email: string, role: string): Pro
   const inv = await inviter.post(`/api/orgs/${orgId}/invitations`, { email, role });
   expect(inv.status, inv.text).toBe(200);
   const c = new Client(app);
-  const r = await c.post('/api/auth/signup', { name: email.split('@')[0], email, password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
+  const r = await c.post('/api/auth/signup', { acceptTerms: true, name: email.split('@')[0], email, password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
   expect(r.status, r.text).toBe(200);
   return c;
 }

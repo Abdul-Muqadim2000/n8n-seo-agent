@@ -1,4 +1,5 @@
 import {
+  clientText,   // CR17-H (F1): the client-copy guard
   INDEXING_MERGE_KEY,
   effectiveSeverity,
   liveResolved,
@@ -93,10 +94,17 @@ import {
   type LadderRow,
   type MetricsPoint,
   type MonitorsRow,
+  type KiCompetitorRow,
+  type CompetitorSiteContext,
+  competitorList,
+  competitorRole,
+  splitAiNamed,
+  isRetiredProspect,
   type ProfileFields,
   type ProfileReadiness,
   type ProfileRow,
   type ProspectRow,
+  type LinkOutreachRow,
   type QueryChange,
   type QueryPoint,
   type QueryRow,
@@ -118,6 +126,8 @@ import {
   type TrendRow,
   type MonitorSettings,
   prospectDraft,
+  prospectLinkState,
+  linkStatusCounts,
   draftSuperseded,
   // G12 / G29 (2026-10-13, FIX_PLAN): the chart marks, the control-group change test and the lineage every figure carries
   buildAnnotations,
@@ -148,8 +158,15 @@ import {
   type AiScope,
   type AiScopeSummary,
   aiTargetView,
+  aiAnsweredView,
+  aiPermanentMoves,
+  aiQuestionPages,
+  type AiQuestionInputs,
   type AiWrittenPage,
   PAGE_IN_FLIGHT_HOURS,
+  checkinNotIndexed,
+  trackedKeywordsLine,
+  trackedKeywordsOf,
 } from '@seo/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db';
@@ -162,6 +179,9 @@ import { liveTechnical } from './technicalLive';
 import { aiChargeEntries, bucketAiCharges } from './runCredits';
 import { callbackUrl, latestReport, reportsList } from './runs';
 import { healGa4 } from './engineSite';
+import { linkStatusOf } from './linkBuilder';   // CR17-E (F9): the one link-building status model
+import { aiScheduleNextCheck, trackingStateOf } from './aiSchedule';   // CR17 review R5 L7: the one next AI check
+import { cycleIntentOf, loadCycleRows } from './cycles';
 
 // Dashboards: the n8n Data Tables of one domain (filtered server-side by `domain`), shaped for the client. JSON columns are parsed
 // here; the richer weekly reports (daily series, the question grid, the engine's own actions) come from the latest callback stored
@@ -574,7 +594,7 @@ function featureLabels(f: SerpFeatures): string[] {
 }
 
 /** G6: the results page of the latest desktop check of one keyword, plus the latest mobile reading when one was bought */
-export function serpReading(rows: RankHistoryRow[]): SerpReading | null {
+export function serpReading(rows: RankHistoryRow[], ctx?: CompetitorSiteContext): SerpReading | null {
   const desk = desktopRows(rows).slice().sort(byDate((r) => s(r.checked_at)));
   const last = desk[desk.length - 1];
   const raw = last?.features_json ? safeJson<FeatJson | null>(last.features_json, null) : null;
@@ -599,14 +619,18 @@ export function serpReading(rows: RankHistoryRow[]): SerpReading | null {
     features,
     shareOfVoice: sov(last),
     method: s(c.method),
-    above: comps(c.above),
-    competitors: comps(c.competitors),
+    // CR17-F: with the website's context, each domain carries the one role rule's answer (a directory or a software maker is not a rival)
+    above: withRoles(comps(c.above), ctx),
+    competitors: withRoles(comps(c.competitors), ctx),
     // SERP-GOTO (2026-11-08): an approximate address (x: 1, recovered from Google's breadcrumb) is shown as its site with no link; a reading
     // stored with bare Google redirect links shows none of them
     snapshot: { at: snap.at ?? null, device: s(snap.device) || 'desktop', top: snapTop(snap.top ?? []) },
     mobile,
   };
 }
+
+const withRoles = (list: SerpReading['above'], ctx?: CompetitorSiteContext): SerpReading['above'] =>
+  ctx ? list.map((x) => (x.domain.includes('.') ? { ...x, role: competitorRole(x.domain, ctx).role } : x)) : list;
 
 function emptyFeatures(): SerpFeatures {
   return {
@@ -644,12 +668,16 @@ export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; late
 
 export async function rankingsData(site: SiteRow): Promise<RankingsData> {
   const d = site.domain;
-  const [ladderRows, history, profiles] = await Promise.all([
+  const [ladderRows, history, profiles, rkMons, kiComps] = await Promise.all([
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<RankHistoryRow>('rankHistory', d, { sortBy: 'checked_at:asc', max: 5000 }),
     // B6 (pre-launch run 2026-10-21): the rungs the profile hold keeps from being written say so, as the Pipeline does
     siteRows<ProfileRow>('profiles', d, { max: 5 }).catch(() => [] as ProfileRow[]),
+    // CR17-F: the client's competitor choices, for the role of each site above you
+    siteRows<MonitorsRow>('monitors', d, { max: 5 }).catch(() => [] as MonitorsRow[]),
+    kiCompetitorRows(d),
   ]);
+  const rkCtx = competitorSiteOf(site, Array.isArray(rkMons) ? rkMons[0] : undefined, kiComps);
   const histBy = new Map<string, RankHistoryRow[]>();
   for (const h of history) {
     const k = `${h.ladder_id}|${s(h.keyword).toLowerCase()}`;
@@ -671,7 +699,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
         const hist = histBy.get(`${id}|${s(r.keyword).toLowerCase()}`) ?? [];
         const series = rankSeries(hist);
         return {
-          serp: serpReading(hist),
+          serp: serpReading(hist, rkCtx),
           rung: n(r.rung),
           pageNo: n(r.page_no),
           keyword: s(r.keyword),
@@ -703,16 +731,18 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
   out.sort((a, c) => c.startDate.localeCompare(a.startDate));
 
   // Site Tracker live checks are stored with the site id as ladder_id
+  // CR17-I (F8): the website's own keywords are its list (Settings > Tracking), nothing else: a keyword the client removed keeps its old
+  // checks in the history, but it is no longer tracked, so it is not listed (it was, for ever, with its last position)
+  const own = new Set(site.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean));
   const ladderIds = new Set(ladders.keys());
   const siteKw = new Map<string, RankHistoryRow[]>();
+  for (const k of own) siteKw.set(k, []);
   for (const h of history) {
     if (ladderIds.has(h.ladder_id)) continue;
     const k = s(h.keyword).toLowerCase();
-    const l = siteKw.get(k) ?? [];
-    l.push(h);
-    siteKw.set(k, l);
+    if (!own.has(k)) continue;
+    siteKw.get(k)!.push(h);
   }
-  for (const k of site.keywords) if (!siteKw.has(k.toLowerCase())) siteKw.set(k.toLowerCase(), []);
   const keywords: TrackedKeyword[] = [...siteKw.entries()].map(([kw, rs]) => {
     const series = rankSeries(rs);
     const desk = rs.filter((r) => s(r.device) !== 'mobile');
@@ -721,7 +751,7 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       keyword: kw,
       url: s(last?.url),
       serpFeatures: splitList(last?.serp_features),
-      serp: serpReading(rs),
+      serp: serpReading(rs, rkCtx),
       latestPosition: series.latest,
       latestNote: series.latestNote,
       previousPosition: series.previous,
@@ -753,7 +783,10 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       : lineageUnknown('Mobile position', 'no mobile check was bought for this website yet'),
   ];
   const r = contentReadiness({ profile: profiles[0] ?? null, businessFacts: site.businessFacts });
-  return { ladders: out, keywords, lineage: lineageList, readiness: { ready: r.ready, missingText: r.missingText, page: readinessPage(r) } };
+  // CR17-I (F8): the one count of "tracked keywords" (ladder keywords + the own list, each search once)
+  const t = trackedKeywordsOf({ own: site.keywords, ladder: out.flatMap((l) => l.rungs.map((x) => ({ keyword: x.keyword, status: x.status }))) });
+  const tracked = { total: t.total, fromLadders: t.fromLadders, fromYourList: t.fromYourList, line: trackedKeywordsLine(t) };
+  return { ladders: out, keywords, tracked, lineage: lineageList, readiness: { ready: r.ready, missingText: r.missingText, page: readinessPage(r) } };
 }
 
 // ---------------- content & profile ----------------
@@ -1338,10 +1371,90 @@ function toIndex(x: P | null): AiIndex | null {
  */
 export const AI_READ_LIMITS = { runs: 300, prompts: 2500, daily: 120, answers: 6000 } as const;
 
+// ---------------- CR17-F: one competitor role rule (client report C5) ----------------
+
+/** The KI set's rows of a website (the KI pages' own cached read; a failed read, or no table yet, = none). Read KI on or off: the one list is. */
+export async function kiCompetitorRows(domain: string): Promise<KiCompetitorRow[]> {
+  try {
+    const r = await siteRows<KiCompetitorRow>('kiCompetitors', domain, { max: 2000 });
+    const d = domain.toLowerCase();
+    return Array.isArray(r) ? r.filter((x) => s(x?.domain).toLowerCase() === d) : [];
+  } catch {
+    return [];
+  }
+}
+
+const compHost = (d: unknown) => s(d).trim().toLowerCase().replace(/^www\./, '');
+
+/** What the role classifier knows of a website: its domain, its services, and the client's own choices (Site settings, the Competitors page). */
+export function competitorSiteOf(
+  site: Pick<SiteRow, 'domain'> & { services?: string[] | null },
+  mon: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined,
+  ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[],
+): CompetitorSiteContext {
+  // FX-LINKS (review R2 M3): chosen and not-a-competitor come from the one list (CMP.oneList), where the client's latest decision on a domain
+  // wins whichever row holds it; an older "not a competitor" can no longer outvote a later choice here
+  const one = competitorList({ domain: site.domain, declared: splitList(mon?.competitors).map(compHost), kiRows: kiRowsOf(ki), notCompetitors: splitList(mon?.not_competitors).map(compHost), max: 1000 });
+  return {
+    domain: site.domain,
+    services: site.services ?? [],
+    declared: splitList(mon?.competitors).map(compHost),
+    chosen: one.chosen,
+    notCompetitors: one.removed,
+  };
+}
+const kiRowsOf = (ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[]) =>
+  ki.map((r) => ({ compDomain: compHost(r.comp_domain), status: s(r.status), statusBy: s(r.status_by), market: s((r as Partial<KiCompetitorRow>).market), updatedAt: s((r as Partial<KiCompetitorRow>).updated_at) }));
+
+/** THE competitor list of a website (Site settings + the Competitors page choices - not a competitor), as every monitor reads it. */
+export function oneCompetitorListOf(
+  site: Pick<SiteRow, 'domain'>,
+  mon: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined,
+  ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[],
+): string[] {
+  return competitorList({
+    domain: site.domain,
+    declared: splitList(mon?.competitors).map(compHost),
+    kiRows: kiRowsOf(ki),
+    notCompetitors: splitList(mon?.not_competitors).map(compHost),
+    max: 1000,
+  }).list;
+}
+
+type AiLatest = NonNullable<AiData['latest']>;
+/**
+ * AI visibility: who one stored row names, by the one role rule. `competitors` keeps the businesses (role competitor, or a name with no
+ * website); `softwareNamed` = the row's software_json (a newer engine) plus an older row's names of a software maker or a platform you work
+ * with; directories, platforms, publishers and public bodies are left out. Rows stored before the rule still hold sap.com and the like.
+ */
+export function aiNamedOf(row: Pick<AiVisibilityRow, 'competitors_json'> & { software_json?: string | null }, ctx: CompetitorSiteContext): Pick<AiLatest, 'competitors' | 'softwareNamed'> {
+  const all = arr(safeJson(row.competitors_json, [])).map((c) => ({ domain: s(c.domain), mentions: n(c.mentions), share: n(c.share), auto: b(c.auto) }));
+  const split = splitAiNamed(all, ctx);
+  const softwareNamed: AiLatest['softwareNamed'] = [];
+  const seen = new Set<string>();
+  const add = (x: AiLatest['softwareNamed'][number]) => {
+    const k = (x.domain || x.name).toLowerCase();
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    softwareNamed.push(x);
+  };
+  for (const x of arr(safeJson(s(row.software_json), [])))
+    add({ domain: s(x.domain), name: s(x.name) || s(x.domain), answers: n(x.answers), role: s(x.role) === 'your_platform' ? 'your_platform' : 'software' });
+  for (const c of split.software) add({ domain: c.domain, name: c.domain, answers: c.mentions, role: c.role === 'your_platform' ? 'your_platform' : 'software' });
+  return { competitors: split.competitors, softwareNamed: softwareNamed.sort((a, c) => c.answers - a.answers) };
+}
+
+/** A run's share-of-voice brands (every brand named, basis `all`): only the businesses and you; software makers and listings are not rivals. */
+function sovBusinessesOnly(run: AiRun, ctx: CompetitorSiteContext): AiRun {
+  if (!run.sov || run.sov.basis !== 'all') return run;
+  const keep = (id: string) => !/\./.test(id) || ['competitor', 'you'].includes(competitorRole(id, ctx).role);
+  return { ...run, sov: { ...run.sov, brands: run.sov.brands.filter((x) => keep(x.id)) } };
+}
+
 export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boolean | 'summary'; prompts?: boolean; filter?: AiFilter | null; admin?: boolean } = {}): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons, aiRuns] = await Promise.all([
+  const [visDesc, prompts, report, days, growthRows, aiPages, aiTargets, aiProspectsAll, logs, mons, aiRuns, ladderRows, watchRows, kiComps, engineSiteRow, cycleRows] = await Promise.all([
     // newest first, then put in date order: a domain with more than 300 runs shows its newest 300, never freezes on the oldest
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:desc', max: AI_READ_LIMITS.runs }),
     // G6: up to 500 tracked + the switched-off and refused ones (every reword keeps the old row 'off'); stored order kept (the engine's cut)
@@ -1357,7 +1470,20 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
     // client report 2026-11-16 (issue 1): the AI question each of the app's page runs carried (a failed read: none known, never an error page)
     aiRunQuestions(org.id, site.id).catch(() => ({ questions: new Map<string, { targetId: string; question: string }>(), failed: new Set<string>() })),
+    // CR17 (Q3, client report 2026-11-17): the ladder pages and the client's own permanent redirects, so the AI page decides on the same page
+    // list as the write form (a failed read: the content log alone, as before)
+    siteRows<LadderRow>('ladders', d, { max: 1000 }).catch(() => [] as LadderRow[]),
+    siteRows<PageWatchRow>('pageWatch', d, { max: 200 }).catch(() => [] as PageWatchRow[]),
+    // CR17-F: the client's choices on the Competitors page (the one role rule reads them)
+    kiCompetitorRows(d),
+    // CR17 review R5 L7: the tracking state and the website's cycle, so the next AI check is the Pipeline's own date (a failed read: the
+    // app's own tracking state and anchor, as the Pipeline degrades)
+    n8nSite(site).catch(() => null),
+    loadCycleRows(site).catch(() => ({ row: null, jobs: [] })),
   ]);
+  // CR17-F: a prospect retired with its AI question is kept for the record, never offered
+  const aiProspects = aiProspectsAll.filter((p) => !isRetiredProspect(p));
+  const compCtx = competitorSiteOf(site, mons[0], kiComps);
   const vis = [...visDesc].sort((a, b) => s(a.checked_at).localeCompare(s(b.checked_at)));
   const last = vis[vis.length - 1];
   // n8n's run id is per day (ai_YYYYMMDD_domain): a second run that day shares it, so only the answers of the latest run count.
@@ -1368,6 +1494,17 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
   const credits = charges ? bucketAiCharges(vis.map((r) => ({ checkedAt: s(r.checked_at) })), charges) : vis.map(() => null);
   const compared = aiRunsCompared(vis);
   const monitorsNow = monitorsFromRow(mons[0]);
+  // CR17 (Q3): ONE page list and one market for every AI-question decision of this page (badge, button, Recommendations), the list the
+  // write form gets too (pipeline.ts aiPages)
+  const nextAiCheck = aiScheduleNextCheck({
+    verified: !!site.verifiedAt,
+    tracking: trackingStateOf(site, { tracked: !!engineSiteRow, status: engineSiteRow?.status ?? null }),
+    aiVisibility: monitorsNow?.aiVisibility,
+    aiPulse: monitorsNow?.aiPulse,
+    tz: config.n8nTimezone,
+    intent: cycleIntentOf(site, cycleRows.row),
+  });
+  const aiDecision = aiDecisionInputs({ logs, ladders: ladderRows, aiRuns, moves: watchRows, market: site.country ?? '', nextAiCheck });
   let latest: AiData['latest'] = null;
   if (last) {
     const engines = safeJson<Record<string, P>>(last.engines_json, {});
@@ -1398,7 +1535,8 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
           sentiment: nn(e.sentiment),
         }),
       ),
-      competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ domain: s(c.domain), mentions: n(c.mentions), share: n(c.share), auto: b(c.auto) })),
+      // CR17-F: the businesses AI names instead of you, and apart the software makers / platforms it names (never competitors)
+      ...aiNamedOf(last, compCtx),
       // W2-E1: sources_json is {v: 2, types, domains, n, list} now (`list` = the old array); older rows hold the array
       sources: aiLegacySourcesList(last.sources_json).map((x) => ({ domain: s(x.domain), citations: n(x.citations), engines: arr<string>(x.engines).map(String), topics: arr<string>(x.topics).map(String), kind: s(x.kind) })),
       pages: arr(safeJson(last.pages_json, [])).map((x) => ({ url: s(x.url), citations: n(x.citations), engines: arr<string>(x.engines).map(String) })),
@@ -1438,7 +1576,7 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
   // A6 (2026-10-23): the report's prose, grid and actions belong beside the latest run only when they were written for it
   const reportCurrent = !!(rp && last && reportIsFor(s(rp.run_id), report!.report.receivedAt, s(last.run_id), s(last.checked_at)));
   return {
-    runs: vis.map((r, i) => toAiRun(r, compared[i], credits[i])),
+    runs: vis.map((r, i) => sovBusinessesOnly(toAiRun(r, compared[i], credits[i]), compCtx)),
     latest,
     daily: aiDailySeries(days),
     promptsMax: monitorsNow ? monitorsNow.aiPromptsMax : null,
@@ -1476,8 +1614,10 @@ export async function aiData(org: OrgRow, site: SiteRow, opts: { answers?: boole
     answers: opts.answers === 'summary' ? [] : answers.map((a) => toAiAnswer(a)),
     ...(opts.answers === 'summary' ? { answerResults: answerResultsOf(answers), answersStored: answers.length } : {}),
     scope: opts.filter ? aiScopeOf(opts.filter, vis, compared, answers, prompts, opts.answers !== false) : null,
-    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow, opts.admin === true),
-    pagesWritten: aiWrittenPages(logs, aiRuns.questions, aiRuns.failed),
+    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsNow, opts.admin === true, aiDecision),
+    pagesWritten: aiDecision.written as AiWrittenPage[],
+    ladderHeads: [...aiDecision.ladderHeads!],
+    ...(aiDecision.nextAiCheck ? { nextAiCheck: aiDecision.nextAiCheck } : {}),
     // AIR (2026-11-06): the AI-ranking plan, read only for a website in `on` mode (off and the private trial show nothing new)
     // FX-C RC-1: in the client's words with credits; the raw memo and the provider cost for a platform admin only
     aiRank: await aiRankPlanFor(d, mons[0], { prompts, admin: opts.admin === true }),
@@ -1733,14 +1873,27 @@ const toCoverage = (c: P | null): BacklinkCoverage | null => {
 
 export async function backlinksData(org: OrgRow, site: SiteRow): Promise<BacklinksData> {
   const d = site.domain;
-  const [snaps, prospects, report, refs, imports, graphSummary] = await Promise.all([
+  const [snaps, prospectsAll, report, refs, imports, graphSummary, outreach, seqs, blMons, kiComps] = await Promise.all([
     siteRows<BacklinkSnapshotRow>('backlinkSnapshots', d, { sortBy: 'checked_at:asc', max: 300 }),
     siteRows<ProspectRow>('prospects', d, { max: 1000 }),
     latestReport(org.id, site.id, ['backlinks']),
     siteRows<BacklinkRow>('backlinks', d, { max: 3000 }),
     siteRows<LinkImportRow>('linkImports', d, { max: 20000 }),
     siteRows<LinkGraphRow>('linkGraph', d, { extra: [{ columnName: 'kind', condition: 'eq', value: 'summary' }], max: 20 }),
+    // CR17-E (F9): the Link Builder's verdicts and the app's conversations, so "prospects to contact" is the one link status, not prospect status `new`
+    siteRows<LinkOutreachRow>('linkOutreach', d, { max: 1500 }).catch(() => [] as LinkOutreachRow[]),
+    db.select({ prospectDomain: schema.outreachSequences.prospectDomain, type: schema.outreachSequences.prospectType, status: schema.outreachSequences.status, startedAt: schema.outreachSequences.startedAt, approvedAt: schema.outreachSequences.approvedAt,
+      replyAt: schema.outreachSequences.replyAt, replyClass: schema.outreachSequences.replyClass, wonAt: schema.outreachSequences.wonAt }).from(schema.outreachSequences).where(eq(schema.outreachSequences.siteId, site.id)).catch(() => []),
+    // CR17-F: the one role rule for the competitors of the link gap (a failed read: no choices known)
+    siteRows<MonitorsRow>('monitors', d, { max: 5 }).catch(() => [] as MonitorsRow[]),
+    kiCompetitorRows(d),
   ]);
+  // CR17-F: a prospect retired with its AI question is kept for the record, never offered
+  const prospects = prospectsAll.filter((p) => !isRetiredProspect(p));
+  const blCtx = competitorSiteOf(site, Array.isArray(blMons) ? blMons[0] : undefined, kiComps);
+  const iso0 = (x: Date | null) => (x ? x.toISOString() : null);
+  const linkRows = linkStatusOf(outreach, prospects, seqs.map((q) => ({ ...q, startedAt: iso0(q.startedAt), approvedAt: iso0(q.approvedAt), replyAt: iso0(q.replyAt), wonAt: iso0(q.wonAt) })));
+  const linkStateBy = new Map(linkRows.map((r) => [r.key, r.state]));
   const last = snaps[snaps.length - 1];
   const rp = report?.payload;
   const fileId = (needle: string) => report?.report.files.find((f) => f.field.includes(needle) || f.fileName.includes(needle))?.id ?? null;
@@ -1757,7 +1910,8 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
       ? {
           lost: arr(safeJson(last.lost_json, [])).map((l) => ({ ...toLink(l), reason: s(l.reason) || undefined, pending: l.pending === true ? true : undefined })),
           new: arr(safeJson(last.new_json, [])).map(toLink),
-          competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ ...c, domain: s(c.domain) })),
+          // CR17-F: only businesses (a software maker, a directory or a publisher is not a competitor's link profile to chase)
+          competitors: arr(safeJson(last.competitors_json, [])).map((c) => ({ ...c, domain: s(c.domain) })).filter((c) => !/\./.test(c.domain) || competitorRole(c.domain, blCtx).role === 'competitor'),
           timeseries: arr(safeJson(last.timeseries_json, [])).map((t) => ({ month: s(t.month), backlinks: n(t.backlinks), referringDomains: n(t.referring_domains), rank: n(t.rank) })),
           coverage: toCoverage(safeJson<P | null>(last.coverage_json, null)),
           anchors: anchors
@@ -1807,8 +1961,10 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
         followupSubject: s(p.followup_subject),
         followupBody: s(p.followup_body),
         verifiedAt: s(p.verified_at),
+        linkState: linkStateBy.get(`${s(p.prospect_domain).toLowerCase()}|${s(p.type)}`) ?? prospectLinkState({ prospect_domain: s(p.prospect_domain), type: s(p.type), status: s(p.status), contacted_at: s(p.contacted_at), won_at: s(p.won_at), verified_at: s(p.verified_at) }),
       }))
       .sort((a, c) => c.score - a.score || c.rank - a.rank),
+    linkCounts: linkStatusCounts(linkRows),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
@@ -1836,7 +1992,11 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
   ]);
   const month = new Date().toISOString().slice(0, 7);
   return {
-    alerts: alerts.map((a) => ({ kind: s(a.kind), severity: s(a.severity), subject: s(a.subject), summary: s(a.summary), receivedAt: s(a.received_at), status: s(a.status), source: s(a.source) })),
+    // CR17-D (build section 194): the lifecycle fields; the -1 "not recorded" marker of a check-in is null (checkinNotIndexed), never a count
+    alerts: alerts.map((a) => ({
+      id: s(a.message_id), kind: s(a.kind), severity: s(a.severity), subject: s(a.subject), summary: s(a.summary), receivedAt: s(a.received_at), status: s(a.status), source: s(a.source),
+      lastSeenAt: s(a.last_seen_at) || s(a.received_at), count: Math.max(1, n(a.count)), resolvedAt: s(a.resolved_at), resolution: s(a.resolution), ackAt: s(a.ack_at), ackBy: s(a.ack_by),
+    })),
     checkins: checkins.map((c) => {
       const cov = safeJson<P>(c.coverage_json, {});
       return {
@@ -1844,7 +2004,7 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
         manualAction: b(c.manual_action),
         securityIssue: b(c.security_issue),
         notes: s(c.notes),
-        notIndexedTotal: n(c.not_indexed_total),
+        notIndexedTotal: checkinNotIndexed(c.not_indexed_total),
         indexedTotal: nn(cov.indexed_total),
         csvKind: s(c.csv_kind),
         submittedAt: s(c.submitted_at),
@@ -1861,11 +2021,18 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
  * still `writing` whose page is live is shown live), the sentence from a fixed table (ai-target-status.ts): never the engine's own reason,
  * which a platform admin still gets as `adminReason`.
  */
-export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin = false): AiGrowth['targets'][number] {
-  const view = aiTargetView(
+export function targetStat(t: AiTargetRow, logs: readonly ContentLogRow[], admin = false, decision?: AiQuestionInputs): AiGrowth['targets'][number] {
+  const view0 = aiTargetView(
     { status: s(t.status), kind: s(t.kind), keyword: s(t.keyword), question: s(t.question), pageUrl: s(t.page_url), reason: s(t.reason), reasonCode: s(t.reason_code), reasonArgs: t.reason_args, origin: s(t.origin), requestId: s(t.request_id), writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at), liveAt: s(t.live_at) },
     logs,
+    { market: decision?.market ?? '' },   // review R5 (H1): the engine's question-page rule reads the website's market
   );
+  // CR17 (Q3): a live page that answers the question since the engine last weighed it decides the badge, as it decides the button (never over a
+  // refresh AI Growth planned for that very page, review R5 M3)
+  const answered = decision
+    ? aiAnsweredView({ targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), state: view0.state, updatedAt: s(t.updated_at), hidden: view0.hidden, kind: s(t.kind), pageUrl: s(t.page_url), statePageUrl: view0.pageUrl }, decision)
+    : null;
+  const view = answered ? { ...view0, state: answered.state, badge: answered.badge, tone: answered.tone, sentence: answered.sentence, pageUrl: answered.pageUrl, date: answered.date } : view0;
   return {
     targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), kind: s(t.kind) === 'refresh' ? ('refresh' as const) : ('answer' as const), pageUrl: s(t.page_url), pageType: s(t.page_type),
     fanout: s(t.fanout).split(' | ').filter(Boolean), sources: arr(safeJson(s(t.sources_json), [])).map((x) => ({ url: s(x.u), title: s(x.t) })).filter((x) => x.url), competitors: splitList(t.competitors),
@@ -1904,28 +2071,45 @@ export function aiWrittenPages(
   failed: ReadonlySet<string> = new Set(),
   now = Date.now(),
 ): AiWrittenPage[] {
-  const stopped = (l: ContentLogRow) => s(l.status) === 'started' && (failed.has(s(l.request_id)) || !(now - Date.parse(s(l.started_at) || '1970-01-01') < PAGE_IN_FLIGHT_HOURS * 3600_000));
-  return logs
-    .filter((l) => s(l.keyword) && !['failed', 'held', ''].includes(s(l.status)) && !stopped(l))
-    .map((l) => {
-      const q = aiRuns.get(s(l.request_id));
-      return {
-        keyword: s(l.keyword), status: s(l.status), publishedUrl: s(l.published_url), startedAt: s(l.started_at), source: s(l.source),
-        ...(s(l.source) === 'ladder' && Number(l.rung) === 4 ? { ladderHead: true } : {}),
-        ...(q ? { aiTargetId: q.targetId, aiQuestion: q.question } : {}),
-      };
-    })
-    .slice(0, 500);
+  return aiQuestionPages({ logs, aiRuns, failed, now, inFlightHours: PAGE_IN_FLIGHT_HOURS }).slice(0, 500);
 }
 
-function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false): AiGrowth | null {
+/** CR17-E (F9): the AI growth list's status through the one link status (a "won" nobody wrote to, or with no link our check found, is not won) */
+function earnedStatus(pr: ProspectRow | null, fallback: string): string {
+  if (!pr) return fallback.replace(/^drafted$/, 'new') || 'new';
+  const st = prospectLinkState({ prospect_domain: s(pr.prospect_domain), type: s(pr.type), status: s(pr.status), contacted_at: s(pr.contacted_at), won_at: s(pr.won_at), verified_at: s(pr.verified_at) });
+  return st === 'won' ? 'won' : st === 'sent' ? 'contacted' : st === 'replied' ? 'replied' : st === 'declined' ? (s(pr.status) === 'ignored' ? 'ignored' : 'rejected') : 'new';
+}
+
+/** CR17 (Q3, client report 2026-11-17): what every AI-question decision of a website reads, built once (pure): the page list (content log,
+ *  ladder pages, the client's permanent redirects followed), the ladder heads, the market and when AI answers are next checked. The AI
+ *  visibility page (aiData) and the Pipeline's write form (pipeline.ts aiPages) both use it, so they decide on the same pages.
+ *  Review R5 L7: `nextAiCheck` is the schedule's date (aiSchedule.ts), worked out by the caller the same way on both screens. */
+export function aiDecisionInputs(o: {
+  logs: readonly ContentLogRow[];
+  ladders?: readonly LadderRow[];
+  aiRuns?: { questions: ReadonlyMap<string, { targetId: string; question: string }>; failed: ReadonlySet<string> };
+  moves?: readonly PageWatchRow[];
+  market: string;
+  /** the next AI check from the schedule (aiSchedule.ts), '' when none is scheduled */
+  nextAiCheck?: string;
+  now?: number;
+}): AiQuestionInputs & { written: AiWrittenPage[]; ladderHeads: string[]; nextAiCheck: string } {
+  const now = o.now ?? Date.now();
+  const ladders = (o.ladders ?? []).filter((l) => !['archived', 'deleted', 'removed'].includes(s(l.status)));
+  const written = aiQuestionPages({ logs: o.logs, ladders, aiRuns: o.aiRuns?.questions, failed: o.aiRuns?.failed, moves: aiPermanentMoves(o.moves ?? []), now, inFlightHours: PAGE_IN_FLIGHT_HOURS });
+  const ladderHeads = [...new Set(ladders.map((l) => s(l.head_keyword).toLowerCase().trim()).filter(Boolean))];
+  return { written, ladderHeads, market: o.market, nextAiCheck: o.nextAiCheck ?? '' };
+}
+
+function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null, admin = false, decision?: AiQuestionInputs): AiGrowth | null {
   if (!g) return null;
   const sub = safeJson<P>(g.submitted_json, {}); const bing = o(sub.bing); const inx = o(sub.indexnow);
   const keyUrl = s(inx.key_url); const key = (keyUrl.match(/\/([a-f0-9]{32})\.txt$/) || [])[1] || '';
   const earned = arr(safeJson(g.earned_json, [])).map((e) => {
     const pr = prospects.find((x) => s(x.prospect_domain) === s(e.host)) ?? null;
     return { url: s(e.url), title: s(e.title), host: s(e.host), kind: s(e.kind), citations: n(e.citations), engines: arr<string>(e.engines).map(String), questions: arr<string>(e.questions).map(String),
-      mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: (s(pr?.status) || s(e.status)).replace(/^drafted$/, 'new'),
+      mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: earnedStatus(pr, s(e.status)),
       drafted: !!prospectDraft(pr), contactEmail: s(pr?.contact_email), draft: prospectDraft(pr) };   // P34-1: the stale pre-gate drafts are not this week's work and are not offered
   });
   const ent = safeJson<P | null>(g.entity_json, null);
@@ -1940,10 +2124,11 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
       checks: arr(safeJson(s(p.checks_json), [])).filter((c) => n(c.weight) > 0).map((c) => ({ key: s(c.key), ok: c.ok === 'partial' ? ('partial' as const) : b(c.ok), label: s(c.label) })),
       issues: s(p.issues).split(' | ').filter(Boolean), wordsRaw: n(p.words_raw), title: s(p.title), updatedOn: s(p.updated_on), bingCrawledAt: s(p.bing_crawled_at), submittedAt: s(p.submitted_at), submittedVia: s(p.submitted_via), citedBy: splitList(p.cited_by),
     })),
-    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => targetStat(t, logs, admin)),
+    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => targetStat(t, logs, admin, decision)),
     earned,
     entity: ent ? { checkedAt: s(ent.checked_at), found: b(ent.found), qid: s(ent.qid), byName: arr(ent.by_name).map((x) => ({ id: s(x.id), label: s(x.label), description: s(x.description) })) } : null,
-    actions: arr(safeJson(g.actions_json, [])).map((a) => ({ priority: n(a.priority), type: s(a.type), action: s(a.action), why: s(a.why) })),
+    // CR17-H (F1): an AI-ranking action's why was the engine's scoring line; a customer reads the client-copy guard's words (admins the raw)
+    actions: arr(safeJson(g.actions_json, [])).map((a) => ({ priority: n(a.priority), type: s(a.type), action: admin ? s(a.action) : clientText(s(a.action)), why: admin ? s(a.why) : clientText(s(a.why)) })),
     alerts: s(g.alerts).split(' | ').filter(Boolean).map((t) => { const i = t.indexOf(': '); return i > 0 ? { level: t.slice(0, i), text: t.slice(i + 2) } : { level: 'info', text: t }; }),
     pagesPerMonth: m ? m.aiPagesPerMonth : AI_PAGES_DEFAULT,
     writtenThisMonth: logs.filter((l) => /^ai_/.test(s(l.source)) && s(l.started_at).slice(0, 7) === month).length,
@@ -1952,7 +2137,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
 
 // ---------------- settings ----------------
 
-export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & { competitors: string[]; updatedAt: string }) | null {
+export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & { competitors: string[]; notCompetitors: string[]; updatedAt: string }) | null {
   if (!r) return null;
   const engines = splitList(r.ai_engines) as MonitorSettings['aiEngines'];
   return {
@@ -1989,25 +2174,30 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
     // wave 2 (DESIGN_WAVE2 §2.5): read back only when stored (empty = off)
     ...(r.index_sitemap_submit != null && (r.index_sitemap_submit as unknown) !== '' ? { indexSitemapSubmit: indexSitemapSubmitOn(r.index_sitemap_submit) } : {}),
     competitors: splitList(r.competitors),
+    // CR17-F: the domains the client marked "Not a competitor" (absent before the engine adds the column)
+    notCompetitors: splitList(r.not_competitors),
     updatedAt: s(r.updated_at),
   };
 }
 
 export async function settingsData(org: OrgRow, site: SiteRow): Promise<SiteSettingsData> {
   const d = site.domain;
-  const [siteRow, monitors, cadence, profiles] = await Promise.all([
+  const [siteRow, monitors, cadence, profiles, kiComps] = await Promise.all([
     n8nSite(site),
     siteRows<MonitorsRow>('monitors', d, { max: 5 }),
     siteRows<CadenceRow>('cadence', d, { max: 5 }),
     siteRows<ProfileRow>('profiles', d, { max: 5 }),
+    kiCompetitorRows(d),
   ]);
+  const mon = monitorsFromRow(monitors[0]);
   const profile = profileFromRow(profiles[0]);
   // browser pass D1 (2026-11-06): a website with no monitors row yet (not tracked) still gets the AI ranking card when the engine's table has the
   // column: any one row of the table says so (the Data Tables API returns every column on every row); the setting then reads as off
   const aiRankColumn = monitors[0] ? 'ai_rank_mode' in (monitors[0] as object) : await tableRows<MonitorsRow>('monitors', { max: 1 }).then((r) => !!r[0] && 'ai_rank_mode' in (r[0] as object)).catch(() => false);
   return {
     tracking: connection(siteRow, org, site, await ladderCallbacks(site)),
-    monitors: monitorsFromRow(monitors[0]),
+    // CR17-F: THE competitor list (the Competitors page shows the same); the Site settings list alone stays as declaredCompetitors
+    monitors: mon ? { ...mon, declaredCompetitors: mon.competitors, competitors: oneCompetitorListOf(site, monitors[0], kiComps) } : null,
     cadence: cadence[0] ? { pagesPerWeek: n(cadence[0].pages_per_week), status: s(cadence[0].status) } : null,
     profile,
     readiness: readiness(profile),

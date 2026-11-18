@@ -6,6 +6,7 @@ import {
   outreachItemId,
   approveSchema,
   draftDismissSchema,
+  manualSentSchema,
   linkBuilderRunSchema,
   linkSettingsSchema,
   listingStatusSchema,
@@ -14,6 +15,7 @@ import {
   mailboxPatchSchema,
   mailboxSchema,
   n8nSiteId,
+  OPEN_SEQUENCE_STATUSES,
   sequenceOutcomeSchema,
   sequencePatchSchema,
   sequenceReplySchema,
@@ -30,7 +32,7 @@ import { db, schema } from '../db';
 import { badRequest, forbidden, HttpError, notFound, parse } from '../lib/errors';
 import { secretsReady, seal, unseal } from '../lib/secretBox';
 import { invalidateSite, linkBuilderRun, upsertRow } from '../n8n/client';
-import { approve, linkBuildingData, linkSettingsOf, mailboxView, sequenceFor, setProspectStatus, suppress, updateSequence } from '../services/linkBuilder';
+import { approve, linkBuildingData, linkSettingsOf, mailboxView, manualFollowupSent, manualSent, sequenceFor, setProspectStatus, suppress, updateSequence } from '../services/linkBuilder';
 import { testMailbox } from '../services/mail';
 import { exchangeMailCode, isOauthMailbox, MAIL_PROVIDERS, mailAuthUrl, mailProviderInfo, oauthProviderOf, revokeMailTokens, testOauthMailbox } from '../services/mailOauth';
 import { sendManual } from '../services/outreachJobs';
@@ -236,6 +238,23 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     return { ok: true, id: q.id };
   });
 
+  // CR17-E (client report 2026-11-17, C4a): "I sent it myself" - the pitch went out from the person's own mail; the app records it,
+  // reminds them of the follow-ups and the engine's won check reads their page. The client-approval rule applies as it does to approve.
+  app.post('/api/orgs/:orgId/sites/:siteId/link-building/manual-sent', { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } }, async (req) => {
+    const p = req.params as P; const { org, site, user } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(site);
+    const body = parse(manualSentSchema, req.body);
+    await requireClientApproval(org, 'outreach', outreachItemId(body.prospectDomain, body.type));
+    const q = await manualSent(org, site, user.id, body, req.log);
+    invalidateSite(site.domain);
+    return { ok: true, id: q.id };
+  });
+  app.post('/api/orgs/:orgId/sites/:siteId/link-building/sequences/:id/followup-sent', async (req) => {
+    const p = req.params as P; const { org, site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    await manualFollowupSent(await sequenceFor(org, site, p.id));
+    return { ok: true };
+  });
+
   app.post('/api/orgs/:orgId/sites/:siteId/link-building/dismiss', async (req) => {
     const p = req.params as P; const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
     requireVerified(site);
@@ -277,8 +296,16 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
   app.post('/api/orgs/:orgId/sites/:siteId/link-building/sequences/:id/outcome', async (req) => {
     const p = req.params as P; const { org, site } = await siteAccess(req, p.orgId, p.siteId, 'member');
     const q = await sequenceFor(org, site, p.id); const b = parse(sequenceOutcomeSchema, req.body);
-    await updateSequence(q, { status: b.status === 'won' ? 'won' : 'stopped', ...(b.status === 'won' ? { wonAt: new Date() } : { error: 'Marked not a fit' }), nextAt: null });
-    await setProspectStatus(site.domain, q.prospectDomain, q.prospectType, b.status, b.status === 'won' ? 'won (marked in the app; the link check confirms it)' : 'not a fit (marked in the app)', req.log);
+    // CR17-E (195): "they linked" is a claim until our own check finds the link on their page (LK.wonCheck, the engine's weekly read of
+    // the sites we wrote to): the prospect becomes "replied" (a site we wrote to: read every week) and the engine marks it won.
+    // FX-LINKS (review R2 M5): the conversation is CLAIMED, not a reply waiting for an answer (that left a high-priority "reply waiting" for
+    // ever); it becomes won when our check finds the link (settleWonSequences)
+    if (b.status === 'won') {
+      if (!(OPEN_SEQUENCE_STATUSES as readonly string[]).includes(q.status)) throw new HttpError(409, 'This conversation has ended.');
+      await updateSequence(q, { status: 'claimed', replyClass: q.replyClass ?? 'says_linked', nextAt: null });
+    }
+    else await updateSequence(q, { status: 'stopped', error: 'Marked not a fit', nextAt: null });
+    await setProspectStatus(site.domain, q.prospectDomain, q.prospectType, b.status === 'won' ? 'replied' : b.status, b.status === 'won' ? 'you said the link is live: our check reads their page in the next weekly run and counts it won when it finds it' : 'not a fit (marked in the app)', req.log);
     return { ok: true };
   });
 

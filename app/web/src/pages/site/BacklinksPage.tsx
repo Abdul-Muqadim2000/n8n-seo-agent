@@ -3,7 +3,7 @@ import { PRICES } from '@/lib/prices';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
-import { LINK_KINDS, LINK_KIND_ORDER, PROSPECT_STATUSES, bingSourceText, checkNote, compactNumber, linkBreakdown, linkCounts, linkKindOf, sourcesFromLedger, spamScoreReading, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type BingCheck, type LinkBreakdown, type LinkKind, type Prospect, type ProspectStatus } from '@seo/shared';
+import { LINK_KINDS, LINK_KIND_ORDER, PROSPECT_STATUSES, bingSourceText, checkNote, clientText, compactNumber, linkBreakdown, linkCounts, linkKindOf, sourcesFromLedger, spamScoreReading, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type BingCheck, type LinkBreakdown, type LinkKind, type Prospect, type ProspectStatus } from '@seo/shared';
 import { useMutation } from '@tanstack/react-query';
 import { GuideButton } from '@/components/guide';
 import { api, fileUrl, toastError } from '@/lib/api';
@@ -128,7 +128,10 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
   const atRiskRefs = d.refs.filter((x) => x.status === 'at_risk' && linkCounts(x)).length;
   const droppedJunk = d.refs.filter((x) => (x.status === 'lost' || x.status === 'at_risk') && !linkCounts(x)).length;
   const spamRead = D ? spamScoreReading(D.spamScore, d.refs.length ? breakdown : null) : null;
-  const openProspects = d.prospects.filter((p) => statusOf(p) === 'new').length;
+  // CR17-E (F9): the one link status (shared link-status.ts): a site the Link Builder left out, a pitch already sent or a site that already
+  // links to you is not "to contact"
+  const lc = d.linkCounts;
+  const openProspects = lc ? lc.found + lc.noPage + lc.needsContact + lc.toWrite + lc.needsEdit + lc.toReview : d.prospects.filter((p) => statusOf(p) === 'new').length;
   const perSource = d.latest?.coverage?.perSource ?? {};
 
   return (
@@ -269,7 +272,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
           icon={<Send />}
           title="Outreach pipeline"
           description="Prospects scored by value × likelihood, with the contact found on their site and a drafted e-mail"
-          info="An unlinked mention converts far more often than a cold site. Contacted prospects get follow-up drafts after 7 and 14 days. Won is set when the link is found on the page."
+          info="An unlinked mention converts far more often than a cold site. Contacted prospects get follow-up drafts after 7 and 14 days. Won only when you wrote to the site and our own check then found your link on their page; a site that links to you without a pitch is listed as already linking, never as won."
         />
         <Card className="px-4 pb-4">
           <Pipeline prospects={d.prospects} />
@@ -913,8 +916,14 @@ function CompetitorList({ rows, graph }: { rows: NonNullable<BacklinksData['late
 
 const TYPE_LABEL: Record<string, string> = { lost: 'Lost link', reclaim: 'Broken-link reclaim', mention: 'Unlinked mention', gap: 'Link gap', list: '"Best of" list', comp_new: 'Linked a competitor', ai_source: 'Cited by AI' };
 const typeLabel = (t: string) => TYPE_LABEL[t] ?? (t ? titleCase(t) : 'Prospect');
-const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', replied: 'Replied', won: 'Won', rejected: 'Rejected', ignored: 'Ignored' };
-const statusOf = (p: Prospect): ProspectStatus => ((PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new');
+const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', replied: 'Replied', won: 'Won', rejected: 'Rejected', ignored: 'Set aside' };   // CR17-E: left out, already linking and low-value sites sit here too
+// CR17-E (F9): the board's column follows the one link status (a "won" nobody wrote to, or with no link our check found, is not won;
+// a website the Link Builder left out is "not a fit"); rows without it keep their stored status
+const statusOf = (p: Prospect): ProspectStatus => {
+  const ls = p.linkState;
+  if (ls) return ls === 'won' || ls === 'claimed' ? 'won' : ls === 'sent' || ls === 'approved' ? 'contacted' : ls === 'replied' ? 'replied' : ls === 'declined' ? (p.status === 'ignored' ? 'ignored' : 'rejected') : ls === 'left_out' || ls === 'already_links' || ls === 'low_value' || ls === 'lost' ? 'ignored' : 'new';
+  return (PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new';
+};
 
 /** Prospect cards shown before "Show more" (the rest stay in the page, folded). */
 const PROSPECTS_SHOWN = 8;
@@ -989,7 +998,7 @@ function ProspectCard({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
             <ExternalLink href={`https://${p.prospectDomain}`} className="text-sm font-semibold text-ink">
               {p.prospectDomain}
             </ExternalLink>
-            {st === 'won' ? <StatusBadge tone="good">Won{p.wonAt ? ` ${fmtDate(p.wonAt)}` : ''}</StatusBadge> : st !== 'new' ? <Badge>{STATUS_LABEL[st]}</Badge> : null}
+            {st === 'won' && p.linkState === 'claimed' ? <StatusBadge tone="accent">You marked it won: checking</StatusBadge> : st === 'won' ? <StatusBadge tone="good">Won{p.wonAt ? ` ${fmtDate(p.wonAt)}` : ''}</StatusBadge> : st !== 'new' ? <Badge>{STATUS_LABEL[st]}</Badge> : null}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Kind>{typeLabel(p.type)}</Kind>
@@ -1009,7 +1018,8 @@ function ProspectCard({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
       {p.detail && <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">{p.detail}</p>}
       {p.contactEmail && <p className="mt-2 text-xs text-ink-3">Contact: {p.contactEmail}</p>}
       {st === 'contacted' && p.followupBody && <p className="mt-2 text-xs font-medium text-warning-text">Follow-up {p.followupStep} is drafted</p>}
-      {p.note && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1 text-xs text-ink-2">Note: {p.note}</p>}
+      {/* CR17-H (F1): an older note named a lever code ("AI ranking placement (L08)"): the client-copy guard rewrites it */}
+      {p.note && clientText(p.note) && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1 text-xs text-ink-2">Note: {clientText(p.note)}</p>}
       <div className="mt-auto flex items-center justify-between gap-2 pt-3">
         <span className="text-xs text-ink-3">since {fmtDate(p.firstSeen)}</span>
         <Button size="sm" variant={p.outreachBody ? 'secondary' : 'ghost'} icon={<Mail className="size-3.5" />} onClick={onOpen}>

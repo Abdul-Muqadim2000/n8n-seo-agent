@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { aiOnDemandRunCost, aiRunPanelOf } from '../src/ai-panel';
 import { n8nSiteId } from '../src/domain';
-import { aiPanelQuoteBody, buildN8nPayload, compactBody, siteAdminMonitorsBody, type SiteContext } from '../src/payload';
+import { aiPanelQuoteBody, buildN8nPayload, compactBody, keepTrackLists, siteAdminMonitorsBody, type SiteContext } from '../src/payload';
 import { monitorSettingsSchema, RUN_SCHEMAS } from '../src/schemas';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,7 +34,7 @@ const noMail = { ...delivery, email: '' };
 const AI_PANEL_200 = aiRunPanelOf({ aiPromptsMax: 200, aiEngines: null, aiPersonaContext: true, aiPersonas: 'CFO, IT manager, Procurement', aiFanoutCheck: 50, aiDemandMarket: true });
 const AI_QUOTE = aiPanelQuoteBody(aiOnDemandRunCost(AI_PANEL_200), AI_PANEL_200.panel) as { dfs_usd: number; ai_usd: number; panel: number };
 
-type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown>; /** fields the server adds to the body (runs.ts) */ extra?: Record<string, unknown>; /** KI: the workflow the front door starts ('ki' = SEOagentKIntel1) */ target?: 'ki' };
+type Case = { name: string; mode: keyof typeof RUN_SCHEMAS; input: Record<string, unknown>; site: SiteContext | null; mail?: boolean; expect: Record<string, unknown>; /** fields the server adds to the body (runs.ts) */ extra?: Record<string, unknown>; /** KI: the workflow the front door starts ('ki' = SEOagentKIntel1) */ target?: 'ki'; /** FX-SERVER (R3 M2): an API / MCP body: lists it leaves out are the website's stored ones (keepTrackLists) */ api?: true };
 
 const cases: Case[] = [
   {
@@ -194,16 +194,27 @@ const cases: Case[] = [
     mode: 'track',
     input: { siteId: SITE_ID, country: 'United Arab Emirates', blogsPerWeek: 1, timezone: 'Asia/Dubai', services: ['E-invoicing onboarding', 'Odoo implementation'] },
     site,
+    api: true,
     // the server adds it: the website's first tracking (sites.trackingStartedAt), kept on every re-save
     extra: { tracking_started_at: '2026-10-19T08:30:00.000Z' },
     expect: { mode: 'track', blogs_per_week: 1, timezone: 'Asia/Dubai', services: ['E-invoicing onboarding', 'Odoo implementation'], services_given: true, tracking_started_at: '2026-10-19T08:30:00.000Z' },
   },
   {
+    // FX-SERVER (review R3 M2): an API body that leaves the competitors and brand names out keeps the website's stored lists (no clear_lists)
     name: 'track with monitors',
     mode: 'track',
     input: { siteId: SITE_ID, country: 'United Arab Emirates', keywords: ['peppol uae', 'e invoicing software uae'], blogsPerWeek: 2, monitors: { aiEngines: ['chatgpt', 'perplexity'], aiPromptsMax: 30, aiPulse: false, auditPages: 500, backlinks: false } },
     site,
+    api: true,
     expect: { mode: 'track', keyword: '', track_keywords: ['peppol uae', 'e invoicing software uae'], blogs_per_week: 2, ga4_property_id: '543096312', competitors: ['azentio.com', 'cleartax.com'], 'monitor_input.ai_engines': 'chatgpt, perplexity', 'monitor_input.ai_prompts_max': 30, 'monitor_input.ai_pulse': false, 'monitor_input.audit_pages': 500, 'monitor_input.backlinks': false, 'monitor_input.ai_visibility': true, 'monitor_input.brand_names': 'Northwind, Northwind ERP' },
+  },
+  {
+    // FX-SERVER (review R3 M2): the client removed every competitor and brand name in Track my site: the engine is told to clear its copy
+    name: 'track: the client emptied its competitors and brand names',
+    mode: 'track',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', keywords: ['peppol uae'], blogsPerWeek: 1, competitors: [], monitors: { brandNames: [] } },
+    site,
+    expect: { mode: 'track', competitors: [], 'monitor_input.brand_names': '', clear_lists: ['competitors', 'brand_names'] },
   },
   {
     // W2-FIX (2026-10-23): the owner's W2-E3 AI options reach Monitor Row (Track) through Normalize Input's monitor_input (they were dropped)
@@ -211,6 +222,7 @@ const cases: Case[] = [
     mode: 'track',
     input: { siteId: SITE_ID, country: 'United Arab Emirates', keywords: ['peppol uae'], blogsPerWeek: 1, monitors: { aiPromptsMax: 50, aiClaudeWeekly: true, aiPulseEngines: ['chatgpt', 'perplexity'], aiPersonaContext: false, aiFanoutCheck: 25, aiDemandMarket: true } },
     site,
+    api: true,
     expect: { mode: 'track', 'monitor_input.ai_claude_weekly': true, 'monitor_input.ai_pulse_engines': 'chatgpt, perplexity', 'monitor_input.ai_persona_context': false, 'monitor_input.ai_fanout_check': 25, 'monitor_input.ai_demand_market': true, 'monitor_input.ai_prompts_max': 50 },
   },
   {
@@ -326,7 +338,8 @@ const cases: Case[] = [
 ];
 
 const fixtures = cases.map((c) => {
-  const parsed = RUN_SCHEMAS[c.mode].safeParse({ mode: c.mode, ...c.input });
+  const raw = { mode: c.mode, ...c.input };
+  const parsed = RUN_SCHEMAS[c.mode].safeParse(c.api && c.site ? keepTrackLists(raw, { keywords: [], competitors: c.site.competitors, brandNames: c.site.brandNames }) : raw);
   if (!parsed.success) throw new Error(`${c.name}: ${JSON.stringify(parsed.error.issues)}`);
   const body = { ...compactBody(buildN8nPayload(parsed.data as never, c.site, c.mail === false ? noMail : delivery)), ...(c.extra ?? {}) };
   return { name: c.name, headers: { 'x-forwarded-for': 'app:7a1c2d3e-org' }, body, expect: c.expect, ...(c.target ? { target: c.target } : {}) };

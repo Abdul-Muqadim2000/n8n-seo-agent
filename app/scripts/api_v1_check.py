@@ -59,7 +59,7 @@ def table_id(name):
 
 def user(name):
     a = Api(args.base); email = f'{name}-{TAG}@example.org'
-    s, me = a.post('/api/auth/signup', {'name': name.title(), 'email': email, 'password': 'api-test-pass-1'})
+    s, me = a.post('/api/auth/signup', {'acceptTerms': True, 'name': name.title(), 'email': email, 'password': 'api-test-pass-1'})
     check(f'signup {name}', s == 200, me)
     sql(f"update users set email_verified_at=now() where email='{email}'")
     return a

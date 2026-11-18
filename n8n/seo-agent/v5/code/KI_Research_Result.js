@@ -133,13 +133,15 @@ const gapRows = kg.map(x => { const old = storedGaps[x.gap_id] || storedByKw[KI.
   return { ...x, sample_note: x.sample_note ? x.sample_note + ' searches the data provider holds for these competitors' : '', status: ['dismissed', 'started', 'done'].includes(S(old.status)) ? S(old.status) : x.status, created_at: S(old.created_at) || x.created_at }; });
 const gapsSummary = {}; for (const x of gapRows) gapsSummary[x.type] = (gapsSummary[x.type] || 0) + 1;
 // ---- the plan (KI.plan: up to 10 ranked actions; Start creates the existing pipeline item, W2) ----
-const plan = KI.plan(heads.filter(h => h._gate !== 'fail').slice(0, 30).map(h => ({ ...h, keyword: h.head, score: { score: h.score, low: h.score_low, high: h.score_high, mid: h.score_mid } })), gapRows, cfg)
-  .map(a => { const o = { action_id: a.action_id, kind: a.kind, title: a.title, why: a.why, target: a.target, credits: N(a.credits) || 0 }; if (a.gap_id) o.gap_id = a.gap_id; if (a.cluster_id) o.cluster_id = a.cluster_id; return o; });
+// CR17-F (section 196): the picks keep a balance between the client's services (lead services first, none over 40%, every service a place)
+const plan = KI.plan(heads.filter(h => h._gate !== 'fail').slice(0, 30).map(h => ({ ...h, keyword: h.head, score: { score: h.score, low: h.score_low, high: h.score_high, mid: h.score_mid } })), gapRows, cfg, { services: p.services || [], lead: p.lead_services || [] })
+  .map(a => { const o = { action_id: a.action_id, kind: a.kind, title: a.title, why: a.why, target: a.target, credits: N(a.credits) || 0, service: KIW.S(a.service) }; if (a.gap_id) o.gap_id = a.gap_id; if (a.cluster_id) o.cluster_id = a.cluster_id; return o; });
 // ---- rows for seo_ki_keywords (the scored ones, then the gated ones with their reason) ----
 const srcOf = (r) => (r.sources || []).map(x => ({ source: x.source, fetched_at: x.fetched_at, detail: x.detail || '' }));
 const volBasis = (r) => r.volume == null ? null : 'provider_estimate';
 // FX-L L3: top10_json keeps exact / url_partial, so a later re-cluster never keys a recovered address as exact
-const kwRow = (r) => KIW.shape('KI_KW', { site_id: p.site_id, domain: p.domain, market: p.market, keyword: r.keyword, kw_key: r.kw_key, sources_json: srcOf(r), source_count: (r.sources || []).length,
+const kwRow = (r) => KIW.shape('KI_KW', { site_id: p.site_id, domain: p.domain, market: p.market, keyword: r.keyword, kw_key: r.kw_key, service: r.gate === 'fail' ? '' : KI.serviceOf(r.keyword, p.services || []),   // CR17-F: the service it belongs to ('' = none)
+  sources_json: srcOf(r), source_count: (r.sources || []).length,
   volume: N(r.volume), volume_basis: volBasis(r), volume_source: r.volume == null ? ((r.families || []).length >= 2 ? 'evidenced, volume not measured' : '') : (KIW.S(r.volume_source) === 'labs' ? 'DataForSEO keyword data' : (KIW.S(r.volume_source) || 'DataForSEO keyword data')),
   cpc: N(r.cpc), kd: N(r.kd), trend_json: r.trend || null, gsc_impressions: N(r.gsc_impressions), gsc_clicks: N(r.gsc_clicks), gsc_position: N(r.gsc_position), gsc_page: r.gsc_page || null,
   intent: ['commercial', 'transactional', 'informational', 'navigational'].includes(r.intent) ? r.intent : null, stage: r.stage || null, stage_evidence_json: r.stage_evidence || [], intent_confidence: N(r.intent_confidence),

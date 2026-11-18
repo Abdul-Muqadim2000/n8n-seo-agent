@@ -1,12 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowDownCircle, HelpCircle, Lightbulb, ListFilter, OctagonAlert, Scale, ShieldAlert, TriangleAlert } from 'lucide-react';
-import { queueBands, type Priority, type QueueBand, type Recommendation, type RecommendationCategory } from '@seo/shared';
-import { useRecommendations } from '@/lib/queries';
+import { ArrowDownCircle, CheckCircle2, Clock, HelpCircle, Lightbulb, ListFilter, OctagonAlert, Scale, ShieldAlert, TriangleAlert, XCircle } from 'lucide-react';
+import { queueBands, type Priority, type QueueBand, type Recommendation, type RecommendationBoard, type RecommendationCategory } from '@seo/shared';
+import { useRecommendationBoard } from '@/lib/queries';
 import { useCycleDay } from '@/lib/cycle-day';
 import { cn } from '@/lib/utils';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
-import { Segmented } from '@/components/ui/tabs';
+import { Segmented, Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { CountUp, HeroNextStep, HeroStat, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataGate, FilterChips, Panel, RunAnalysisMenu, ToolButton, useSitePage } from './_components/kit';
 import { useTicketStates } from '@/components/site/TicketButton';
@@ -19,14 +19,15 @@ type GroupBy = 'worth' | 'priority' | 'category';
 
 export default function RecommendationsPage() {
   const { org, site } = useSitePage();
-  const q = useRecommendations(org.id, site.id);
+  // CR17-H (client report 2026-11-17, Q4): the four tabs, read from the same states as the Overview and the Pipeline
+  const q = useRecommendationBoard(org.id, site.id);
   useTicketStates(site.id); // G4: the state of tickets made from these, read back from the tracker
   return (
     <div>
       <PageHeader
         icon={<Lightbulb />}
         title="Recommendations"
-        description="Every next step we see for this website, from tracking, audits, rankings, AI answers and backlinks. The most important come first."
+        description="Every next step we see for this website, from tracking, audits, rankings, AI answers and backlinks. Each one says why, how to do it and how we check it is done; what our checks confirmed moves to Resolved."
         actions={<RunAnalysisMenu />}
       />
       <DataGate
@@ -39,9 +40,81 @@ export default function RecommendationsPage() {
           </div>
         }
       >
-        {(recs) => <Recommendations recs={recs} refetching={q.isFetching} />}
+        {(board) => <Board board={board} refetching={q.isFetching} />}
       </DataGate>
     </div>
+  );
+}
+
+type BoardTab = 'todo' | 'waiting' | 'resolved' | 'dismissed';
+
+/** CR17-H: To do / Waiting for Google / Resolved / Dismissed. Resolved also lists what is no longer reported but no check confirmed. */
+function Board({ board, refetching }: { board: RecommendationBoard; refetching: boolean }) {
+  const [tab, setTab] = useState<BoardTab>('todo');
+  return (
+    <Tabs value={tab} onValueChange={(v) => setTab(v as BoardTab)}>
+      <TabList>
+        <Tab value="todo" count={board.todo.length}>
+          To do
+        </Tab>
+        <Tab value="waiting" count={board.waiting.length}>
+          Waiting for Google
+        </Tab>
+        <Tab value="resolved" count={board.resolved.length}>
+          Resolved
+        </Tab>
+        <Tab value="dismissed" count={board.dismissed.length}>
+          Dismissed
+        </Tab>
+      </TabList>
+      <TabPanel value="todo">
+        <Recommendations recs={board.todo} refetching={refetching} />
+      </TabPanel>
+      <TabPanel value="waiting">
+        <StateList
+          items={board.waiting}
+          icon={<Clock />}
+          title="Waiting for Google"
+          description="Done on your website; Google has not read the pages again yet. The daily index check looks every day and moves each one to Resolved when Google has it."
+          empty="Nothing is waiting for Google right now."
+        />
+      </TabPanel>
+      <TabPanel value="resolved" className="space-y-6">
+        <StateList
+          items={board.resolved}
+          icon={<CheckCircle2 />}
+          title="Resolved in the last 90 days"
+          description="Each one was confirmed by a check of ours, with the date and what it saw."
+          empty="Nothing confirmed resolved yet. When a check of ours confirms a step is done, it moves here with the date and the proof."
+        />
+        {board.expired.length > 0 && (
+          <StateList
+            items={board.expired}
+            icon={<HelpCircle />}
+            title="No longer reported"
+            description="Their source stopped listing them, but no check of ours could confirm they are fixed, so they are not called resolved."
+            empty=""
+          />
+        )}
+      </TabPanel>
+      <TabPanel value="dismissed">
+        <StateList items={board.dismissed} icon={<XCircle />} title="Dismissed" description="You said these do not apply, with the reason. Bring one back at any time." empty="Nothing dismissed." />
+      </TabPanel>
+    </Tabs>
+  );
+}
+
+function StateList({ items, icon, title, description, empty }: { items: Recommendation[]; icon: ReactNode; title: string; description: string; empty: string }) {
+  const { site } = useSitePage();
+  if (!items.length) return <EmptyState icon={<span className="[&_svg]:size-5">{icon}</span>} title={empty} />;
+  return (
+    <Panel icon={icon} iconTone="neutral" description={description} title={<span className="inline-flex items-center gap-2">{title}<span className="rounded-full bg-surface-2 px-2 text-xs font-semibold tabular text-ink-2">{items.length}</span></span>} flush>
+      <ul className="divide-y divide-line border-t border-line">
+        {items.map((r) => (
+          <RecommendationItem key={r.id} rec={r} siteId={site.id} />
+        ))}
+      </ul>
+    </Panel>
   );
 }
 

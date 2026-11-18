@@ -1,7 +1,7 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { ssoRequiredError, ssoRequiredFor } from '../services/sso';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { forgotSchema, loginSchema, resetSchema, signupSchema, type AuthProviders } from '@seo/shared';
+import { forgotSchema, LEGAL_VERSION, loginSchema, resetSchema, signupSchema, type AuthProviders } from '@seo/shared';
 import { requireUser } from '../auth/access';
 import { exchangeGoogleCode, G_COOKIE, googleAuthUrl } from '../auth/google';
 import { burnPasswordCheck, hashPassword, verifyPassword } from '../auth/password';
@@ -93,6 +93,9 @@ export async function authRoutes(app: FastifyInstance) {
         passwordHash: await hashPassword(body.password),
         // the invitation link reached this mailbox, which confirms the address
         emailVerifiedAt: invitedHere ? new Date() : null,
+        // CR17-B: signupSchema refuses a sign-up without the tick; the version agreed to and when
+        termsVersion: LEGAL_VERSION,
+        termsAcceptedAt: new Date(),
       })
       .returning();
     if (invitedHere && invitation) {
@@ -197,6 +200,10 @@ export async function authRoutes(app: FastifyInstance) {
     reply.setCookie('g_state', state, G_COOKIE);
     reply.setCookie('g_verifier', verifier, G_COOKIE);
     reply.setCookie('g_next', safeNext((req.query as { next?: string }).next), G_COOKIE);
+    // CR17-B: "Sign up with Google" carries the person's tick on the sign-up page (the version they saw); a NEW account needs it
+    const terms = String((req.query as { terms?: string }).terms ?? '');
+    if (terms === LEGAL_VERSION) reply.setCookie('g_terms', terms, G_COOKIE);
+    else reply.clearCookie('g_terms', { path: G_COOKIE.path });
     return reply.redirect(url);
   });
 
@@ -206,7 +213,8 @@ export async function authRoutes(app: FastifyInstance) {
     const verifier = req.cookies.g_verifier;
     const next = safeNext(req.cookies.g_next);
     const intent = req.cookies.g_intent ?? '';
-    for (const c of ['g_state', 'g_verifier', 'g_next', 'g_intent']) reply.clearCookie(c, { path: G_COOKIE.path });
+    const termsOk = req.cookies.g_terms === LEGAL_VERSION;
+    for (const c of ['g_state', 'g_verifier', 'g_next', 'g_intent', 'g_terms']) reply.clearCookie(c, { path: G_COOKIE.path });
     // "Verify with Google": the signed-in admin's own Google account must own the domain in Search Console
     if (intent.startsWith('verify:')) {
       const [, orgId, siteId] = intent.split(':');
@@ -265,9 +273,11 @@ export async function authRoutes(app: FastifyInstance) {
           .returning();
       } else {
         if (!config.allowSignup && !(await pendingInvitationFor(profile.email))) return fail('signup_closed');
+        // CR17-B: a new account is created only after the person agreed on the sign-up page (from "Sign in with Google" they are sent there)
+        if (!termsOk) return reply.redirect(`/signup?error=terms_required${next !== '/' ? `&next=${encodeURIComponent(next)}` : ''}`);
         [user] = await db
           .insert(schema.users)
-          .values({ email: profile.email, name: profile.name, googleSub: profile.sub, avatarUrl: profile.picture, emailVerifiedAt: new Date() })
+          .values({ email: profile.email, name: profile.name, googleSub: profile.sub, avatarUrl: profile.picture, emailVerifiedAt: new Date(), termsVersion: LEGAL_VERSION, termsAcceptedAt: new Date() })
           .returning();
       }
     }

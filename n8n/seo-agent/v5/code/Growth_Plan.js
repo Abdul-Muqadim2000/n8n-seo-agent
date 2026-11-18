@@ -214,13 +214,22 @@ for (const s of sites) {
     const lr = t.request_id ? logByReq.get(String(t.request_id)) : null;
     const headOf = (l) => String((lrowsAll.find(r => String(r.ladder_id || '') === String(l.ladder_id || '') && r.head_keyword) || {}).head_keyword || '');
     const otherSearch = (l) => !!l && String(l.source || '') === 'ladder' && !!kw && !!l.keyword && !LRU.questionPage(kw, { keyword: l.keyword, rung: l.rung, head_keyword: headOf(l) }, market);
-    if ((st === 'writing' || st === 'written') && otherSearch(lr)) return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'other_search', _log: lr };
+    // client report 2026-11-17 (CR17 Q2, section 197): a question folded into another search's ladder page: the live page that owns the question's
+    // search answers it (AQ.answeredBy, the same rule as AI Target Settle); else the page written for it keeps it once it exists; else queued again
+    if ((st === 'writing' || st === 'written') && otherSearch(lr)) {
+      const ow = AQ.answeredBy(kw, slog, { market, except: lr.published_url });
+      if (ow) return { ...t, status: 'written', request_id: String(ow.request_id || ''), written_at: String(ow.started_at || t.written_at || iso), _settled: 'published', _log: ow };
+      if (String(lr.status || '') !== 'published') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'other_search', _log: lr }; }
     if (st === 'writing' && lr) { const ls = String(lr.status || '');
       if (ls === 'published' || ls === 'written') return { ...t, status: 'written', written_at: String(lr.started_at || t.written_at || iso), _settled: ls, _log: lr };
       if (ls === 'failed') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'failed', _log: lr };
       // review 2026-11-16 (L4): a run HELD for the client's OK wrote no page: the question is not "being written" (and not a run that failed)
       if (ls === 'held') return { ...t, status: 'queued', request_id: '', written_at: '', _settled: 'held', _log: lr }; }
     if (st === 'written' && lr && String(lr.status || '') === 'published') return { ...t, _settled: 'published', _log: lr };
+    // review R5 (L3): a question settled at publish time against a page with no run of ours (a rung the client wrote itself, recorded live by
+    // publish detection with no request id) has no log row by request id: the live page that answers it (the same rule as the settle) keeps it
+    // live, never "written, waiting to be published"
+    if (st === 'written' && !lr) { const ow = AQ.answeredBy(kw, slog, { market }); if (ow) return { ...t, _settled: 'published', _log: ow }; }
     if (st === 'queued' && kw && String(t.kind || 'answer') !== 'refresh') {   // only a page written FOR an AI question, after the question existed
       const own = slog.filter(l => kwKeyG(l.keyword) === kwKeyG(kw) && /^ai_/.test(String(l.source || '')) && ['written', 'published', 'not_ready'].includes(String(l.status || ''))
         && (!t.created_at || !l.started_at || String(l.started_at) >= String(t.created_at).slice(0, 10))).sort((a, b) => (LOG_RANK[b.status] || 0) - (LOG_RANK[a.status] || 0))[0];

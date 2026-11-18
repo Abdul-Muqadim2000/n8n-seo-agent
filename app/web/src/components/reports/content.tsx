@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, isValid, parseISO } from 'date-fns';
-import { ArrowRight, BarChart3, FileSearch, FileText, Hand, Lightbulb, ListChecks, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
+import { ArrowRight, BarChart3, FileSearch, FileText, Hand, Lightbulb, ListChecks, MessagesSquare, MousePointerClick, PenLine, Rocket, Search, ShieldAlert, Tags, TrendingUp, Workflow } from 'lucide-react';
 import type { ReportDetail, Run } from '@seo/shared';
 import { api } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
@@ -310,6 +310,10 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
+      {/* CR17 (Q2, client report 2026-11-17): the questions this page was written to answer, so a service or ladder page carrying an AI question is
+          seen as meant to (meta.questions_answered: the AI question its run carried, its own question headings) */}
+      <QuestionsAnswered value={meta.questions_answered} onLadder={!!meta.ladder && typeof meta.ladder === 'object'} />
+
       {has(existing) && (
         <Block title="Existing page" description="The page this run improves" icon={<FileSearch />}>
           <ExistingPage page={existing} />
@@ -395,6 +399,46 @@ export function ContentReport({ report }: { report: ReportDetail }) {
 
       <CreditsCard p={p} />
     </Stagger>
+  );
+}
+
+/** CR17 (Q2): "Questions this page answers": the AI question the run carried and the page's own question headings, from the package's meta. */
+function QuestionsAnswered({ value, onLadder = false }: { value: unknown; onLadder?: boolean }) {
+  const q = obj(value);
+  const ai = objs(q.ai).map((x) => ({ question: str(x.question), refresh: str(x.kind) === 'refresh' })).filter((x) => x.question);
+  const headings = strs(q.headings);
+  if (!ai.length && !headings.length) return null;
+  return (
+    <Block title="Questions this page answers" description="The questions it was written to answer, so AI assistants and Google can quote it" icon={<MessagesSquare />}>
+      {ai.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-medium text-ink-2">From your AI questions</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-ink">
+            {ai.map((x) => (
+              <li key={x.question}>{x.question}</li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-ink-3">
+            {/* review R5 (L6): the "no separate answer page" note fits a question folded into a service or ladder page, never the answer page itself */}
+            {ai.some((x) => x.refresh)
+              ? 'This page was improved to answer it. One page can answer several related questions, so no separate answer page is written for it.'
+              : onLadder
+                ? 'The page carries a direct answer to it near the top. One page can answer several related questions, so no separate answer page is written for it.'
+                : 'This is the answer page for it: the page carries a direct answer near the top.'}
+          </p>
+        </div>
+      )}
+      {headings.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-ink-2">Questions people ask that the page answers under its own headings</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-ink">
+            {headings.map((h) => (
+              <li key={h}>{h}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Block>
   );
 }
 

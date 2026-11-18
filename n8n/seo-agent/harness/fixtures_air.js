@@ -193,9 +193,10 @@ function make(opts) {
       submit_url: 'https://clutch.co/get-listed', priority: 1, why: 'cited in AI answers for this market', checked_at: ago(7), submitted_at: '', note: '' });
     T.seo_link_prospects.push({ site_id: sid, domain: A.domain, prospect_domain: host(A.sources.listicle), type: 'ai_source', rank: 0, spam_score: 0, detail: 'cited by AI answers', source_url: A.sources.listicle, target_url: W + '/', status: 'new',
       first_seen: ago(21), last_seen: ago(7), won_at: '', outreach_subject: '', outreach_body: '', note: '', score: 40, origin: 'ai_growth', contact_email: 'editor@' + host(A.sources.listicle), contact_url: '', contacted_at: '', followup_step: 0,
-      followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' });
+      followup_subject: '', followup_body: '', verified_at: '', drafted_at: '', retired_at: '' });   // retired_at: CR17-F (2026-11-17)
     T.seo_link_outreach.push({ site_id: sid, domain: A.domain, prospect_domain: host(A.sources.listicle), type: 'ai_source', status: 'drafted', score: 40, fit: 'ok', fit_reason: '', checks_json: '{}', page_url: A.sources.listicle, page_title: 'Top 10',
-      evidence: '', contacts_json: '[]', contact_email: 'editor@' + host(A.sources.listicle), contact_form_url: '', country: A.cc, language: 'en', target_url: W + '/', target_reason: '', anchor_hint: A.name, sequence_json: '[]', deadline: '', drafted_at: ago(7), checked_at: ago(7), request_id: '' });
+      evidence: '', contacts_json: '[]', contact_email: 'editor@' + host(A.sources.listicle), contact_form_url: '', country: A.cc, language: 'en', target_url: W + '/', target_reason: '', anchor_hint: A.name, sequence_json: '[]', deadline: '', drafted_at: ago(7), checked_at: ago(7), request_id: '',
+      anchor_text: A.name, reason_code: '' });   // CR17-E (2026-11-17, section 195): the link text itself and the verdict code
     // what the site published and what AI Growth queued before AIR (the old logic)
     T.seo_content_log.push({ site_id: sid, domain: A.domain, keyword: A.ladders[0][0], source: 'ladder', page_type: 'Service Page', existing_page_url: '', rung: 1, ladder_id: 'lad_' + sid.slice(5, 12) + '_0', request_id: 'cad_fx_' + sid.slice(5, 9),
       started_at: ago(30), status: 'published', published_url: W + A.pages[1], published_at: ago(25), week: '', qa_reasons: '', publish_note: '' });

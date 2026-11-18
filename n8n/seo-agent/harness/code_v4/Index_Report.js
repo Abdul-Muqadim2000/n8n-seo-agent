@@ -22,6 +22,18 @@ const PW = (() => {
   // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
   const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
   const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
+  // >>> LOCALE RULE (CR17-FX-INDEX, review R1 M4): ONE text in _index_kit.js, _page_watch.js and _moves.js (build_v4.py section 194 checks they are the
+  // same). A same-site redirect that only adds a language / country prefix (/x -> /ae/x, / -> /en/), or sends a deep page to a bare locale root,
+  // answers where OUR server sits (Doha), not what Google's crawler sees: never a move, never a cause.
+  const localeRedirect = (from, to) => {
+    const LOC = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+    const pa = (u) => String(u == null ? '' : u).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '') || '/';
+    const f = pa(from), t = pa(to);
+    if (!LOC.test(t) || LOC.test(f)) return false;
+    if ((t.replace(LOC, '') || '/').replace(/\/+$/, '').toLowerCase() === f.replace(/\/+$/, '').toLowerCase()) return true;
+    return /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(t) && f !== '/';
+  };
+  // <<< LOCALE RULE
   // the shared entity decoder, inlined (v5/code/_entities.js; build section 122 asserts the two stay identical): named, decimal and hex, one pass
   const entDecode = /*__ENT_BEGIN__*/(() => {
   const N = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…', copy: '©', reg: '®', trade: '™', bull: '•', middot: '·', laquo: '«', raquo: '»', euro: '€', pound: '£', deg: '°' };
@@ -77,58 +89,212 @@ const PW = (() => {
     };
   };
 
-  // ---- robots.txt: the fingerprint (seo_cache) plus the rules that decide whether a key page is crawlable ----
+  // ---- robots.txt: a state machine that follows what Google does (client report 2026-11-17, devaicon.com F5; build section 194) ----
+  // Google's robots.txt rules (developers.google.com/search/docs/crawling-indexing/robots/robots_txt): 2xx is read as served; 3xx is followed
+  // up to five hops and an unresolved chain counts as a 404; 4xx (except 429) means "no robots.txt": Google crawls everything; 5xx and 429
+  // mean Google stops crawling for 12 hours, then uses its last copy for up to 30 days; an HTML page served as robots.txt is parsed for rules
+  // and the rest ignored. The watch used to hash whatever came back: devaicon's 404 page (20 KB of Next.js HTML) became "2,085 characters of
+  // rules" and a High alert, and every new deploy id in that page raised it again. Now: a state (ok / missing / unreachable / html), the
+  // PARSED rules (groups, allow / disallow lines, sitemap lines) compared as rules, and a severity that says what Google will do.
+  const ROBOTS_V = 2;   // the fingerprint below is of the parsed rules; a stored fingerprint of another version is a baseline, never a change
+  const robotsParse = (text) => {
+    const groups = []; const sitemaps = []; let cur = null; let lastUA = false;
+    for (const raw of S(text).replace(/\r/g, '').split('\n')) {
+      const line = raw.replace(/#.*$/, '').trim(); if (!line) continue;
+      const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if (!m) { lastUA = false; continue; }
+      const field = m[1].toLowerCase(), value = S(m[2]);
+      if (field === 'user-agent') { if (!cur || !lastUA) { cur = { agents: [], lines: [] }; groups.push(cur); } cur.agents.push(value.toLowerCase()); lastUA = true; continue; }
+      lastUA = false;
+      if (field === 'sitemap') { if (value) sitemaps.push(value); continue; }
+      if (field !== 'disallow' && field !== 'allow') continue;
+      if (!cur) { cur = { agents: ['*'], lines: [] }; groups.push(cur); }
+      cur.lines.push({ allow: field === 'allow', path: value });
+    }
+    // which groups apply to Googlebot: its own group wins over `*`, and groups naming the same agent are merged (as Google's parser does)
+    const forGoogle = groups.filter(g => g.agents.includes('googlebot'));
+    const applies = (forGoogle.length ? forGoogle : groups.filter(g => g.agents.includes('*'))).flatMap(g => g.lines);
+    const text2 = groups.map(g => 'user-agent: ' + g.agents.join(', ') + (g.lines.length ? '\n' + g.lines.map(l => (l.allow ? 'allow: ' : 'disallow: ') + l.path).join('\n') : '')).join('\n')
+      + (sitemaps.length ? (groups.length ? '\n' : '') + sitemaps.map(x => 'sitemap: ' + x).join('\n') : '');
+    // one line per rule, with the agents it is for: what a diff compares (a reordered file or a comment changes nothing)
+    const facts = [...new Set(groups.flatMap(g => g.lines.map(l => (l.allow ? 'Allow: ' : 'Disallow: ') + (l.path || '(empty)') + ' for ' + g.agents.map(a => a === '*' ? 'every crawler' : a === 'googlebot' ? 'Googlebot' : a).join(', ')))
+      .concat(sitemaps.map(x => 'Sitemap: ' + x)))];
+    return { groups, sitemaps, applies, text: text2, facts, google_group: forGoogle.length ? 'googlebot' : '*' };
+  };
+  const isHtml = (ctype, text) => /text\/html|application\/xhtml/i.test(S(ctype)) || /^\s*(?:<!doctype html|<html[\s>]|<head[\s>])/i.test(S(text).slice(0, 400));
   const robotsRead = (res) => {
     const r = res || {}; const status = n0(r.statusCode ?? r.status); const text = S(r.body ?? r.data);
-    if (!status) return { ok: false, status: 0, error: S((r.error && (r.error.message || r.error.description)) || r.error || 'no answer').slice(0, 200), hash: '', rules: [] };
-    const clean = text.replace(/\r/g, '').split('\n').map(l => l.replace(/#.*$/, '').trim()).filter(Boolean).join('\n');
-    const rules = []; let groups = [];
-    for (const line of clean.split('\n')) {
-      const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if (!m) continue;
-      const field = m[1].toLowerCase(), value = S(m[2]);
-      if (field === 'user-agent') { if (rules.length && rules[rules.length - 1].touched) { groups = []; } groups.push(value.toLowerCase()); rules.push({ agents: groups.slice(), touched: false }); continue; }
-      if (field !== 'disallow' && field !== 'allow') continue;
-      if (!rules.length) { groups = ['*']; rules.push({ agents: ['*'], touched: false }); }
-      const g = rules[rules.length - 1]; g.touched = true; g.agents = groups.slice();
-      (g.lines = g.lines || []).push({ allow: field === 'allow', path: value });
+    const headers = r.headers || {};
+    const ctype = S((Object.keys(headers).find(k => k.toLowerCase() === 'content-type') && headers[Object.keys(headers).find(k => k.toLowerCase() === 'content-type')]) || '');
+    const errText = S((r.error && (r.error.message || r.error.description)) || r.error || '');
+    const none = { groups: [], sitemaps: [], applies: [], text: '', facts: [] };
+    const out = (state, p, extra) => ({ ok: true, state, status, hash: state === 'ok' || state === 'html' ? hash(p.text) : '', v: ROBOTS_V, length: p.text.length,
+      rules: p.applies, groups: p.groups.slice(0, 30), sitemaps: p.sitemaps.slice(0, 20), text: p.text.slice(0, 1500), facts: p.facts.slice(0, 60), content_type: ctype.slice(0, 80),
+      blocks: (url) => {
+        if ((state !== 'ok' && state !== 'html') || !p.applies.length) return null;   // no file, or nothing that applies: nothing is blocked by it
+        const path = pathOf(url);
+        let best = null;
+        for (const l of p.applies) {
+          if (!l.path) continue;                                              // `Disallow:` with no path allows everything
+          const pat = l.path.replace(/\*+/g, '*');
+          const rx = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+          if (!rx.test(path)) continue;
+          if (!best || l.path.length > best.path.length || (l.path.length === best.path.length && l.allow)) best = l;   // longest rule wins, Allow wins a tie
+        }
+        return best ? !best.allow : false;
+      }, error: '', ...(extra || {}) });
+    if (!status) {
+      // a chain longer than Google's five hops is treated as a 404 by Google: "missing", not "could not be read"
+      if (/redirect/i.test(errText)) return out('missing', none, { reason: 'redirect_chain', status: 0 });
+      return { ok: false, state: 'not_read', status: 0, error: (errText || 'no answer').slice(0, 200), hash: '', rules: [], groups: [], sitemaps: [], text: '', facts: [], v: ROBOTS_V };
     }
-    // which groups apply to Googlebot (its own group wins over `*`, as Google's parser does)
-    const forGoogle = rules.filter(g => g.agents.some(a => a === 'googlebot'));
-    const applies = (forGoogle.length ? forGoogle : rules.filter(g => g.agents.includes('*'))).flatMap(g => g.lines || []);
-    const blocks = (url) => {
-      if (status === 404 || status >= 500 || !applies.length) return null;   // no file, or nothing that applies: nothing is blocked by it
-      const p = pathOf(url);
-      let best = null;
-      for (const l of applies) {
-        if (!l.path) continue;                                              // `Disallow:` with no path allows everything
-        const pat = l.path.replace(/\*+/g, '*');
-        const rx = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
-        if (!rx.test(p)) continue;
-        if (!best || l.path.length > best.path.length) best = l;
-      }
-      return best ? !best.allow : false;
-    };
-    return { ok: true, status, hash: hash(clean), length: clean.length, rules: applies, blocks, error: '' };
+    if (status >= 300 && status < 400) return { ...out('unresolved', none), ok: false, location: S((Object.keys(headers).find(k => k.toLowerCase() === 'location') && headers[Object.keys(headers).find(k => k.toLowerCase() === 'location')]) || ''), error: 'robots.txt redirects (' + status + ')' };
+    if (status === 429 || status >= 500) return out('unreachable', none);
+    if (status >= 400) return out('missing', none);
+    if (isHtml(ctype, text)) return out('html', robotsParse(text));
+    return out('ok', robotsParse(text));
+  };
+  const BAD_ROBOTS = ['missing', 'unreachable', 'html'];
+  const prevRobots = (prev) => {
+    if (typeof prev === 'string') return prev ? { v: ROBOTS_V, hash: prev, state: 'ok', text: '', facts: null } : {};
+    const p = prev || {};
+    const st = S(p.state) || (n0(p.status) >= 200 && n0(p.status) < 300 ? 'ok' : n0(p.status) === 429 || n0(p.status) >= 500 ? 'unreachable' : n0(p.status) >= 400 ? 'missing' : '');
+    return { v: n0(p.v), hash: S(p.hash), state: st, text: S(p.text), facts: Array.isArray(p.facts) ? p.facts : null, last_good_hash: S(p.last_good_hash), last_good_at: S(p.last_good_at),
+      last_good_text: S(p.last_good_text), bad_runs: n0(p.bad_runs) };
+  };
+  const disallowsOf = (text) => [...new Set(S(text).split('\n').filter(l => /^disallow: \S/.test(l)).map(l => l.slice(10).trim()))];
+  // the whole site closed to Google, or to every crawler (`*` covers Bing and the AI search fetchers too)
+  const rootBlock = (robots) => (robots.groups || []).some(g => (g.agents || []).some(a => a === '*' || a === 'googlebot') && (g.lines || []).some(l => !l.allow && l.path === '/'))
+    || (robots.rules || []).some(l => !l.allow && l.path === '/');
+  /**
+   * The site's robots.txt as a change of its own. prev: the stored reading (seo_cache `watch:<site>`: v, hash, state, text, facts, last good
+   * copy, bad_runs) or, in the older form, only a fingerprint string; robots: robotsRead() of today; o.newly_blocked: key pages the new rules
+   * block that were crawlable before. -> null (nothing to say) or { code, severity, label, text, from, to, state }
+   */
+  const robotsChange = (prev, robots, o) => {
+    const opts = o || {};
+    if (!robots || robots.ok === false) return null;                       // not read, or a redirect we could not follow: no claim at all
+    const P = prevRobots(prev); const now = S(robots.state) || 'ok';
+    const mk = (code, severity, text) => ({ code, severity, label: CODES[code].label, text, from: P.hash || P.state, to: S(robots.hash) || now, state: now });
+    if (!P.state && !P.hash) return null;                                   // the first reading is a baseline
+    const legacy = P.v !== ROBOTS_V;                                          // a fingerprint of the old kind: the state compares, the rules do not
+    const rulesLine = (txt) => { const d = disallowsOf(txt); return d.length ? ' (' + d.slice(0, 4).map(x => 'Disallow ' + x).join(', ') + (d.length > 4 ? ', and ' + (d.length - 4) + ' more' : '') + ')' : ''; };
+    const prevText = P.text || P.last_good_text;
+    if (now === 'missing') {
+      if (P.state === 'missing') return null;
+      const blockedNothing = !legacy && P.state === 'ok' && !disallowsOf(prevText).length;
+      return mk('robots_missing', blockedNothing ? 'low' : 'medium', 'robots.txt is missing' + (robots.reason === 'redirect_chain' ? ' (it redirects more than five times, which Google treats as missing)' : ' (it answers ' + robots.status + ')')
+        + '. Google then crawls everything: nothing is blocked, but your rules' + rulesLine(prevText) + ' and the Sitemap line no longer apply. Put the file back if this was not on purpose.');
+    }
+    if (now === 'unreachable') {
+      if (P.state === 'unreachable') return P.bad_runs === 1
+        ? mk('robots_unreachable', 'critical', 'robots.txt still answers ' + robots.status + ' (second check in a row). Google has paused crawling your site and uses its last copy of the file; fix the server so robots.txt answers again.')
+        : null;
+      return mk('robots_unreachable', 'high', 'robots.txt answers ' + robots.status + ' (a server error). While this lasts Google stops crawling your site for up to 12 hours, then uses its last copy of the file for up to 30 days. Check the server or the CDN in front of it.');
+    }
+    if (now === 'html') {
+      if (P.state === 'html') return null;
+      return mk('robots_html', 'medium', 'robots.txt answers a web page instead of a rules file. Google tries to read rules from it and ignores the rest, so your rules' + rulesLine(prevText) + ' may no longer apply. Serve the plain text file at /robots.txt.');
+    }
+    // now === 'ok'
+    if (BAD_ROBOTS.includes(P.state)) {
+      const same = P.last_good_hash && P.last_good_hash === S(robots.hash);
+      if (!same && P.last_good_hash && rootBlock(robots)) return mk('robots_changed', 'high', 'robots.txt is back, but it now closes the whole site to crawlers (Disallow: /). Remove that line unless you mean to leave search.');
+      return mk('robots_back', 'info', 'robots.txt is back' + (same ? ' with the same rules as on ' + (S(P.last_good_at).slice(0, 10) || 'the last good check') + '.' : P.last_good_hash ? ' with rules that differ from the last good copy: read it once.' : '.'));
+    }
+    if (legacy || !P.hash || P.hash === S(robots.hash)) return null;
+    // a real change of the rules: say which rules, and how much it matters for Google
+    const was = P.facts ? new Set(P.facts) : null; const isNow = new Set(robots.facts || []);
+    const added = was ? [...isNow].filter(x => !was.has(x)) : []; const removed = was ? [...was].filter(x => !isNow.has(x)) : [];
+    const blocked = (opts.newly_blocked || []).filter(Boolean);
+    const severity = (blocked.length || rootBlock(robots)) ? 'high' : 'medium';
+    const diff = (added.length ? ' Added: ' + added.slice(0, 5).join('; ') + (added.length > 5 ? '; and ' + (added.length - 5) + ' more' : '') + '.' : '')
+      + (removed.length ? ' Removed: ' + removed.slice(0, 5).join('; ') + (removed.length > 5 ? '; and ' + (removed.length - 5) + ' more' : '') + '.' : '');
+    return mk('robots_changed', severity, 'robots.txt changed.' + (diff || ' Its rules are different from the last check.')
+      + (blocked.length ? ' It now stops Google crawling ' + blocked.length + ' of your key pages: ' + blocked.slice(0, 3).map(pathOf).join(', ') + (blocked.length > 3 ? ', and more' : '') + '.' : '')
+      + (rootBlock(robots) && !blocked.length ? ' It closes the whole site to crawlers (Disallow: /), so Google and the AI search tools stop reading it.' : ''));
+  };
+
+  // ---- a page that started redirecting: where does it land? (build section 194) ----
+  // Google: a 301 / 308 tells the indexing pipeline the target should be canonical (the old address's place moves to the new one); a 302 / 307
+  // does not, and keeps the old address in search (developers.google.com/search/docs/crawling-indexing/301-redirects). So a permanent move to
+  // a working page of the same site is good news (Info), a temporary one is Medium, and a redirect to a broken, unindexable or foreign page,
+  // or a deep page sent to the home page (a soft 404 for Google), is High or Critical. `hop` is the target read with the redirect followed.
+  const absUrl = (location, base) => {
+    const l = S(location); if (!l) return '';
+    if (/^https?:\/\//i.test(l)) return l;
+    const origin = (S(base).match(/^(https?:\/\/[^\/?#]+)/i) || [])[1] || ''; if (!origin) return '';
+    if (/^\/\//.test(l)) return (S(base).match(/^(https?:)/i) || ['', 'https:'])[1] + l;
+    if (l.charAt(0) === '/') return origin + l;
+    return origin + (pathOf(base).replace(/[^\/]*$/, '') || '/') + l;
+  };
+  const redirectVerdict = (x) => {
+    const o = x || {}; const status = n0(o.status); const from = S(o.url); const to = absUrl(o.location, from);
+    const hop = o.hop || null; const permanent = status === 301 || status === 308;
+    const where = to ? pathOf(to) : '';
+    const v = (verdict, code, severity, text) => ({ verdict, code, severity, label: CODES[code].label, text, to });
+    if (!to) return v('broken', 'page_redirect_bad', 'high', 'The page now redirects (' + status + ') but does not say where to, so visitors and Google land nowhere.');
+    if (bare(hostOf(to)) !== bare(hostOf(from))) return v('offsite', 'page_redirect_bad', 'high', 'The page now sends visitors to another website (' + to + '). Google drops it from your site\'s results; if this is not on purpose, remove the redirect.');
+    // CR17-FX-INDEX (M4): a language / country redirect for our server's location is not a move and not a problem we can judge
+    if (localeRedirect(from, to)) return v('locale', 'page_locale', 'info', 'The page sends our reader to ' + where + ', a language or country version for where our server is. Google crawls from elsewhere and may not get this redirect, so the page is not treated as moved.');
+    if (pathOf(from).replace(/\/+$/, '') !== '' && where.replace(/\/+$/, '') === '') return v('home', 'page_redirect_bad', 'high', 'The page now sends visitors to your home page. Google treats a page sent to the home page like a page that is gone, so its place in search is lost. Redirect it to the page that replaced it, or keep it.');
+    const hostOnly = ukey(to) === ukey(from);
+    if (!hop || hop.ok === false) {
+      if (hop && /redirect/i.test(S(hop.error))) return v('loop', 'page_redirect_bad', 'high', 'The page now redirects (' + status + ' to ' + where + ') and the redirects never end in a page (more than five hops or a loop).');
+      return v('unread', 'page_redirects', 'medium', 'The page now redirects (' + status + ' to ' + where + '). The new address could not be read today; we check it again with the next watch.');
+    }
+    const hs = n0(hop.status);
+    if (hs >= 400 && hs < 500) return v('gone', 'page_redirect_bad', 'critical', 'The page now redirects to ' + where + ', which is gone (' + hs + '): visitors and Google land on an error page.');
+    if (hs >= 500) return v('error', 'page_redirect_bad', 'high', 'The page now redirects to ' + where + ', which answers a server error (' + hs + ').');
+    if (hs >= 300) return v('loop', 'page_redirect_bad', 'high', 'The page now redirects to ' + where + ', which redirects again too many times.');
+    if (hop.noindex) return v('noindex', 'page_redirect_bad', 'high', 'The page now redirects to ' + where + ', which asks search engines not to index it, so neither address can be found in Google.');
+    const canonOk = !S(hop.canonical) || ukey(hop.canonical) === ukey(to);
+    if (!permanent) return v('temporary', 'page_redirects', 'medium', 'The page now redirects temporarily (' + status + ') to ' + where + '. Google keeps the old address in search while a redirect is temporary; use a permanent (301) redirect if the move is final.');
+    if (!canonOk) return v('canonical_elsewhere', 'page_redirects', 'medium', 'The page moved permanently to ' + where + ', but that page names ' + S(hop.canonical) + ' as its main version, so Google may show neither. Point the redirect at the main version.');
+    if (hostOnly) return v('moved', 'page_moved', 'info', 'The page now opens at ' + to + ', the same page on your main address. Nothing to do.');
+    return v('moved', 'page_moved', 'info', 'The page moved permanently to ' + where + ', which works' + (o.expected ? '. This is the redirect your Steps on your website asked for' : '')
+      + '. Google moves the old address\'s place in search to the new one. We watch the new address from now on.');
+  };
+
+  /**
+   * CR17-FX-INDEX (review R1 L3): a moved address read again (once a week) no longer redirects permanently to the page it moved to. The move is
+   * cleared (the address is watched again); our rows stay on the new address, said here so a person decides. -> one change (Low).
+   */
+  const moveUndone = (url, movedTo, status, redirectTo) => {
+    const st = n0(status); const now = (st === 301 || st === 308) && S(redirectTo) ? 'it now redirects to ' + pathOf(redirectTo)
+      : st >= 300 && st < 400 ? 'it now redirects temporarily (' + st + ')' + (S(redirectTo) ? ' to ' + pathOf(redirectTo) : '') : 'it answers ' + st;
+    return { code: 'move_undone', severity: 'low', label: CODES.move_undone.label, from: S(movedTo), to: st + (S(redirectTo) ? ' ' + S(redirectTo) : ''),
+      text: 'This address no longer redirects permanently to ' + pathOf(movedTo) + ': ' + now + '. We watch it again from the next check. Your keyword ladder, published pages and AI questions still use ' + pathOf(movedTo) + '.' };
   };
 
   // ---- what changed since the stored reading, and how loudly to say it ----
   // `prev` is the stored seo_page_watch row (or null for a page nobody has watched yet), `now` the signals of this run.
+  // Build section 194: the severity is what Google does with the change, not the fact that something changed - a permanent move to a working
+  // page and a canonical that now names the page itself are fixes (Info), a changed title is Low (Info when it is a page we just published).
   const CODES = {
     page_gone: { severity: 'critical', label: 'page gone' },
     page_error: { severity: 'critical', label: 'server error' },
     noindex_added: { severity: 'critical', label: 'noindex added' },
     robots_blocked: { severity: 'critical', label: 'blocked by robots.txt' },
-    page_redirects: { severity: 'high', label: 'page now redirects' },
+    page_redirects: { severity: 'medium', label: 'page now redirects' },
+    page_redirect_bad: { severity: 'high', label: 'redirects to a page that does not work' },
+    page_moved: { severity: 'info', label: 'page moved' },
+    page_locale: { severity: 'info', label: 'language or country redirect' },
+    move_undone: { severity: 'low', label: 'redirect removed' },
     canonical_moved: { severity: 'high', label: 'canonical moved' },
-    canonical_removed: { severity: 'high', label: 'canonical removed' },
-    robots_changed: { severity: 'high', label: 'robots.txt changed' },
-    title_changed: { severity: 'medium', label: 'title changed' },
+    canonical_removed: { severity: 'low', label: 'canonical removed' },
+    canonical_fixed: { severity: 'info', label: 'canonical points at the page itself' },
+    robots_changed: { severity: 'medium', label: 'robots.txt changed' },
+    robots_missing: { severity: 'medium', label: 'robots.txt missing' },
+    robots_unreachable: { severity: 'high', label: 'robots.txt unreachable' },
+    robots_html: { severity: 'medium', label: 'robots.txt is a web page' },
+    robots_back: { severity: 'info', label: 'robots.txt is back' },
+    title_changed: { severity: 'low', label: 'title changed' },
     page_back: { severity: 'info', label: 'page answers again' },
     noindex_removed: { severity: 'info', label: 'noindex gone' },
   };
   const compare = (prev, now, o) => {
     const opts = o || {}; const out = [];
-    const add = (code, text, from, to) => out.push({ code, severity: CODES[code].severity, label: CODES[code].label, text, from: S(from), to: S(to) });
+    const add = (code, text, from, to, sev) => out.push({ code, severity: sev || CODES[code].severity, label: CODES[code].label, text, from: S(from), to: S(to) });
     if (!now || now.ok === false) return out;                                 // a failed fetch is "not checked", never a change
     const first = !prev || !S(prev.checked_at);
     const was = prev || {};
@@ -138,33 +304,181 @@ const PW = (() => {
       if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 500) add('page_error', 'The page answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
       else if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 400) add('page_gone', 'The page is gone: it answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
       else if (wasStatus >= 400 && nowStatus >= 200 && nowStatus < 300) add('page_back', 'The page answers ' + nowStatus + ' again (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
-      if (nowStatus >= 300 && nowStatus < 400 && !(wasStatus >= 300 && wasStatus < 400)) add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + ')', wasStatus, nowStatus + ' ' + S(now.location));
+      if (nowStatus >= 300 && nowStatus < 400 && !(wasStatus >= 300 && wasStatus < 400)) {
+        const rv = opts.redirect || null;   // the verdict on where it lands (Watch Compare reads the target); without it: Medium, said as such
+        if (rv) add(rv.code, rv.text, wasStatus, nowStatus + ' ' + S(now.location), rv.severity);
+        else add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + '). Where it lands was not checked in this run.', wasStatus, nowStatus + ' ' + S(now.location));
+      } else if (nowStatus >= 300 && nowStatus < 400 && opts.redirect) {
+        // CR17-FX-INDEX (review R1 M1): a page that keeps redirecting is judged again every day by where it lands. When today's verdict differs
+        // from the stored one (seo_page_watch.redirect_verdict; '' on rows before this fix = a baseline, nothing said), the change is raised:
+        // a target that broke after a move (moved -> gone) is Critical the same day, a temporary redirect whose target is gone gets louder.
+        // An unread target ('unread') says nothing; a target that works again closes the open alert in the lifecycle (present() is false).
+        const rv = opts.redirect; const pv = S(was.redirect_verdict);
+        if (pv && rv.verdict !== 'unread' && rv.verdict !== pv && rv.verdict !== 'moved' && rv.verdict !== 'locale') add(rv.code, rv.text, wasStatus + ' ' + pv, nowStatus + ' ' + S(now.location), rv.severity);
+      }
       if (now.noindex && !was.noindex) add('noindex_added', 'The page tells search engines not to index it (' + S(now.noindex_source) + ': "' + S(now.robots_meta || 'noindex') + '")', '', S(now.noindex_source));
       if (!now.noindex && was.noindex) add('noindex_removed', 'The page no longer tells search engines to leave it out', S(was.noindex_source), '');
       // the title and the canonical are only compared between two readings of a page that was answering: the title of yesterday's 404
       // ("Not found") is not a baseline, so a page that comes back is "answers again", never "the title changed".
       const wasOk = wasStatus >= 200 && wasStatus < 300;
       if (wasOk && nowStatus >= 200 && nowStatus < 300) {
-        if (S(was.canonical) && !S(now.canonical)) add('canonical_removed', 'The canonical tag is gone (it pointed at ' + S(was.canonical) + ')', S(was.canonical), '');
-        else if (S(now.canonical) && S(was.canonical) && !same(now.canonical, was.canonical)) add('canonical_moved', 'The canonical now points at ' + S(now.canonical) + ' (it pointed at ' + S(was.canonical) + ')', S(was.canonical), S(now.canonical));
-        if (S(was.title) && S(now.title) && S(was.title) !== S(now.title)) add('title_changed', 'The title changed to "' + S(now.title) + '" (it was "' + S(was.title) + '")', S(was.title), S(now.title));
+        const selfNow = S(now.canonical) && same(now.canonical, url || now.url || '');
+        const selfWas = S(was.canonical) && same(was.canonical, url || was.url || '');
+        if (S(was.canonical) && !S(now.canonical)) {
+          if (selfWas) add('canonical_removed', 'The canonical tag is gone (it pointed at the page itself). Google usually still treats the page as its own main version; put the tag back to be sure.', S(was.canonical), '');
+          else add('canonical_fixed', 'The canonical tag that pointed at ' + S(was.canonical) + ' is gone, so Google can index this page under its own address again.', S(was.canonical), '');
+        } else if (S(now.canonical) && S(was.canonical) && !same(now.canonical, was.canonical)) {
+          if (selfNow) add('canonical_fixed', 'The canonical now points at the page itself (it pointed at ' + S(was.canonical) + '). That is right: Google can index this page under its own address.', S(was.canonical), S(now.canonical));
+          else add('canonical_moved', 'The canonical now points at ' + S(now.canonical) + ' (it pointed at ' + S(was.canonical) + '), so Google is asked to show that page instead of this one.', S(was.canonical), S(now.canonical));
+        }
+        if (S(was.title) && S(now.title) && S(was.title) !== S(now.title)) {
+          if (opts.own_title) add('title_changed', 'Your new title is live: "' + S(now.title) + '" (it was "' + S(was.title) + '").', S(was.title), S(now.title), 'info');
+          else add('title_changed', 'The title changed to "' + S(now.title) + '" (it was "' + S(was.title) + '").', S(was.title), S(now.title));
+        }
       }
     }
     // a page we are seeing for the first time is a baseline, never a change — that includes one robots.txt already blocked before we looked
     if (!first && opts.robots_blocked === true && opts.robots_blocked_before !== true) add('robots_blocked', 'robots.txt now stops Google crawling ' + (url || 'this page'), '', 'disallowed');
     return out;
   };
-  // the site's robots.txt as a change of its own (one per site, compared with the stored seo_cache fingerprint)
-  const robotsChange = (prevHash, robots) => {
-    if (!robots || robots.ok === false) return null;
-    const before = S(prevHash);
-    if (!before || before === S(robots.hash)) return null;
-    return { code: 'robots_changed', severity: CODES.robots_changed.severity, label: CODES.robots_changed.label,
-      text: 'robots.txt changed (' + robots.status + ', ' + n0(robots.length) + ' characters of rules). Read it before the next crawl: one wrong Disallow line can take the whole site out of Google.',
-      from: before, to: S(robots.hash) };
-  };
   const state = (changes, now) => (!now || now.ok === false) ? 'not_checked' : ((changes || []).some(c => c.severity !== 'info') ? 'changed' : 'ok');
-  const worst = (changes) => { const order = ['critical', 'high', 'medium', 'info']; return (changes || []).map(c => c.severity).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] || ''; };
+  const worst = (changes) => { const order = ['critical', 'high', 'medium', 'low', 'info']; return (changes || []).map(c => c.severity).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] || ''; };
+
+  // ---- the alert lifecycle (build section 194; Conductor's model: one incident per condition, closed when the condition is gone) ----
+  // Every alert names its condition: the site, the page (or robots.txt) and the family of the change. While the condition lasts there is ONE
+  // open alert (last_seen_at, count), never a new row a day; when the watch reads the page and the condition is gone the alert is resolved
+  // with the sentence that says why (resolved_at, resolution). A change that is good news (a page moved to a working address, a canonical
+  // that now names the page) is recorded resolved at once: nothing is left for the client to do. Rows written before section 194 carry no
+  // condition key; it is read back from their message id (watch:<site>:<code>:<page hash>:<day>).
+  const FAMILY = { page_gone: 'status', page_error: 'status', page_back: 'status', noindex_added: 'noindex', noindex_removed: 'noindex', robots_blocked: 'robots_blocked',
+    page_redirects: 'redirect', page_redirect_bad: 'redirect', page_moved: 'redirect', page_locale: 'redirect', canonical_moved: 'canonical', canonical_removed: 'canonical_tag', canonical_fixed: 'canonical',
+    title_changed: 'title', move_undone: 'move', robots_missing: 'robots_state', robots_unreachable: 'robots_state', robots_html: 'robots_state', robots_back: 'robots_state', robots_changed: 'robots_rules' };
+  // the codes that close their family's open alert instead of opening one
+  const CLOSES = { page_back: true, noindex_removed: true, page_moved: true, canonical_fixed: true, robots_back: true };
+  const conditionKey = (site_id, code, page) => 'watch:' + S(site_id) + ':' + (FAMILY[code] || code) + ':' + hash(ukey(page));
+  /** The condition of a stored alert row: its own key, or read back from a message id written before section 194. */
+  const conditionOf = (row) => {
+    const r = row || {};
+    if (S(r.condition_key)) {
+      const m = S(r.condition_key).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8})$/); if (!m) return null;
+      // CR17-FX-INDEX (L1): a "canonical removed" row stored under the shared canonical family (its message id names the code) is its own condition
+      if (m[2] === 'canonical' && /^watch:.+:canonical_removed:[0-9a-f]{8}:/.test(S(r.message_id))) return { key: 'watch:' + m[1] + ':canonical_tag:' + m[3], site_id: m[1], family: 'canonical_tag', page_hash: m[3] };
+      return { key: S(r.condition_key), site_id: m[1], family: m[2], page_hash: m[3] };
+    }
+    const m = S(r.message_id).match(/^watch:(.+):([a-z_]+):([0-9a-f]{8}):\d{4}-\d\d-\d\d$/);
+    if (!m || m[2] === 'recheck') return null;
+    const family = FAMILY[m[2]] || m[2];
+    return { key: 'watch:' + m[1] + ':' + family + ':' + m[3], site_id: m[1], family, page_hash: m[3], legacy: true, code: m[2] };
+  };
+  const isOpenRow = (r) => S((r || {}).status || 'new') !== 'resolved' && !S((r || {}).resolved_at);
+  /** Is the condition of `family` still true of a page read today? null = this family cannot be judged from one reading (an event). */
+  const present = (family, p, ctx) => {
+    if (!p || p.ok === false) return null;
+    const st = n0(p.status);
+    if (family === 'status') return st >= 400;
+    if (family === 'noindex') return !!p.noindex;
+    // CR17-FX-INDEX (review R1 M2): robots.txt not read today or unreachable (Google keeps its last copy) cannot judge a block: unknown, kept open
+    if (family === 'robots_blocked') return p.robots_blocked === true ? true : p.robots_blocked === false ? false : null;
+    if (family === 'redirect') return st >= 300 && st < 400 && S((ctx || {}).verdict) !== 'moved' && S((ctx || {}).verdict) !== 'locale';
+    if (family === 'canonical') return st >= 200 && st < 300 && !!S(p.canonical) && !same(p.canonical, p.url);
+    // CR17-FX-INDEX (review R1 L1): "canonical removed" lasts while the page has no canonical tag
+    if (family === 'canonical_tag') return st >= 200 && st < 300 ? !S(p.canonical) : null;
+    // CR17-FX-INDEX (L3): a removed redirect is a notice until the address redirects permanently again
+    if (family === 'move') return (st === 301 || st === 308) ? false : null;
+    return null;   // title / robots rules: events, open until somebody marks them seen
+  };
+  const RESOLVED_TEXT = {
+    status: (p) => n0(p.status) >= 300 && n0(p.status) < 400 ? 'The address no longer answers with an error: it now redirects (' + n0(p.status) + ').' : 'The page answers ' + n0(p.status) + ' again.',
+    noindex: () => 'The page no longer asks search engines to leave it out.',
+    robots_blocked: () => 'robots.txt no longer blocks this page.',
+    redirect: (p, ctx) => n0(p.status) >= 200 && n0(p.status) < 300 ? 'The page answers at its own address again.'
+      : S((ctx || {}).verdict) === 'locale' ? 'The redirect is a language or country version for where our server is, not a move.'
+      : 'The page now moves permanently to ' + pathOf((ctx || {}).to || p.location) + ', which works.',
+    canonical: () => 'The canonical now points at the page itself.',
+    move: () => 'The address redirects permanently again.',
+    canonical_tag: (p) => 'The canonical tag is back' + (same(p.canonical, p.url) ? ', pointing at the page itself.' : ', and it names ' + S(p.canonical) + ' as the main version.'),
+  };
+  /**
+   * One run's alert rows for one site. o: { site_id, domain, now, changes, pages (Watch Compare page states with `verdict` / `moved_to`),
+   * robots (today's robots state), open (stored alert rows of this site), moved ([{ from, to }] addresses the watch stopped reading because
+   * they moved), ran_late (sentence or '') }. -> { rows (exact seo_console_alerts columns), resolved, updated, opened }
+   */
+  const lifecycle = (o) => {
+    const x = o || {}; const nowIso = S(x.now) || new Date().toISOString(); const day = nowIso.slice(0, 10);
+    const site_id = S(x.site_id), domain = S(x.domain);
+    const openRows = (x.open || []).filter(r => r && isOpenRow(r) && S(r.source || 'page_watch') === 'page_watch');
+    const byKey = new Map();
+    for (const r of openRows) { const c = conditionOf(r); if (!c || c.site_id !== site_id) continue; if (!byKey.has(c.key)) byKey.set(c.key, { row: r, c }); }
+    const pageByHash = new Map((x.pages || []).filter(p => p && p.ok !== false && S(p.url)).map(p => [hash(ukey(p.url)), p]));
+    const movedByHash = new Map((x.moved || []).filter(m => m && S(m.from)).map(m => [hash(ukey(m.from)), m]));
+    const rows = []; const out = { rows, resolved: 0, updated: 0, opened: 0 };
+    const late = S(x.ran_late) ? ' Ran late: ' + S(x.ran_late) : '';
+    const base = (r) => ({ site_id, domain, kind: 'page_watch', source: 'page_watch', severity: S(r.severity), subject: S(r.subject).slice(0, 200), summary: S(r.summary).slice(0, 1000),
+      received_at: S(r.received_at) || nowIso, message_id: S(r.message_id).slice(0, 200), status: S(r.status) || 'new', condition_key: S(r.condition_key), last_seen_at: S(r.last_seen_at) || S(r.received_at) || nowIso,
+      count: n0(r.count) || 1, resolved_at: S(r.resolved_at), resolution: S(r.resolution).slice(0, 500) });
+    // CR17-FX-INDEX (review R1 L6): "Mark as seen" (ack_by / ack_at) is written by the app only. A row this run creates starts with both empty; a
+    // row it updates or resolves carries neither field, so the upsert (auto-mapped, partial on update) never overwrites a mark saved while the
+    // watch ran. FRESH = the columns of a new row.
+    const FRESH = { ack_by: '', ack_at: '' };
+    const done = new Set();
+    const resolve = (k, sentence) => { const e = byKey.get(k); if (!e || done.has(k)) return; done.add(k);
+      rows.push({ ...base(e.row), condition_key: k, status: 'resolved', resolved_at: nowIso, resolution: S(sentence).slice(0, 500), last_seen_at: S(e.row.last_seen_at) || S(e.row.received_at) || nowIso });
+      out.resolved += 1; };
+    const subjectOf = (c, page) => (S(c.label).charAt(0).toUpperCase() + S(c.label).slice(1) + ': ' + (S(page).replace(/^https?:\/\//, '') || domain)).slice(0, 200);
+    const order = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+    // 1. today's changes: open, update or resolve
+    for (const c of (x.changes || [])) {
+      const page = S(c.url); const k = conditionKey(site_id, c.code, page);
+      if (done.has(k)) continue;   // one condition, one row per run
+      const text = (S(c.text) + (/^robots_/.test(c.code) ? '' : ' Checked ' + nowIso.slice(0, 16).replace('T', ' ') + ' UTC by the daily key-page watch.') + late).slice(0, 1000);
+      if (CLOSES[c.code] || c.severity === 'info') {
+        if (byKey.has(k)) { resolve(k, S(c.text)); continue; }
+        // good news with nothing open: recorded as a resolved notice, so the history shows it and nobody has to act on it
+        rows.push({ ...base({}), ...FRESH, severity: 'info', subject: subjectOf(c, page), summary: text, received_at: nowIso, message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200),
+          status: 'resolved', condition_key: k, last_seen_at: nowIso, count: 1, resolved_at: nowIso, resolution: 'Nothing to do.' });
+        out.opened += 1; continue;
+      }
+      if (byKey.has(k) && !done.has(k)) {
+        const e = byKey.get(k); done.add(k);
+        // a condition only grows louder in place; robots.txt's state is replaced by its new state (missing after unreachable is Medium again), and so
+        // is where a redirect lands (CR17-FX-INDEX M1: a gone target fixed back to a temporary redirect is Medium again, never a stale Critical)
+        const sev = FAMILY[c.code] === 'robots_state' || FAMILY[c.code] === 'redirect' || (order[c.severity] ?? 5) < (order[S(e.row.severity)] ?? 5) ? c.severity : S(e.row.severity);
+        rows.push({ ...base(e.row), condition_key: k, severity: sev, subject: subjectOf(c, page), summary: text, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' });
+        out.updated += 1; continue;
+      }
+      rows.push({ ...base({}), ...FRESH, severity: S(c.severity), subject: subjectOf(c, page), summary: text, received_at: nowIso,
+        message_id: ('watch:' + site_id + ':' + S(c.code) + ':' + hash(ukey(page)) + ':' + day).slice(0, 200), status: 'new', condition_key: k, last_seen_at: nowIso, count: 1 });
+      done.add(k); byKey.set(k, { row: rows[rows.length - 1], c: { key: k } }); out.opened += 1;
+    }
+    // 2. the open alerts nobody touched today: still true (seen again) or gone (resolved)
+    for (const [k, e] of byKey) {
+      if (done.has(k)) continue;
+      const fam = e.c.family;
+      if (fam === 'robots_state') {
+        const rs = x.robots || null; if (!rs || rs.ok === false) continue;
+        if (S(rs.state) === 'ok') { resolve(k, 'robots.txt answers again.'); continue; }
+        done.add(k); rows.push({ ...base(e.row), condition_key: k, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' }); out.updated += 1; continue;
+      }
+      const p = pageByHash.get(e.c.page_hash);
+      if (!p) {
+        const mv = movedByHash.get(e.c.page_hash);
+        if (mv && ['status', 'redirect', 'canonical', 'canonical_tag', 'noindex', 'robots_blocked', 'title'].includes(fam)) resolve(k, 'This address now moves permanently to ' + pathOf(mv.to) + ', which works. We watch the new address.');
+        continue;   // not read today: nothing is claimed
+      }
+      const st3 = n0(p.status) >= 300 && n0(p.status) < 400;
+      if (st3 && S(p.verdict) === 'moved' && fam !== 'redirect') { resolve(k, 'This address now moves permanently to ' + pathOf(p.moved_to || p.redirect_to) + ', which works. We watch the new address.'); continue; }
+      const isNow = present(fam, p, { verdict: p.verdict, to: p.moved_to || p.redirect_to });   // null: cannot be judged today (kept open, nothing claimed)
+      if (isNow === null) {
+        // an event (title, robots rules) that started before section 194: it stays open until marked seen, but a title alert on a page that
+        // moved away is closed with the move
+        if (fam === 'title' && n0(p.status) >= 300 && n0(p.status) < 400 && S(p.verdict) === 'moved') resolve(k, 'This address now moves permanently to ' + pathOf(p.moved_to || p.redirect_to) + ', which works.');
+        continue;
+      }
+      if (!isNow) resolve(k, (RESOLVED_TEXT[fam] || (() => 'The condition is gone.'))(p, { to: p.moved_to || p.redirect_to, verdict: p.verdict }));
+      else { done.add(k); rows.push({ ...base(e.row), condition_key: k, last_seen_at: nowIso, count: (n0(e.row.count) || 1) + 1, status: 'new' }); out.updated += 1; }
+    }
+    return out;
+  };
 
   // ---- "I fixed this": one audit finding, re-checked on the key pages we just fetched ----
   // Only what a raw fetch of the key pages can honestly answer is answered. Anything else (a crawl of the whole site, Search Console,
@@ -378,10 +692,10 @@ const PW = (() => {
         : 'No page could be inspected in Search Console' + (notChecked ? ' (' + notChecked + ' not checked: ' + (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'no access') + ')' : '') };
   };
 
-  return { signals, robotsRead, compare, robotsChange, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
-    changedPages, changeOf, freshFirst,
-    CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT, FRESH_DAYS,
-    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0 } };
+  return { signals, robotsRead, robotsParse, compare, robotsChange, redirectVerdict, moveUndone, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
+    changedPages, changeOf, freshFirst, conditionKey, conditionOf, lifecycle, present,
+    CODES, FAMILY, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT, FRESH_DAYS, ROBOTS_V,
+    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0, absUrl, localeRedirect } };
 })();
 // ---- Index coverage (2026-10-29, docs/indexing-2026-10-29/DESIGN.md): which pages Google left out, why, and what to do ----
 // Pure functions only (no clock, no network, no table): every caller passes `now`, so the harness replays any day. Inlined by
@@ -781,8 +1095,18 @@ const IX = (() => {
   // E2: what a bot wall or a challenge looks like from our side. Google's own crawler is not served these, so they say nothing about the page.
   const CHALLENGE = /cf-chl|challenge-platform|cf_chl_opt|<title>\s*(?:just a moment|attention required|access denied|pardon our interruption|please wait|ddos-guard|security check)|_incapsula_resource|request unsuccessful\. incapsula|px-captcha|perimeterx|sucuri website firewall/i;
   const CHALLENGE_WEAK = /captcha|are you a robot|verify you are (?:a )?human|akamai.{0,40}reference #/i;   // only on an error status (a contact form has a captcha too)
-  // a same-site redirect that only adds a language / country prefix (/ar/..., /en-us/...) answers where our server sits, not what Google sees
-  const LOCALE = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+  // >>> LOCALE RULE (CR17-FX-INDEX, review R1 M4): ONE text in _index_kit.js, _page_watch.js and _moves.js (build_v4.py section 194 checks they are the
+  // same). A same-site redirect that only adds a language / country prefix (/x -> /ae/x, / -> /en/), or sends a deep page to a bare locale root,
+  // answers where OUR server sits (Doha), not what Google's crawler sees: never a move, never a cause.
+  const localeRedirect = (from, to) => {
+    const LOC = /^\/[a-z]{2}(?:[-_][a-z]{2,4})?(?=\/|$)/i;
+    const pa = (u) => String(u == null ? '' : u).trim().replace(/^https?:\/\/[^\/?#]*/i, '').replace(/[?#].*$/, '') || '/';
+    const f = pa(from), t = pa(to);
+    if (!LOC.test(t) || LOC.test(f)) return false;
+    if ((t.replace(LOC, '') || '/').replace(/\/+$/, '').toLowerCase() === f.replace(/\/+$/, '').toLowerCase()) return true;
+    return /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(t) && f !== '/';
+  };
+  // <<< LOCALE RULE
   /**
    * first: the answer of a GET that did NOT follow redirects; final: the answer of the one hop we follow ourselves (only asked when `first` was
    * a 3xx to the site's own domain; E11: every hop is re-checked). -> { ok, blocked, block_reason, http_status, final_url, moved_to, noindex
@@ -793,7 +1117,9 @@ const IX = (() => {
    */
   const readFetch = (url, first, final) => {
     const f = first || {}; const st1 = n0(f.statusCode ?? f.status);
-    const none = { ok: false, blocked: false, block_reason: '', http_status: 0, final_url: '', moved_to: '', noindex: '', page_canonical: '', words: 0, title: '' };
+    const none = { ok: false, blocked: false, block_reason: '', http_status: 0, final_url: '', moved_to: '', noindex: '', page_canonical: '', words: 0, title: '', redirect_status: 0 };
+    // CR17-C (build section 193): the status of the FIRST answer when it redirected (301 / 308 = permanent), so a move is told from a detour
+    const rs1 = st1 >= 300 && st1 < 400 ? st1 : 0;
     if (!st1) return { ...none, error: S((f.error && (f.error.message || f.error)) || 'no answer').slice(0, 160) };
     const hdr = (r, name) => { const h = (r && r.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === name); return k ? S(Array.isArray(h[k]) ? h[k].join(', ') : h[k]) : ''; };
     const blocked = (why) => ({ ...none, ok: true, blocked: true, block_reason: why, http_status: st1, error: '' });
@@ -813,19 +1139,18 @@ const IX = (() => {
       const pa = parseUrl(abs), pu = parseUrl(url);
       if (pa && pu && bare(pa.host) === bare(pu.host)) {
         if (same(abs, url)) moved_to = 'https://' + pa.host + pa.path + pa.query;   // slash / case / www only: the same page
-        else if (LOCALE.test(pa.path) && !LOCALE.test(pu.path) && (pa.path.replace(LOCALE, '') || '/').replace(/\/+$/, '').toLowerCase() === pu.path.replace(/\/+$/, '').toLowerCase()) return blocked('a language or country redirect for our location');
-        else if (LOCALE.test(pa.path) && !LOCALE.test(pu.path) && /^\/[a-z]{2}(?:[-_][a-z]{2,4})?\/?$/i.test(pa.path) && pu.path !== '/') return blocked('a language or country redirect for our location');
+        else if (localeRedirect(url, abs)) return blocked('a language or country redirect for our location');   // CR17-FX-INDEX (M4): the shared LOCALE RULE
         else final_url = 'https://' + pa.host + pa.path + pa.query;
       } else if (abs) final_url = pa ? 'https://' + pa.host + pa.path + pa.query : S(abs).slice(0, 500);
     }
     const fin = final && n0(final.statusCode ?? final.status) ? final : null;
     const use = (st1 >= 300 && st1 < 400) ? fin : f;
-    if (st1 >= 300 && st1 < 400 && !use) return { ...none, ok: true, http_status: st1, final_url, moved_to, error: '' };   // the hop was not read (off site, or not asked)
+    if (st1 >= 300 && st1 < 400 && !use) return { ...none, ok: true, http_status: st1, final_url, moved_to, redirect_status: rs1, error: '' };   // the hop was not read (off site, or not asked)
     const st2 = n0(use.statusCode ?? use.status);
     if (use !== f) { const w2 = wall(use, st2); if (w2) return blocked(w2); }
     if (use !== f && st2 >= 300 && st2 < 400) {   // a second redirect: we do not follow it; the page redirects (to where the chain points next)
       const loc2 = hdr(use, 'location'); const p2 = parseUrl(/^\//.test(loc2) && !/^\/\//.test(loc2) ? 'https://' + hostOf(final_url || moved_to || url) + loc2 : loc2);
-      return { ...none, ok: true, http_status: st2, final_url: p2 ? 'https://' + p2.host + p2.path + p2.query : (final_url || moved_to), moved_to: '', error: '' };
+      return { ...none, ok: true, http_status: st2, final_url: p2 ? 'https://' + p2.host + p2.path + p2.query : (final_url || moved_to), moved_to: '', redirect_status: rs1, error: '' };
     }
     const sig = (typeof PW !== 'undefined') ? PW.signals(use) : { ok: false };
     const body = S(use.body ?? use.data);
@@ -833,7 +1158,7 @@ const IX = (() => {
     const xrRaw = (() => { const h = (use && use.headers) || {}; const k = Object.keys(h).find(x => x.toLowerCase() === 'x-robots-tag'); return k ? h[k] : ''; })();
     const noindex = !sig.ok ? '' : metaNoindex(body) ? 'meta' : xRobotsNoindex(xrRaw) ? 'header' : '';
     return { ok: true, blocked: false, block_reason: '', http_status: st2, final_url, moved_to, noindex,
-      page_canonical: S(sig.canonical).slice(0, 500), words: st2 >= 200 && st2 < 300 ? mainWords(body) : 0, title: S(sig.title).slice(0, 300), error: '' };
+      page_canonical: S(sig.canonical).slice(0, 500), words: st2 >= 200 && st2 < 300 ? mainWords(body) : 0, title: S(sig.title).slice(0, 300), redirect_status: rs1, error: '' };
   };
   /** The next hop of a page read that answered a redirect: only to the site's own domain, rebuilt (E11). '' = not followed. */
   const hopOf = (url, first, site) => {
@@ -980,6 +1305,36 @@ const IX = (() => {
    * reading: readInspection / reuseOf / storedReading (or null); fetch: readFetch (or null); p: the merged page (in_sitemap, sources, lane, ...).
    * ctx.sitemap_complete: the sitemap tree was read completely today (E1) - only then is "not in the sitemap" said.
    */
+  /**
+   * CR17-C (build section 193, client report 2026-11-17 F3): the only address that belongs in a sitemap is one whose newest read by us answers
+   * 200 directly (no redirect), carries no noindex and names itself (or nothing) as its canonical. f: today's readFetch (or null: the stored
+   * read on the row). An address we never read is not one (it is read first: IX_Page_Fetch_Requests).
+   */
+  const direct200 = (p, f) => {
+    const x = f ? { fetch_at: 'today', http_status: f.http_status, final_url: f.final_url, noindex: f.noindex, page_canonical: f.page_canonical } : (p || {});
+    const st = n0(x.http_status);
+    return !!S(x.fetch_at) && st >= 200 && st < 300 && !S(x.final_url) && !S(x.noindex) && (!S(x.page_canonical) || same(x.page_canonical, (p || {}).url));
+  };
+  /** CR17-C: a permanent redirect is 301 or 308 (a 302 / 307 is a detour, the address stays). */
+  const PERMANENT = [301, 308];
+  /**
+   * CR17-C: the stored row says WE saw the address move (cause redirect, a final address on the site itself) after Google's last visit
+   * (lastCrawl): until Google reads it again, the move stands over Google's older word (and over impressions of the old address).
+   */
+  /**
+   * CR17-FX-INDEX (review R1 H1): a redirect is a MOVE only when the page it lands on works: it answers 2xx (our read of the hop, http_status),
+   * carries no noindex, and a deep address is not sent to the home page. A 301 into a 404 / 5xx / noindex page is a broken page, never
+   * "moved, nothing to do". f: a readFetch result or a stored row (same field names). THE SHARED RULE (app twin: indexing.ts permanentMoveLands).
+   */
+  const rootPath = (u) => { const x = parseUrl(u); return !!x && /^\/?$/.test(x.path); };
+  const landsWell = (url, f) => { const x = f || {}; const st = n0(x.http_status); return !!S(x.final_url) && st >= 200 && st < 300 && !S(x.noindex) && !(rootPath(x.final_url) && !rootPath(url)); };
+  const movedByUs = (p, lastCrawl, site) => {
+    const x = p || {}; const fu = S(x.final_url);
+    if (S(x.cause) !== 'redirect' || !fu || same(fu, x.url)) return false;
+    if (!landsWell(x.url, x)) return false;   // CR17-FX-INDEX H1: a stored move whose target did not work is no move
+    const sameSite = site && S(site.domain) ? own(fu, site) : bare(hostOf(fu)) === bare(hostOf(x.url));
+    return sameSite && ts(x.fetch_at) > 0 && ts(x.fetch_at) > ts(lastCrawl);
+  };
   const diagnose = (p, reading, fetch, ctx) => {
     const c = ctx || {}; const now = n0(c.now);
     const srcs = S(p.sources); const ours = srcs.split(',').includes('ours');
@@ -1020,11 +1375,34 @@ const IX = (() => {
         : S(f.final_url) ? 'redirect' : f.noindex ? 'noindex' : (S(f.page_canonical) && !same(f.page_canonical, p.url) && !same(f.page_canonical, f.moved_to)) ? (p.in_sitemap ? 'canonical_elsewhere' : 'alternate') : '';
       if (hard) cause = hard;
     }
+    // CR17-C (build section 193, F3): Google's reading is only as new as Google's last visit (last_crawl). A permanent redirect (301 / 308) to
+    // a page of the same site that our read saw AFTER that visit is the truth today: the address moved (cause redirect, whatever Google's
+    // older reading said: never "indexed, add it to your sitemap", never a drop-out). A 404 / 410 or a noindex over Google's word needs two
+    // reads on two days, both after Google's visit (one flaky answer must not move an indexed page). The freshness guard: Google's word wins
+    // whenever Google read the page after us. With no read today, a move we stored stands until Google visits again.
+    if (r && cause) {
+      const gLast = ts(r.last_crawl);
+      const sameSite = (u) => !!S(u) && (c.site && S(c.site.domain) ? own(u, c.site) : bare(hostOf(u)) === bare(hostOf(p.url)));
+      if (f) {
+        const fAt = ts(c.fetch_at) || now;
+        if (gLast < fAt && cause !== 'redirect' && cause !== 'redirect_error') {
+          const st = n0(f.http_status); const pv = p._prev || {};
+          if (S(f.final_url) && PERMANENT.includes(n0(f.redirect_status)) && sameSite(f.final_url) && landsWell(p.url, f)) cause = 'redirect';
+          else if (!SOFT.includes(cause) && cause !== 'not_found' && cause !== 'noindex') {
+            const hard2 = (st === 404 || st === 410) ? 'not_found' : f.noindex ? 'noindex' : '';
+            const pAt = ts(pv.fetch_at);
+            const before = hard2 === 'not_found' ? (n0(pv.http_status) === 404 || n0(pv.http_status) === 410) : hard2 === 'noindex' ? !!S(pv.noindex) : false;
+            if (hard2 && before && pAt > gLast && fAt - pAt >= 20 * 3600e3) cause = hard2;
+          }
+        }
+      } else if (cause !== 'redirect' && cause !== 'redirect_error' && movedByUs(p, r.last_crawl, c.site)) cause = 'redirect';
+    }
     if (!cause) return null;   // nothing read: the caller keeps what was stored
     // what the client meant: a block on a page nobody lists, links to or found in Google is intended
     if (cause === 'noindex' && !important) cause = 'noindex_intended';
     if (cause === 'robots') cause = important ? 'robots_blocked' : 'robots_intended';
-    if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url, p) && smKnown && c.has_sitemap) cause = 'indexed_not_in_sitemap';
+    // CR17-C (F3): "add it to your sitemap" only for an address that answers 200 directly and names itself (direct200)
+    if (cause === 'indexed' && !p.in_sitemap && !isLowValue(p.url, p) && smKnown && c.has_sitemap && direct200(p, f)) cause = 'indexed_not_in_sitemap';
     // wave 3 (§2.4): a page the client marked important is never a low-value listing either
     if (stateOf(cause) !== 'indexed' && typeOverride(p) !== 'important' && isLowValue(p.url, p) && (SOFT.includes(cause) || cause === 'duplicate_no_canonical' || cause === 'google_chose_other')) cause = 'low_value';
     if ((cause === 'unknown_to_google' || cause === 'discovered_not_crawled') && p.lane === 'new') {
@@ -1139,9 +1517,13 @@ const IX = (() => {
       soft_404: 'Google thinks this page looks empty or like an error page. Add real content, or answer "not found" if the page is gone.',
       server_error: 'Your server answered with an error when this page was read' + (st >= 500 ? ' (' + st + ')' : '') + '. Check the server or the hosting.',
       access_denied: 'This page asks for a login or turns visitors away' + (st === 401 || st === 403 ? ' (' + st + ')' : '') + ', so Google cannot read it. Open it to everyone if you want it in Google.',
+      // CR17-C (F3): a redirect in the sitemap is the one step (take the old address out, list where it goes); an address that moved while
+      // Google still lists it is waiting for Google, never "add it to the sitemap"
       redirect: S(row.action) === 'site_fix'
-        ? 'This address redirects' + (S(row.final_url) ? ' to ' + pathLabel(row.final_url) : '') + '. List the final address in your sitemap instead.'
-        : 'This address redirects to another page. That is normal. Nothing to do.',
+        ? 'This address redirects' + (S(row.final_url) ? ' to ' + pathLabel(row.final_url) : '') + ', so it does not belong in your sitemap. Take it out and list ' + (S(row.final_url) ? pathLabel(row.final_url) : 'the address it redirects to') + ' instead.'
+        : (S(row.verdict) === 'PASS' || covCause(row.coverage) === 'indexed') && S(row.final_url)
+          ? 'Google still shows this old address. It now redirects permanently to ' + pathLabel(row.final_url) + ', and Google swaps the two after its next visit (usually a few days to a few weeks). Nothing to do. Keep the redirect for at least a year.'
+          : 'This address redirects to another page. That is normal. Nothing to do.',
       redirect_error: 'Google could not follow the redirect on this address (a loop, a chain that is too long, or a redirect to a broken address). Fix the redirect so it goes straight to a working page, or answer "not found" if the page is gone.',
       low_value: 'This is a listing, filter, search or account page that does not need to be in Google. Nothing to do.',
       not_checked: 'We could not check this page today' + (S(row._why) ? ' (' + S(row._why).replace(/[.:]+$/, '') + ')' : '') + '. We try again on the next run.',
@@ -1199,7 +1581,8 @@ const IX = (() => {
     fix_seen_at: S(r.fix_seen_at), ask_google: yes(r.ask_google), next_check_at: S(r.next_check_at), sig: rowSig(r), improved_at: S(r.improved_at),
     fix_failed_at: S(r.fix_failed_at), ask_google_at: S(r.ask_google_at), sources: S(r.sources),
     linked_by: S(r.linked_by), asked_google_at: S(r.asked_google_at), google_read_after_ask_at: S(r.google_read_after_ask_at),
-    escalated_at: S(r.escalated_at), indexnow_at: S(r.indexnow_at), type_override: S(r.type_override), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n) });
+    escalated_at: S(r.escalated_at), indexnow_at: S(r.indexnow_at), type_override: S(r.type_override), link_depth: n0(r.link_depth), linked_n: n0(r.linked_n),
+    fetch_at: S(r.fetch_at), http_status: n0(r.http_status), noindex: S(r.noindex), final_url: S(r.final_url) });   // CR17-C: the previous read (two-reads rule)
   /**
    * c: { site, now, stored (seo_index_pages rows), inventory (seo_pages rows), sitemap: { read, complete, urls: [{loc, lastmod, gsc}] },
    * ours: [{url, published_at}], search: searchEvidence() result + { read }, watch: seo_page_watch rows, prev_complete, prev_complete_at }.
@@ -1301,9 +1684,11 @@ const IX = (() => {
       if (smComplete && row.in_sitemap && S(row.cause) === 'indexed_not_in_sitemap') Object.assign(row, { cause: '', action: 'none' });
       if (smComplete && row.in_sitemap && S(row.cause) === 'not_in_sitemap') Object.assign(row, { cause: 'unknown_to_google', action: 'links' });
       // evidence without quota: impressions in the last 28 days of data and no newer inspection saying otherwise
-      if (ev && n0(ev.impr28) > 0 && (row.state === 'unknown' || row.state === 'error' || (row.state !== 'indexed' && S(ev.last_at) > S(row.inspect_at).slice(0, 10)))) {
+      // CR17-C (F3): impressions of an address we saw move after Google's last visit say Google still lists the OLD address, not that it is a
+      // page to keep: the move stands (movedByUs), and only an address that answers 200 directly may be "missing from the sitemap"
+      if (ev && n0(ev.impr28) > 0 && !movedByUs(row, row.last_crawl, site) && (row.state === 'unknown' || row.state === 'error' || (row.state !== 'indexed' && S(ev.last_at) > S(row.inspect_at).slice(0, 10)))) {
         row._search_flip = row.state !== 'unknown';
-        Object.assign(row, { state: 'indexed', evidence: 'search', cause: (!row.in_sitemap && smComplete && smUrls && !isLowValue(row.url, row)) ? 'indexed_not_in_sitemap' : '', action: '', dropped_at: S(pv.dropped_at), fix_seen_at: '', fix_failed_at: '' });
+        Object.assign(row, { state: 'indexed', evidence: 'search', cause: (!row.in_sitemap && smComplete && smUrls && !isLowValue(row.url, row) && direct200(row, null)) ? 'indexed_not_in_sitemap' : '', action: '', dropped_at: S(pv.dropped_at), fix_seen_at: '', fix_failed_at: '' });
         row.action = ACTION[row.cause] || 'none';
         row.indexed_since = S(pv.state) === 'indexed' ? (S(pv.indexed_since) || nowIso) : nowIso;
         row.next_check_at = nextCheck(row, ctx);
@@ -1408,12 +1793,15 @@ const IX = (() => {
     const opts = o || {}; const now = n0(opts.now); const nowIso = new Date(now).toISOString(); const home = opts.home_keys || new Set(); const frz = !!(opts.freeze && opts.freeze.freeze);
     // wave 2 (DESIGN_WAVE2.md §2.3): never a utility page; a page the client already asked Google about waits ask_reoffer_days;
     // important existing pages are the ones in the sitemap OR linked from the website (linked_by)
+    // CR17-C (build section 193, client report 2026-11-17 Q1): the pages an old address now redirects to (a move we saw) are asked first, at the
+    // "fix we saw" tier: they carry the old page's history and the client is waiting for them; a policy page marked important comes after
+    const movedTargets = new Set((rows || []).filter(r => S(r.cause) === 'redirect' && S(r.final_url) && !same(r.final_url, r.url)).map(r => key(r.final_url)));
     const eligible = (r) => {
       if (S(r.state) === 'indexed' || S(r.action) === 'leave_out' || S(r.action) === 'none' && !S(r.fix_seen_at)) return 0;
       if (frz && S(r.action) === 'quality') return 0;
       if (isUtilityRow(r)) return 0;
       const ak = ts(r.asked_google_at); if (ak && now - ak < CFG.ask_reoffer_days * DAY) return 0;
-      if (S(r.fix_seen_at) || improveState(r) === 'waiting') return 3;   // a fix we saw, or an improved version Google has not read yet
+      if (S(r.fix_seen_at) || improveState(r) === 'waiting' || movedTargets.has(key(r.url))) return 3;   // a fix we saw, an improved version Google has not read yet, or where an old address now goes
       const pub = ts(r.published_at);
       if (S(r.sources).split(',').includes('ours') && pub && now - pub >= CFG.ask_ours_days * DAY) return 2;
       if ((r.in_sitemap || linkedList(r.linked_by).length || home.has(key(r.url)) || typeOverride(r) === 'important') && UNSEEN.includes(S(r.cause))) return 1;
@@ -1643,6 +2031,15 @@ const IX = (() => {
   const changed = (prev, row) => !prev || (prev.sig ? prev.sig !== rowSig(row) : PAGE_COLS.some(k => k !== 'updated_at' && colVal(prev, k) !== colVal(row, k)));
 
   // ---- the run: the site's figures, the client's report ----
+  /**
+   * CR17-C (build section 193, client report 2026-11-17 F6): "pages that should be in Google" - THE SHARED RULE with the app
+   * (app/shared/src/indexing.ts inGooglePopulation): a page Google gave a reading of, not left out on purpose, not an address that is not a
+   * page of its own (moved, gone, another page's copy), and not an address our newest read saw redirect to another page. A moved address
+   * counts once, through the page it moved to.
+   */
+  const NOT_A_PAGE = ['redirect', 'redirect_error', 'not_found', 'canonical_elsewhere', 'alternate'];
+  const inPopulation = (r) => ['indexed', 'not_indexed', 'excluded'].includes(S(r.state)) && S(r.action) !== 'leave_out' && !NOT_A_PAGE.includes(S(r.cause))
+    && !(S(r.final_url) && !same(r.final_url, r.url));
   const summarize = (rows, run) => {
     const R = rows || []; const cnt = (f) => R.filter(f).length;
     const by_cause = {}, by_action = {};
@@ -1650,6 +2047,7 @@ const IX = (() => {
     return { known: R.length, indexed: cnt(r => r.state === 'indexed'), not_indexed: cnt(r => r.state === 'not_indexed'), excluded: cnt(r => r.state === 'excluded'),
       unknown: cnt(r => r.state === 'unknown'), errors: cnt(r => r.state === 'error'), new_pages: cnt(r => r.lane === 'new'), new_indexed: cnt(r => r.lane === 'new' && r.state === 'indexed'),
       needs_person: cnt(r => r.needs_person === true), should_index: cnt(r => r.action !== 'leave_out'), by_cause, by_action,
+      should_be: cnt(inPopulation), in_google: cnt(r => inPopulation(r) && r.state === 'indexed'),   // CR17-C (F6): the app's population
       backlog_left: n0((run || {}).backlog_left) };
   };
   const ACTION_LABEL = { fixed: 'Fixed on your site, waiting for Google', improved: 'Improved by you, waiting for Google', moved: 'Improved version published at another address', site_fix: 'Steps on your website', links: 'Help Google find these pages (internal links and sitemap)', quality: 'Pages Google read and left out',
@@ -1684,7 +2082,10 @@ const IX = (() => {
     L.push('');
     // E14: a website that could not be checked is said to be not checked - never "0 of 0", never a measured zero
     if (opts.failed) L.push('**We could not check this website today: ' + S(opts.why || 'not checked').replace(/[.:]+$/, '') + '.**' + (sum.known ? ' The figures below are from the last check.' : ' Nothing has been checked yet.'));
-    if (sum.known) L.push('Google has **' + sum.indexed + ' of ' + sum.known + '** known pages in its index' + (should && should !== sum.known ? ' (' + sum.indexed + ' of the ' + should + ' that should be there)' : '') + '.');
+    // CR17-C (F6): the headline counts the pages that should be in Google (one population with the app); the known-pages figure stays as context
+    const sb = sum.should_be != null ? n0(sum.should_be) : should; const ig = sum.in_google != null ? n0(sum.in_google) : sum.indexed;
+    if (sum.known) L.push(sb ? 'Google has **' + ig + ' of the ' + sb + '** pages that should be in Google (' + sum.known + ' addresses known, old addresses that redirect and pages left out on purpose not counted).'
+      : 'Google has **' + sum.indexed + ' of ' + sum.known + '** known pages in its index.');
     if (sum.unknown) L.push(sum.unknown + ' page(s) are not checked yet; at up to ' + n0(run.quota_cap) + ' checks a day that takes about ' + Math.max(1, Math.ceil(sum.unknown / Math.max(1, n0(run.quota_cap)))) + ' more day(s).');
     if (sum.errors) L.push(sum.errors + ' page(s) could not be checked on the last try; they are tried again, never counted as missing.');
     if (S(run.note) && !opts.failed) L.push(S(run.note));
@@ -2239,9 +2640,9 @@ const IX = (() => {
   };
 
   return { CFG, key, same, norm, own, safe, parseUrl, siteHost, hostOf, bare, pathOf, depth, isLowValue, LOW_VALUE, robotsSitemaps, parseSitemap, sitemapRoots, sitemapAccept,
-    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, fixSeen, covCause,
+    sitemapQueue, sitemapComplete, searchEvidence, saWindows, readInspection, readingsOf, reuseOf, storedReading, readFetch, hopOf, robotsAllows, mainWords, diagnose, direct200, movedByUs, landsWell, PERMANENT, fixSeen, covCause,
     stateOf, ACTION, CAUSES, laneOf, anchorOf, noteOf, plan, inProperty, nextCheck, capOf, isGone, askGoogle, homeLinks, linkSuggestions, topicOf, kindOf, parseEvents,
-    eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize,
+    eventRows, policyText, policyEvent, POLICY_URL, freeze, impactWindows, impactDue, impactCompare, impactNote, PAGE_COLS, rowOut, rowSig, changed, summarize, inPopulation,
     reportMarkdown, groupNote, isoDay, DAY, merge, ts,
     fixState, xRobotsNoindex, metaNoindex, sitemapBatch, answerText, sizeOf, plainWhy, PLAIN_FAIL,
     UTILITY, isUtility, isJobPosting, resolveHref, pageLinks, linkIndex, linkedOf, linkedList, parentOf, parentPlan, titleOf, titleCore, canonicalOwn,
@@ -2275,6 +2676,7 @@ for (const d of diag) {
   const dates = sj.dates || null;
   const summary = { known: sum.known, indexed: sum.indexed, not_indexed: sum.not_indexed, excluded: sum.excluded, unknown: sum.unknown, backlog_left: sum.unknown,
     new_pages: sum.new_pages, new_indexed: sum.new_indexed, by_action: sum.by_action, by_cause: sum.by_cause, dropped: (d.dropped || []).slice(0, IX.CFG.dropped_max),
+    should_be: sum.should_be, in_google: sum.in_google,   // CR17-C (build section 193, F6): the pages that should be in Google, the app's one population
     freeze: !!fr.freeze, freeze_reason: S(fr.reason), events,
     impact: imp ? { event_title: S(imp.event_title), dropped: n0(imp.dropped), stable: n0(imp.stable), gained: n0(imp.gained) } : { event_title: '', dropped: 0, stable: 0, gained: 0 },
     // N12 (fix wave 2): a run that could not read the website says so in the summary itself - the figures are the LAST check's, never today's

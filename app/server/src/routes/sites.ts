@@ -56,6 +56,8 @@ import { routeSiteToApp } from '../services/runs';
 import { fetchPublicText, verify } from '../services/verify';
 import { checkIndexnowStep } from '../services/siteTasks';
 import { invalidateKi } from '../services/ki';
+import { engineIdIsOwn, purgeEngineHistory } from '../services/enginePurge';
+import { settingsDeclaredPart, syncSettingsCompetitors } from '../services/kiData';
 import { deleteAiPrompts, importAiReport } from '../services/aiWave2';
 import { aiPilotState, startAiPilot } from '../services/aiPilot';
 import { checkBingAccess } from '../services/bingCheck';
@@ -152,88 +154,28 @@ export async function verifyWithGoogle(req: FastifyRequest, orgId: string, siteI
   return 'verified';
 }
 
-/** Stops everything the SEO engine runs for a domain: its site row (weekly runs) and its ladders (rank tracking and the "virtual"
- * sites the monitors build from ladder rows). History tables stay. */
+/**
+ * Stops everything the SEO engine runs for a domain and deletes its history there (CR17-B, client report 2026-11-17 C1): the engine's
+ * Site Admin `delete` (site row, weekly runs, and with the domain every history table of ladder_common.SITE_PURGE), then the app's own
+ * pass over the same list as the backstop (services/enginePurge.ts). Whether the tables keyed only by the engine site id are this
+ * website's is read first, before the engine's delete removes the rows that tell. Never throws.
+ */
 async function stopInEngine(site: SiteRow, log: FastifyRequest['log']) {
+  const idSafe = await engineIdIsOwn(site, log);
   try {
-    await siteAdmin({ action: 'delete', domain: site.domain, site_id: n8nSiteId(site.domain), request_id: `app-delete-${site.id}` });
+    // FX-SERVER (review R5 M5): the engine's own delete honours the same reading: with purge_ids false, Site Admin deletes no row keyed only
+    // by the engine site id (another website's), only the rows that name this domain (engine build section 200, Admin Action purge_id)
+    await siteAdmin({ action: 'delete', domain: site.domain, site_id: n8nSiteId(site.domain), purge_ids: idSafe, request_id: `app-delete-${site.id}` });
   } catch (err) {
     log.warn({ err: String(err), domain: site.domain }, 'n8n site delete failed');
   }
-  try {
-    await deleteRows('ladders', [{ columnName: 'domain', condition: 'eq', value: site.domain }]);
-    // the ladders' settings (Phase 2 table: nothing to do while it does not exist)
-    await deleteRows('ladderSettings', [{ columnName: 'domain', condition: 'eq', value: site.domain }]);
-  } catch (err) {
-    log.warn({ err: String(err), domain: site.domain }, 'n8n ladder delete failed');
-  }
-  await clearAiInEngine(site.domain, log);
-  await clearIndexInEngine(site.domain, log);
-  await clearKiInEngine(site.domain, log);
+  await purgeEngineHistory(site.domain, log, { idSafe });
+  invalidateKi(site.domain);
   invalidateSite(site.domain);
 }
 
-/**
- * X16 (Index coverage, FIX_CONTRACT decision 8): the website's index check leaves with it, like its ladders. The page, run and update-impact
- * rows carry the domain; the history rows only the engine's site id (the app refuses a second domain with the same id, so it is this
- * website's). Google's own announcements (seo_google_events) are global and stay. A table that fails is logged; the others still go.
- */
-export const INDEX_TABLES_CLEARED_ON_DELETE = ['indexPages', 'indexRuns', 'updateImpact'] as const;
-export async function clearIndexInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
-  const failed: string[] = [];
-  const del = async (t: 'indexPages' | 'indexRuns' | 'updateImpact' | 'indexHistory', f: { columnName: string; condition: 'eq'; value: string }) => {
-    try {
-      await deleteRows(t, [f]);
-    } catch (err) {
-      failed.push(t);
-      log.warn({ err: String(err), domain, table: t }, 'n8n index data delete failed');
-    }
-  };
-  for (const t of INDEX_TABLES_CLEARED_ON_DELETE) await del(t, { columnName: 'domain', condition: 'eq', value: domain });
-  await del('indexHistory', { columnName: 'site_id', condition: 'eq', value: n8nSiteId(domain) });
-  return failed;
-}
-
-/**
- * KI (2026-11-08, A1; CONTRACTS.md §5): the website's keyword intelligence leaves with it. The engine's Site Admin `delete` removes the KI rows
- * too (E2); this covers an engine without that step, table by table, keyed by the domain (a table not created yet is nothing to do).
- */
-export const KI_TABLES_CLEARED_ON_DELETE = ['kiCompetitors', 'kiKeywords', 'kiGaps', 'kiRuns'] as const;
-export async function clearKiInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
-  const failed: string[] = [];
-  for (const t of KI_TABLES_CLEARED_ON_DELETE) {
-    try {
-      await deleteRows(t, [{ columnName: 'domain', condition: 'eq', value: domain }]);
-    } catch (err) {
-      failed.push(t);
-      log.warn({ err: String(err), domain, table: t }, 'n8n KI data delete failed');
-    }
-  }
-  invalidateKi(domain);
-  return failed;
-}
-
-/**
- * A12 (2026-10-23, AI visibility app audit): the owner's AI inputs and measurements leave with the website. Site Admin `delete` removes
- * the site row and its cycle only; the monitor settings (panel size, engines, competitors, brand names, buyer roles, markets), the question
- * panel (with the owner's own questions and personas) and the AI history (runs, answers, pulse days) stayed, so the next company that
- * verified the domain saw them and was billed for the old panel size. They are removed here through the n8n public API, table by table; a
- * table that fails is logged and the others still go (the next owner then starts from the engine's default panel).
- */
-// R-A6 (review 2026-10-23): the owner's AI report uploads (seo_ai_imports: queries, page URLs, file names) leave with the website too
-export const AI_TABLES_CLEARED_ON_DELETE = ['monitors', 'aiPrompts', 'aiVisibility', 'aiAnswers', 'aiDaily', 'aiImports'] as const;
-export async function clearAiInEngine(domain: string, log: FastifyRequest['log']): Promise<string[]> {
-  const failed: string[] = [];
-  for (const t of AI_TABLES_CLEARED_ON_DELETE) {
-    try {
-      await deleteRows(t, [{ columnName: 'domain', condition: 'eq', value: domain }]);
-    } catch (err) {
-      failed.push(t);
-      log.warn({ err: String(err), domain, table: t }, 'n8n AI data delete failed');
-    }
-  }
-  return failed;
-}
+// CR17-B (2026-11-17): the per-area lists (AI, Index coverage, KI tables cleared on delete: A12, X16, KI E2) are one list now,
+// ladder_common.SITE_PURGE, run by purgeEngineHistory in stopInEngine above (every table, not three groups of them).
 export { stopInEngine };
 
 /** A13: the audit details of a Site Admin change: counts and ids only (a question text can carry a customer's competitive framing). */
@@ -449,7 +391,7 @@ export async function siteRoutes(app: FastifyInstance) {
   app.delete('/api/orgs/:orgId/sites/:siteId', async (req) => {
     const p = req.params as P;
     const { site } = await siteAccess(req, p.orgId, p.siteId, 'admin');
-    // a verified owner leaves: nothing keeps running or reporting for the domain (history in n8n stays)
+    // a verified owner leaves: nothing keeps running or reporting for the domain, and its engine history goes (CR17-B)
     if (site.verifiedAt) await stopInEngine(site, req.log);
     await db.delete(schema.sites).where(eq(schema.sites.id, site.id));
     invalidateSite(site.domain);
@@ -705,7 +647,8 @@ export async function siteRoutes(app: FastifyInstance) {
         // RC-4 (review C, 2026-11-06): until the owner opens AI ranking to clients (AI_RANK_OPEN_TO_CLIENTS), only a platform admin sets the
         // mode (Trial / On) and the reserved slot; a company owner or admin sees it read-only
         if (a.aiRank && Object.keys(a.aiRank).length && !aiRankMayChange(a.aiRank, isPlatformAdmin(user))) throw new HttpError(403, `${AI_RANK_ROLLOUT_NOTE} Until then only our team can switch it on.`, 'forbidden');
-        body = { ...base, action: 'monitors', monitors: { ...siteAdminMonitorsBody(a.monitors, a.competitors), ...aiRankBody(a.aiRank) } };
+        // FX-LINKS (review R2 L4): only the declared part of the one list is stored as the website's own list (Competitors page choices stay there)
+        body = { ...base, action: 'monitors', monitors: { ...siteAdminMonitorsBody(a.monitors, a.competitors ? await settingsDeclaredPart(site, a.competitors) : a.competitors), ...aiRankBody(a.aiRank) } };
         break;
       }
       case 'prospect':
@@ -723,6 +666,9 @@ export async function siteRoutes(app: FastifyInstance) {
     }
     const r = await siteAdmin(body);
     if (!r.ok) throw new HttpError(502, r.error || 'The SEO engine could not apply the change.', 'admin_failed');
+    // CR17-F: Site settings shows THE one competitor list; a Competitors page choice taken off it goes to the watchlist (or the union brings it
+    // back), and a domain typed in that was marked not a competitor is chosen again
+    if (a.action === 'monitors' && a.competitors) await syncSettingsCompetitors(site, a.competitors);
     // A13: who changed the panel or the monitors, and what in numbers (ids and counts, never the question texts)
     await audit(req, site.orgId, { action: `site.admin.${a.action}` as AuditAction, target: { type: 'site', id: site.id, label: site.domain }, details: adminAuditDetails(a, r.affected) });
     if (r.affected === 0 && (a.action === 'pause' || a.action === 'resume')) throw new HttpError(409, 'The SEO engine does not track this website yet: start weekly tracking first.', 'not_tracked');

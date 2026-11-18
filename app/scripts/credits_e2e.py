@@ -107,7 +107,7 @@ saved = None
 O = None
 try:
     admin = Api(args.base)
-    s, _ = admin.post('/api/auth/signup', {'name': 'Credits Admin', 'email': args.admin, 'password': 'credits-e2e-pass-1'})
+    s, _ = admin.post('/api/auth/signup', {'acceptTerms': True, 'name': 'Credits Admin', 'email': args.admin, 'password': 'credits-e2e-pass-1'})
     if s != 200:
         s, _ = admin.post('/api/auth/login', {'email': args.admin, 'password': 'credits-e2e-pass-1'})
     sql(f"update users set email_verified_at = now() where email = '{args.admin}'")
@@ -118,7 +118,7 @@ try:
 
     owner = Api(args.base)
     email = f'credits-owner-{TAG}@example.org'
-    s, _ = owner.post('/api/auth/signup', {'name': 'Owner', 'email': email, 'password': 'credits-e2e-pass-1'})
+    s, _ = owner.post('/api/auth/signup', {'acceptTerms': True, 'name': 'Owner', 'email': email, 'password': 'credits-e2e-pass-1'})
     sql(f"update users set email_verified_at = now() where email = '{email}'")
     s, org = owner.post('/api/orgs', {'name': f'Credits Co {TAG}'})
     O = org['id']

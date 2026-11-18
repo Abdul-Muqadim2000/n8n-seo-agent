@@ -25,6 +25,7 @@ export * from './keywords';
 export * from './link-import';
 export * from './backlinks';   // client report 2026-11-11 (N45): what each referring site is (real, listing, automatic report page, farm), Bing check
 export * from './outreach';
+export * from './link-status';   // CR17-E (client report 2026-11-17, F9 + C4): one link-building status model (linkStates / linkStatusCounts), the won rule, the link text
 export * from './draft-qa';
 export * from './placeholders';
 export * from './findings';
@@ -54,8 +55,11 @@ export * from './agency';
 export * from './admin';
 export * from './billing';   // credits: what customers see and pay (app/docs/CREDITS.md)
 export * from './autopilot'; // one breakdown of a website's schedules, for the settings card, the forecast and the reserve
+export * from './credit-forecast';   // CR17-I (2026-11-17, M2): the credit forecast from the ledger, two runways, cost per outcome
+export * from './tracked-keywords';   // CR17-I (2026-11-17, F8): what "tracked keywords" means, one definition for every screen
 export * from './cycle-clock'; // the per-website cycle's clock (v5/code/_cycle.js mirrored): due times, monthly cycles, previews
 export * from './ladder-rules';   // LADDER PACKAGE (2026-11-09): the engine's ladder rules (v5/code/_ladder_rules.js), generated: market lock, rung reasons, stuck rungs
+export * from './competitor-roles';   // CR17-F (2026-11-17): the engine's one competitor role classifier (v5/code/_competitors.js), generated: roles, one list, AI named split
 export * from './fit-gate';  // the engine's fit gate (v5/code/_fit_gate.js), generated from the kit by build_v4.py (KW-PARITY), the same code
 export * from './search-advice';   // F-10 (2026-11-12): the fit gate + address searches + the client's brand names, for every keyword list Recommendations shows
 export * from './cycles';    // the per-website 7-day cycle and keyword-first autopilot contract (SCHEDULING_KEYWORDS_PLAN.md §14)
@@ -66,10 +70,16 @@ export * from './consistency-more';   // MKT (2026-10-27): the remaining cases (
 export * from './robots';   // site tasks: the engine's robots.txt matcher (v5/code/_ai_access_kit.js), ported line for line
 export * from './indexing';   // Index coverage (2026-10-29): which pages Google left out, why, and what to do (DESIGN.md in docs/indexing-2026-10-29)
 export * from './site-tasks';   // site tasks (2026-10-28, app/docs/SITE_TASKS.md): steps on the client's own website, checked by us
+export * from './site-health';   // CR17-C (client report 2026-11-17 C3 / F6): Technical health and Pages in Google, one rule each
 export * from './ai-rank';   // AIR (2026-11-06, docs/ai-ranking-2026-11-05): the AI-ranking settings, plan, memo and the ai_growth callback's ai_rank key
 export * from './ai-rank-client';   // FX-C RC-1 (2026-11-06): the AI ranking plan in the client's words (the engine kit's AIRC.view, mirrored)
 export * from './hold';   // W0-D (2026-10-29): a page held for the client's OK before writing (verdict under 50, or a page the website already has)
 export * from './run-watch';   // 2026-11-05: when a run with no result is overdue (the watcher and the run page share it)
 export * from './ki-api';   // KI A1 (2026-11-08): the KI routes' response shapes and readers (fixes/A1_ROUTES.md)
 export * from './ki';   // KI (2026-11-08, docs/keyword-intel-2026-11-08/CONTRACTS.md): keyword intelligence rows, callbacks, words, the per-site switch
+export * from './alerts';   // CR17-D (2026-11-17, build section 194): alert states (open / seen / resolved), the open count, check-in numbers that were not recorded
 export * from './draft-fix';   // 2026-10-21: a not-ready draft is finished by hand (the engine's qa_next_step / qa_owner_edits), never re-run
+export * from './legal';   // CR17-B (2026-11-17): the Terms / Privacy version agreed at sign-up, their links, what deleting one's account does
+export * from './engine-purge';   // CR17-B (2026-11-17): the engine tables a deleted website's history is purged from (one list, ladder_common.SITE_PURGE)
+export * from './client-copy';   // CR17-H (client report 2026-11-17, F1): what a client may read, one guard for every screen and report
+export * from './recommendation-rules';   // CR17-H (Q4): a rule per recommendation family, one card per issue, the state machine

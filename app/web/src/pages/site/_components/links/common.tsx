@@ -1,7 +1,7 @@
 // Link building (v4.13, n8n/seo-agent/LINK_BUILDER_SPEC.md): labels, icons and small pieces shared by the page's sections.
 import type { ReactNode } from 'react';
 import { AtSign, Bot, Library, Link2, Link2Off, ListOrdered, Network, Newspaper, PenLine, Swords, Unlink, Wrench } from 'lucide-react';
-import { OPPORTUNITY_LABEL, REPLY_LABEL, SEQUENCE_LABEL, titleCase, type MailboxView, type OutreachContact, type ReplyClass, type SequenceStatus, type LinkBuildingData } from '@seo/shared';
+import { ANCHOR_KIND_LABEL, OPPORTUNITY_LABEL, REPLY_LABEL, SEQUENCE_LABEL, titleCase, type MailboxView, type OutreachContact, type ReplyClass, type SequenceStatus, type LinkBuildingData } from '@seo/shared';
 import { prefersReducedMotion } from '@/components/insight';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 
@@ -24,14 +24,18 @@ export const typeIcon = (t: string) => TYPE_ICON[t] ?? <Link2 />;
 
 export const CONTACT_KIND: Record<OutreachContact['kind'], string> = { person: 'Named person', editorial: 'Editorial inbox', general: 'General inbox', other: 'Other address' };
 
-/** The link text we ask for (never a keyword). */
-export const ANCHOR_LABEL: Record<string, string> = { brand: 'Your brand name', title: 'The page\'s title', url: 'The page\'s address', 'as before': 'The same text as before' };
-export const anchorLabel = (a: string) => ANCHOR_LABEL[a] ?? (a ? a : ANCHOR_LABEL.brand!);
+/** CR17-E (client report 2026-11-17, C4c): the link text itself ("Devaicon", "Open edX Services"), with its kind as a hint; never a
+ *  label like "Your brand name" that reads as an unfilled template. The server resolves the text (shared anchorDisplay). */
+export function anchorLabel(text: string, kind: string): string {
+  const k = ANCHOR_KIND_LABEL[kind] ?? '';
+  if (!text) return kind === 'as before' ? 'The same text as before' : 'Your business name (add it in the business profile)';
+  return k ? `"${text}" (${k})` : `"${text}"`;
+}
 export const ANCHOR_INFO =
   'We never ask for a keyword as the link text: Google names optimised link text in requested links as link spam. Your brand or the page\'s title is what an editor would write anyway.';
 
 export function SequenceBadge({ status }: { status: SequenceStatus }) {
-  const tone: Tone = status === 'won' ? 'good' : status === 'replied' ? 'accent' : status === 'paused' ? 'warning' : status === 'bounced' || status === 'failed' ? 'critical' : 'neutral';
+  const tone: Tone = status === 'won' ? 'good' : status === 'replied' || status === 'claimed' ? 'accent' : status === 'paused' ? 'warning' : status === 'bounced' || status === 'failed' ? 'critical' : 'neutral';
   return tone === 'neutral' ? <Badge>{SEQUENCE_LABEL[status] ?? titleCase(status)}</Badge> : <StatusBadge tone={tone}>{SEQUENCE_LABEL[status] ?? titleCase(status)}</StatusBadge>;
 }
 

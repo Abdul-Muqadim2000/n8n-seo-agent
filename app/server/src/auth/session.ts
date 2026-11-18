@@ -1,6 +1,6 @@
 import { and, eq, isNull, lt } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { ACCOUNT_SUSPENDED, policyOf, strictestIdle, type AuthMethod, type User } from '@seo/shared';
+import { ACCOUNT_SUSPENDED, policyOf, strictestIdle, termsAccepted, type AuthMethod, type User } from '@seo/shared';
 import { config } from '../config';
 import { db, schema } from '../db';
 import type { SessionRow, UserRow } from '../db/schema';
@@ -163,5 +163,8 @@ export function toUser(u: UserRow, mfaPasskeys = 0): User {
     googleLinked: !!u.googleSub,
     mfaEnabled: !!u.mfaTotpEnabledAt || mfaPasskeys > 0,
     createdAt: u.createdAt.toISOString(),
+    termsAccepted: termsAccepted(u.termsVersion),
+    termsVersion: u.termsVersion ?? null,
+    termsAcceptedAt: u.termsAcceptedAt?.toISOString() ?? null,
   };
 }

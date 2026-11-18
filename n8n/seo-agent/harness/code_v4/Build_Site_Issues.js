@@ -713,7 +713,8 @@ ok(pm.duplicate_title === 0, 'No duplicate page titles');
 ok(pm.duplicate_description === 0, 'No duplicate meta descriptions');
 ok(pm.duplicate_content === 0, 'No duplicate content across pages');
 ok(pm.redirect_loop === 0, 'No redirect loops');
-ok(pm.non_indexable === 0, 'All crawled pages are indexable');
+const __gsOut193 = (((input.search_console || {}).not_indexed) || []).length; const __gsOk193 = (((input.search_console || {}).inspections) || []).filter(i => i && !i.error).length;   // CR17-C (section 193)
+ok(pm.non_indexable === 0, 'No crawled page blocks indexing (no noindex, no canonical to another page)' + (__gsOut193 ? '. Google has still left ' + __gsOut193 + ' of the ' + __gsOk193 + ' pages it was asked about out of its index: see Indexing' : ''));
 ok((pm.checks || {}).no_h1_tag === 0, 'Every page has an H1');
 ok((pm.checks || {}).no_title === 0, 'Every page has a title tag');
 for (const w of probe.what_works) if (!whatWorks.includes(w)) whatWorks.push(w);
@@ -756,6 +757,10 @@ for (let i = findings.length - 1; i >= 0; i--) {
 IMP.rank(findings, { total_pages: total, search_console: input.search_console || null, ga4_key_events: input.ga4_key_events || null,
   key_pages: [...(((input.html_analysis || {}).sampled_pages) || []).map(p => (p && p.url) || p), ...(((input.search_console || {}).top_pages) || []).slice(0, 5).map(p => p.page || p.url)].filter(Boolean) });
 
+// CR17-C (build section 193, client report 2026-11-17 C3): a finding that measures Google's decision (google_state: not indexed, a canonical
+// Google chose, rare crawls, impressions without clicks) is listed and ranked but does not change Technical health: it is counted under Pages in
+// Google (the daily Index coverage), once. Marked here, after the merge of duplicate findings, so it also leaves the caps.
+for (const f of findings) if (f && f.google_state === true && f.scoring !== false) { f.scoring = false; f.score_note = 'Google\'s view, counted under Pages in Google'; }
 // ===== 7. Scoring =====
 const PEN2 = { Critical: 30, High: 15, Medium: 7, Low: 3, Info: 1 };
 // (the weights are declared above section 5b: a category this audit type does not weight must not reach the fix list either — R24)
@@ -846,7 +851,7 @@ return [{
       not_assessed,
       evidence_withheld,
       dataforseo_onpage_score: pm.onpage_score ?? null,
-      scoring_method: (isFull ? 'Full SEO health. ' : 'Technical site health only. ') + 'Each category starts at 100. Findings written by the AI content review, and notes about data that could not be collected, are listed but do not change the score. Each other finding deducts Critical 30, High 15, Medium 7, Low 3, Info 1 points, scaled by the share of pages affected (60%-100% of the penalty); site-wide issues take the full penalty. Within a category, each further finding of the same severity counts 70% of the previous one, so many small issues cannot zero a category on their own. The score is the weighted average of category scores, capped at 70 with one critical issue, 60 with two or more, and 85 with five or more high-priority issues.',
+      scoring_method: (isFull ? 'Full SEO health. ' : 'Technical health: what our crawl can verify on the site. ') + 'Each category starts at 100. Findings that measure Google\'s own decision (pages left out of its index, a canonical Google chose, rare crawls, impressions without clicks) are listed but counted under Pages in Google, not in this score. Findings written by the AI content review, and notes about data that could not be collected, are listed but do not change the score. Each other finding deducts Critical 30, High 15, Medium 7, Low 3, Info 1 points, scaled by the share of pages affected (60%-100% of the penalty); site-wide issues take the full penalty. Within a category, each further finding of the same severity counts 70% of the previous one, so many small issues cannot zero a category on their own. The score is the weighted average of category scores, capped at 70 with one critical issue, 60 with two or more, and 85 with five or more high-priority issues.',
       notes: [LN.evidenceNote(evidence_withheld), probe.note, base.crawl_js === false ? 'Every page figure in this report was read from the first response: the crawl did not run JavaScript. That is what a crawler which does not render sees — every AI crawler today, and Google on its first pass — so a heading, a text or a link that a script writes is reported here as missing.' + (RDF && RDF.available ? ' The ' + RDF.pages_checked + ' key page(s) of the response-versus-render check were read both ways' + (render_merge ? ', and ' + render_merge.merged + ' finding(s) were joined to the rendering that causes them' : '') + '.' : '') : '', extras.errors.length ? 'Some extra crawl reports were unavailable: ' + extras.errors.join('; ') : '', (base.pages_crawled && total < base.pages_crawled) ? 'Only ' + total + ' of ' + base.pages_crawled + ' crawled pages were analysed in detail.' : ''].filter(Boolean)
     }
   }

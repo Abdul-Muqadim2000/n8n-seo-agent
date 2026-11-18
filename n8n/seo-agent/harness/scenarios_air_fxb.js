@@ -181,7 +181,10 @@ module.exports = async (ctx) => {
     const saA = (plan.targets_set_aside || []).find(x => x.target_id === tA.target_id) || {};
     check('(d) the F-37 path is reached: an off-topic question with a cited client page is kept (flagged, not set aside) and not queued', tA.target_id && tA.status !== 'set_aside' && tA.status !== 'queued' && saA.kept === true && /AI already cites your page/.test(tA.reason || ''), J({ tA: [tA.status, String(tA.reason).slice(0, 200)], saA }));
     check('(d) the F-38 path is reached: a refresh target whose page was published 10 days ago and not read yet waits for its readiness check', tB.target_id && tB.kind === 'refresh' && tB.status === 'skipped' && /its AI readiness is checked before any refresh is planned/.test(tB.reason || ''), J({ tB: [tB.kind, tB.status, String(tB.reason).slice(0, 200)] }));
-    const pin = { report: g.report, callback: g.callback, posted: g.posted, writes: g.writes };
+    // CR17-F (2026-11-17): seo_link_prospects.retired_at is new, written null by the exact-column writer: left out of the comparison, as AIRG3 does
+    const noRetired = (ws) => (ws || []).map(w => w && w.table === 'seo_link_prospects' ? { ...w, rows: (w.rows || []).map(r => { if (r && (r.retired_at === null || r.retired_at === '')) { const c = { ...r }; delete c.retired_at; return c; } return r; }) } : w);
+    const noRet = (x) => Array.isArray(x) ? x.map(noRet) : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).filter(([k, v]) => !(k === 'retired_at' && (v === '' || v === null))).map(([k, v]) => [k, noRet(v)])) : x;
+    const pin = { report: noRet(g.report), callback: g.callback, posted: g.posted, writes: noRetired(g.writes) };
     if (process.env.AIR_GOLDEN_WRITE === '1') { let moved = null;
       if (process.env.AIR_GOLDEN_BASE_WF) { const b = await PL.runGrowth({ wf: readWf(path.basename(process.env.AIR_GOLDEN_BASE_WF), path.dirname(process.env.AIR_GOLDEN_BASE_WF)), modes: { nova: '', acme: 'off' }, tablesFn: (t, F) => pathsFixture(t, F) });
         const bt = (((b.last('Growth Plan') || []).map(i => i.json).find(p => p.site_id === NOVA) || {}).targets || []);

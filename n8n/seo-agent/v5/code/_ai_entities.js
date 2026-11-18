@@ -15,6 +15,8 @@
 //    owner's brand names are. A word inside a cited domain is never located with indexOf (E8: "small business" is not business.com), and a
 //    framework (ASP.NET) is not a business.
 // No URL constructor (the n8n Code sandbox has none): hosts are parsed with regexes.
+// CR17-F (2026-11-17, client report C5, section 196): the one role classifier (CMP.role) comes with this kit; the build inlines it once per node.
+/*__COMPETITORS__*/
 const AIE = (() => {
   const L = (s) => String(s == null ? '' : s).normalize('NFKC');
   const low = (s) => L(s).toLowerCase();
@@ -88,7 +90,11 @@ const AIE = (() => {
   const OPEN_PLAT = new Set(['openedx.org', 'moodle.com']);
   // FX-B RB-1: the version of the entity rule (who counts as a competitor). F-53 changed it; every stored figure that depends on it (share of
   // voice, the competitor table, a pulse morning's competitors) carries it, and a week is never compared with one counted under another rule.
-  const RULE = 'f53';   // ENTITY_RULE (the harness reads it here)
+  // CR17-F (2026-11-17, section 196): a software maker (SAP, Salesforce, Oracle, Zapier), the platform the client builds on, a directory, a
+  // platform or an authority is never a competitor, whatever the answer says (CMP.role, the one classifier): SAP, Salesforce, Oracle, HubSpot and
+  // Zapier filled 5 of devaicon's 8 "businesses AI recommends instead of you", all 8 of techand's. A new rule version: no week counted under it
+  // is compared with one counted under f53 (a new baseline, as F-53 did).
+  const RULE = 'c17f';   // ENTITY_RULE (the harness reads it here)
 
   // ---- how a name is found in a text ----
   const B = '(?<![\\p{L}\\p{M}\\p{N}])', E = '(?![\\p{L}\\p{M}\\p{N}])';
@@ -265,6 +271,14 @@ const AIE = (() => {
     return out;
   };
 
+  // CR17-F: the entity role of a business's sites by the one classifier: software maker / the client's platform -> platform; directory,
+  // authority, publisher or platform that ranks -> source; a site the client marked not a competitor -> other; '' when any site is a competitor
+  const CMP_TO_ROLE = { software: 'platform', your_platform: 'platform', listing: 'source', authority: 'source', also_ranks: 'source', not_competitor: 'other' };
+  const cmpRoleOf = (ds, plan) => { if (typeof CMP !== 'object' || !CMP || !CMP.role || !ds || !ds.length) return '';
+    const ctx = { own_domain: (plan && plan.domain) || '', services: (plan && plan.services) || [], topics: (plan && plan.topics) || [], not_competitors: (plan && plan.not_competitors) || [] };
+    const roles = ds.map(d => CMP.role(d, ctx).role); if (roles.some(r => r === 'competitor' || r === 'you' || r === 'unknown')) return '';
+    return CMP_TO_ROLE[roles[0]] || ''; };
+
   // ---- the context of one mention ----
   // a sentence ends at . ! ? ; or a line break - not at the dot of "e.g." / "i.e." / "etc." / "Inc." (masked, same length, before the search)
   const maskAbbr = (t) => t.replace(/\b(e\.g|i\.e|etc|vs|approx|inc|ltd|co|no|st)\./gi, (m) => m.replace(/\./g, '_'));
@@ -389,7 +403,9 @@ const AIE = (() => {
       const srcKind = [...kinds].some(k => SOURCE_KINDS.has(k)) && !ds.some(d => kindOfDomain(d) === 'site' && named.some(m => m.dom && regD(m.name) === d)) || names.some(n => NAME_SRC.test(n));
       const otherKind = (kinds.has('other') && !kinds.has('site')) || names.some(n => NAME_OTHER.test(L(n).trim()));
       let role;
+      const cr = cmpRoleOf(ds, D.plan);   // CR17-F: the one role of its sites ('' = a business, or no site known)
       if (isConf) role = 'competitor';
+      else if (cr) role = cr;
       else if (!named.length) role = isClientPlat ? 'platform' : 'source';
       else if (srcKind) role = 'source';
       else if (otherKind) role = 'other';

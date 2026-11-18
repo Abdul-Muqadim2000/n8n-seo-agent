@@ -3993,6 +3993,17 @@
    {
     "allowed": false,
     "maxTries": 3,
+    "name": "Fetch Watch Hop",
+    "onError": "continueRegularOutput",
+    "paid": false,
+    "per_item": false,
+    "retryOnFail": true,
+    "timeout": 20000,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
     "name": "Post Watch Alert",
     "onError": "continueRegularOutput",
     "paid": false,

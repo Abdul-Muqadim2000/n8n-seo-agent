@@ -75,6 +75,30 @@ export const AI_RANK_CLIENT_LEVER_LABELS: Record<string, string> = {
   L16: 'Keep a page AI answers cite, and refresh it when they stop',
   L17: 'A Wikidata entry for your business',
 };
+/**
+ * CR17-H (client report 2026-11-17, F1): why each lever is worth doing, as one plain sentence for the client (equal to AIRC.WHY in the engine
+ * kit and to the `client` field of ARL.LEVERS; the parity test and harness CR17H hold all three equal). It replaces the engine's scoring line
+ * ("6 cell(s), expected gain 0.0082 over (client time at an hour)"), which is the team's arithmetic and now travels as `score_note` only.
+ */
+export const AI_RANK_CLIENT_WHY: Record<string, string> = {
+  L01: 'Your robots.txt keeps the AI assistants\' search tools out, so they cannot read or cite your pages.',
+  L02: 'This page shows little text until its scripts run, and several AI assistants read only the text sent with the page.',
+  L03: 'Your website is not in Bing yet, and Copilot and other assistants look answers up in Bing.',
+  L04: 'Google has not put this page in its search results yet, and AI answers that search Google cannot use a page it has not indexed.',
+  L05: 'No page of yours answers the searches the AI assistants run for this question.',
+  L06: 'Your page for this question can answer it more directly, so AI assistants can quote it.',
+  L07: 'AI answers quote this page of yours but do not say your business name.',
+  L08: 'AI answers cite this list for your questions, and it does not name your business yet.',
+  L09: 'AI answers cite this directory for your questions, and your business has no profile there yet.',
+  L10: 'AI answers cite this official list of providers, and your business may qualify to be on it.',
+  L11: 'Being mentioned by independent websites is what most often gets a business named in AI answers.',
+  L12: 'AI answers to business questions often cite LinkedIn articles written by named people.',
+  L13: 'AI answers cite community threads for these questions, and an open answer from your business can be cited too.',
+  L14: 'AI answers cite videos for these questions.',
+  L15: 'AI answers say something about your business that is not right.',
+  L16: 'AI answers cite this page today, and keeping it current keeps it cited.',
+  L17: 'Your business has enough independent mentions for a Wikidata entry, which AI assistants read.',
+};
 const LEVER_OF_LABEL: Record<string, string> = Object.fromEntries(Object.entries(AI_RANK_ENGINE_LEVER_LABELS).map(([k, v]) => [v, k]));
 const label = (lever: string) => AI_RANK_CLIENT_LEVER_LABELS[S(lever)] ?? 'A step to get you named in AI answers';
 const STAGE: Record<string, string> = {
@@ -133,10 +157,21 @@ export function aiRankPlain(v: unknown): string {
  * gain 0.0119 over $9.63 (client time at $25 an hour), typical 30 days") is the team's arithmetic, not a reason: the action's own label already
  * says what it is, so the line is dropped whole (aiRankPlain only took the ids and money out of it). Any other sentence is kept, made plain.
  */
-export function aiRankWhyPlain(v: unknown): string {
+export function aiRankWhyPlain(v: unknown, lever?: unknown): string {
   const t = S(v);
-  if (/\bcells?\b|cell\(s\)|expected gain|client time|\bprior\b|\bS[0-5]\s*(->|to)\s*S[0-5]\b/i.test(t)) return '';
+  // CR17-H (F1): the scoring line becomes the lever's own sentence (the lever given, else the engine label the line starts with); unknown: ''
+  if (AI_RANK_SCORE_LINE.test(t)) return AI_RANK_CLIENT_WHY[S(lever) || aiRankLeverOfLine(t)] ?? '';
   return aiRankPlain(t.replace(/^AI ranking \(L\d{2}\):\s*/i, '').replace(/\bL\d{2}\b/g, ''));
+}
+/** the engine's scoring line (ARL.score before CR17-H wrote it into `why`; stored rows and reports still carry it) */
+export const AI_RANK_SCORE_LINE = /\bcells?\b|cell\(s\)|expected gain|client time|\bprior\b|\bS[0-5]\s*(->|to)\s*S[0-5]\b/i;
+/** the lever a scoring line is about: an "AI ranking (Lnn)" prefix, else its engine label before ": N cell(s)" ('' when none is known) */
+export function aiRankLeverOfLine(v: unknown): string {
+  const t = S(v);
+  const id = t.match(/^AI ranking \((L\d{2})\)/i);
+  if (id) return id[1].toUpperCase();
+  const m = t.replace(/^AI ranking \(L\d{2}\):\s*/i, '').match(/^(.+?):\s*\d+\s*cell/);
+  return m ? LEVER_OF_LABEL[m[1].trim()] ?? '' : '';
 }
 
 export interface AiRankClientContext {
@@ -287,7 +322,8 @@ export function aiRankCustomerSafe(v: unknown): unknown {
     arr(xs).map((x) => {
       if (!x || typeof x !== 'object') return x;
       const { action_id: _a, target_stage: _t, ...y } = x as P;
-      return { ...y, why: aiRankPlain(y.why), ...(y.what == null ? {} : { what: aiRankPlain(y.what) }) };
+      // CR17-H (F1): the scoring line was kept here with only its money taken out; now the lever's sentence, as everywhere
+      return { ...y, why: aiRankWhyPlain(y.why, y.lever), ...(y.what == null ? {} : { what: aiRankPlain(y.what) }) };
     });
   if (Array.isArray(out.actions)) out.actions = plainList(out.actions);
   if (Array.isArray(out.steps)) out.steps = plainList(out.steps);

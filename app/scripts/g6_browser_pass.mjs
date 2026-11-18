@@ -81,7 +81,7 @@ const api = async (page, base, method, path, data, headers = {}) => {
 async function setup() {
   const browser = await chromium.launch();
   const page = await (await browser.newContext()).newPage();
-  await api(page, APP, 'POST', '/api/auth/signup', { name: 'Maya Haddad', email: 'maya@g6-demo.example-shop.com', password: PW });
+  await api(page, APP, 'POST', '/api/auth/signup', { acceptTerms: true, name: 'Maya Haddad', email: 'maya@g6-demo.example-shop.com', password: PW });
   const org = await api(page, APP, 'POST', '/api/orgs', { name: 'Gulf Ledger Demo', industry: 'Software' });
   await api(page, APP, 'PATCH', `/api/orgs/${org.id}/onboarding`, { step: 'done', done: true });
   const site = await api(page, APP, 'POST', `/api/orgs/${org.id}/sites`, { domain: DOMAIN, country: 'United Arab Emirates', business: 'Accounting and ERP software for SMEs' });

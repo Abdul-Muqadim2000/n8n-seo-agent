@@ -99,7 +99,7 @@ describe('authentication', () => {
     // a member cannot make tokens
     const inv = await co.owner.post(`/api/orgs/${co.org.id}/invitations`, { email: 'm@else.test', role: 'member' });
     const m = new Client(app);
-    await m.post('/api/auth/signup', { name: 'M', email: 'm@else.test', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
+    await m.post('/api/auth/signup', { acceptTerms: true, name: 'M', email: 'm@else.test', password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
     expect((await m.post(`/api/orgs/${co.org.id}/scim/tokens`, { name: 'x' })).status).toBe(403);
     expect((await m.get(`/api/orgs/${co.org.id}/scim`)).status).toBe(403);
   });

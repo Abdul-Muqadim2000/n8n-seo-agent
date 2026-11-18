@@ -4,14 +4,27 @@
   "installCommand": "npm ci --no-audit --no-fund",
   "buildCommand": "npm run build -w @seo/web",
   "outputDirectory": "web/dist",
-  "cleanUrls": false,
+  "cleanUrls": true,
   "trailingSlash": false,
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/o/:path*", "destination": "/app" },
+    { "source": "/admin/:path*", "destination": "/app" },
+    { "source": "/login/:path*", "destination": "/app" },
+    { "source": "/onboarding/:path*", "destination": "/app" },
+    { "source": "/share/:path*", "destination": "/app" },
+    { "source": "/invite/:path*", "destination": "/app" },
+    { "source": "/signup", "destination": "/app" },
+    { "source": "/forgot-password", "destination": "/app" },
+    { "source": "/reset-password", "destination": "/app" },
+    { "source": "/verify-email", "destination": "/app" },
+    { "source": "/account", "destination": "/app" },
+    { "source": "/portal-handoff", "destination": "/app" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Strict-Transport-Security", "value": "max-age=15552000" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
@@ -28,8 +41,19 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
-      "source": "/(index.html|theme-init.js|site.webmanifest)",
+      "source": "/",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/(app|theme-init.js|site.webmanifest)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/llms.txt",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
     },
     {
       "source": "/brand/(.*)",

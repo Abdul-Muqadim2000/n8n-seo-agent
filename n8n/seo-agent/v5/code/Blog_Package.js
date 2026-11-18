@@ -77,6 +77,15 @@ const slugOf = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').
 const slug = slugOf(d.content_brief_slug || metaLines.slug || title) || slugOf(d.keyword) || 'page';
 const description = /^(?:Title|Meta Description|Meta Title|Slug|Primary Keyword|Secondary Keywords|URL|Page Type)\s*:/i.test(metaLines['meta description'] || '') ? '' : (metaLines['meta description'] || '');   // W0-A: a field label is never a description
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
+// client report 2026-11-17 (Q2, section 197): the questions this page was written to answer, said in the package and the app's content report,
+// so a client sees that a service or ladder page carrying an AI question's section was meant to: the AI question the run carried (its own
+// ai_target, also when the weekly pages attached it to a ladder page) and the questions the page itself answers under its own headings.
+const aiQPB = (() => { let a = d.ai_target && typeof d.ai_target === 'object' ? d.ai_target : null;
+  if (!a || !String(a.question || '').trim()) { try { const pb = ($('Parse Brief').first().json || {}).ai_target; a = pb && typeof pb === 'object' ? pb : null; } catch (e) { a = null; } }
+  return a && String(a.question || '').trim() ? { question: String(a.question).replace(/\s+/g, ' ').trim().slice(0, 300), kind: a.kind === 'refresh' ? 'refresh' : 'answer', ...(a.target_id || a.targetId ? { target_id: String(a.target_id || a.targetId) } : {}) } : null; })();
+const plainQ = (t) => String(t || '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]+/g, '').replace(/\s+/g, ' ').trim();
+const questions_answered = { ai: aiQPB ? [aiQPB] : [],
+  headings: [...new Set(headings.filter(h => h.level === 2 && /\?\s*$/.test(plainQ(h.text))).map(h => plainQ(h.text)))].filter(q => !aiQPB || q.toLowerCase() !== aiQPB.question.toLowerCase()).slice(0, 12) };
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));
 const dom = String(d.domain || '').toLowerCase();
 // P2-3 (2026-10-12, Phase 2 live check; D15): every URL this package hands the owner is on the site's canonical host — the delivered
@@ -255,7 +264,7 @@ const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom,
   headings, internal_links: links.filter(l => isInternal(l.url)), external_links: links.filter(l => !isInternal(l.url)), schema_blocks: schema.map(b => ({ type: b.type || ((b.json || {})['@type']) || '', json: b.json || b })),
   images, featured_image: heroImg || images[0] || null, open_graph: { 'og:title': title, 'og:description': description, 'og:image': (heroImg || images[0] || {}).path || '', 'og:image:width': (heroImg || images[0] || {}).width || 1200, 'og:image:height': (heroImg || images[0] || {}).height || 675, 'twitter:card': 'summary_large_image' },
   ladder: d.ladder_id ? { ladder_id: d.ladder_id, rung: d.ladder_rung == null ? null : d.ladder_rung, head_keyword: d.ladder_head || '' } : null, request_id: d.request_id || null, generated_at: new Date().toISOString(),
-  page_role: role, article_like: articleLike,
+  page_role: role, article_like: articleLike, questions_answered,
   // FIX_PLAN G5 / G33 (2026-10-13): what the quality check measured, with its basis, so the customer sees it next to the page it judges
   // B-L1: a measurement nothing was measured on is not a number — the percentage is withheld and the reason kept beside it
   originality: ORG ? { ...ORG, measured: originality_measured, highest_pct: originality_measured ? ORG.highest_pct : null, not_measured: originality_measured ? '' : String(ORG.basis || 'nothing could be compared') } : null,

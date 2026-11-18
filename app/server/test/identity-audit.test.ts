@@ -38,7 +38,7 @@ async function company(email: string, name: string) {
 async function join(owner: InstanceType<typeof Client>, orgId: string, email: string, role: 'admin' | 'member' | 'viewer') {
   const inv = await owner.post(`/api/orgs/${orgId}/invitations`, { email, role });
   const c = new Client(app);
-  const r = await c.post('/api/auth/signup', { name: email.split('@')[0], email, password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
+  const r = await c.post('/api/auth/signup', { acceptTerms: true, name: email.split('@')[0], email, password: PW, inviteToken: inv.body.inviteUrl.split('/invite/')[1] });
   expect(r.status).toBe(200);
   return c;
 }

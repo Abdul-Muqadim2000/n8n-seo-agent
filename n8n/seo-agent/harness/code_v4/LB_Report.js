@@ -193,7 +193,7 @@ const ANGLE = { broken: 'Dead link on their page', lost: 'Link to restore', ment
 const ASSET_KIND = { data: 'Data study', tool: 'Free tool', template: 'Template', guide: 'Definitive guide' };   // L6
 const VERDICT = CT.LABELS;   // G12: one set of graded verdicts for links and page changes
 const CHANGE = { published: 'Published', rewritten: 'Rewritten' };
-const WON_STATE = { live: 'Still live', at_risk: 'Not found this week', lost: 'Gone', not_checked: 'Could not be read' };   // B11-2
+const WON_STATE = { live: 'Still live', at_risk: 'Not found this week', lost: 'Gone', not_checked: 'Could not be read', not_won: 'Not counted as won' };   // B11-2; CR17-E (195): a "won" that was a junk page or that nobody was written to
 const STATUS = { linked: 'Linked', listed: 'Listed (no link seen)', missing: 'Not listed', submitted: 'Submitted', unknown: 'Not checked (the site blocks checks)', ignored: 'Not relevant' };
 return A.map(s => {
   const r = R.find(x => x.site_id === s.site_id) || { outreach_rows: s.outreach_rows, drafted: 0, skipped: 0 };

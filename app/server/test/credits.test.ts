@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { autopilotMonthlyUsd, monitorSettingsSchema } from '@seo/shared';
+import { autopilotMonthlyUsd, autopilotRows, monitorSettingsSchema } from '@seo/shared';
 
 // Credits as customers live with them (app/docs/CREDITS.md), end to end on a real Postgres (PGlite, every migration): lots used
 // soonest-expiring first, debt paid down by the next lot, expiry, plan months, the quote held and never exceeded, failed runs free,
@@ -219,8 +219,14 @@ describe('quotes, holds and what a run is charged', () => {
     await sync([engineRow({ id: 'q-s1', key: 'schedule:ai_pulse', mode: 'ai_pulse', usd: 0.05, domain: 'quote.test' })]);
     const b = (await c().get(`/api/orgs/${ids.org}/billing`)).body;
     expect(b.month.autopilotUsed).toBe(3);
-    expect(b.sites).toEqual([expect.objectContaining({ domain: 'quote.test', usedThisMonth: 3, forecastMonthly: DEFAULT_FORECAST })]);
-    expect(b.month.autopilotForecast).toBe(DEFAULT_FORECAST);
+    // CR17-I (M2): the forecast follows what the schedules really charged: the pulse row of this young website (5 days) is its measured run
+    // (3 credits) x the pulse's 26 runs a month, every other row is still the price list (no history yet)
+    const quotePulse = autopilotRows(monitorSettingsSchema.parse({}), 0).find((r) => r.id === 'ai_pulse')!.usd * 60;
+    const expected = Math.round((DEFAULT_FORECAST - quotePulse + 3 * 6 * 4.33) * 100) / 100;
+    expect(b.sites).toEqual([expect.objectContaining({ domain: 'quote.test', usedThisMonth: 3 })]);
+    expect(b.sites[0].forecastMonthly).toBeCloseTo(expected, 0);
+    expect(b.month.autopilotForecast).toBeCloseTo(expected, 0);
+    expect(b.forecast.sites[0].rows.find((r: { id: string }) => r.id === 'ai_pulse')).toMatchObject({ basis: 'per_run' });
     const act = (await c().get(`/api/orgs/${ids.org}/billing/activity?origin=autopilot`)).body;
     expect(act.rows[0]).toMatchObject({ kind: 'usage', credits: -3, origin: 'autopilot', title: 'Daily AI pulse · quote.test' });
     const all = (await c().get(`/api/orgs/${ids.org}/billing/activity`)).body.rows;
@@ -320,7 +326,8 @@ describe('the guard', () => {
     await addCreditEntry(db, { orgId: org.id, kind: 'adjust', credits: Math.round(daily * 5) - bal, note: 'set' });
     await billing.creditGuardTick(log);
     expect((await orgRow(org.id)).creditAlertLevel).toBe('low');
-    const low = () => sa.mails.filter((m) => m.to === 'low@credits.test' && /within a week/.test(m.subject));
+    // CR17-I: "low" is now under two weeks (a top-up request has time to be confirmed)
+    const low = () => sa.mails.filter((m) => m.to === 'low@credits.test' && /within two weeks/.test(m.subject));
     expect(low()).toHaveLength(1);
     await billing.creditGuardTick(log);
     expect(low()).toHaveLength(1);

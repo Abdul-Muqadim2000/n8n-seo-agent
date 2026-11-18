@@ -22,6 +22,17 @@ const AIRC = (() => {
   const WHO = { auto: 'we do it', approve: 'you approve it, we do it', human: 'you do it, we check it' };
   const STATUS = { proposed: 'proposed', queued: 'queued', in_progress: 'in progress', done: 'done', verified: 'confirmed', not_happened: 'did not happen', expired: 'expired', refused: 'not done', shadow: 'trial only' };
   const OPEN = ['proposed', 'queued', 'in_progress'];
+  // CR17-H (client report 2026-11-17, F1): why each lever is worth doing, one plain sentence for the client (equal to the app's
+  // AI_RANK_CLIENT_WHY and to ARL.LEVERS[].client; the app's parity test and harness CR17H hold all three equal). It replaces the scoring
+  // line ("6 cell(s), expected gain 0.0082 over (client time at an hour)"), which travels as score_note for the team only.
+  const WHY = { L01: "Your robots.txt keeps the AI assistants' search tools out, so they cannot read or cite your pages.", L02: "This page shows little text until its scripts run, and several AI assistants read only the text sent with the page.", L03: "Your website is not in Bing yet, and Copilot and other assistants look answers up in Bing.", L04: "Google has not put this page in its search results yet, and AI answers that search Google cannot use a page it has not indexed.", L05: "No page of yours answers the searches the AI assistants run for this question.", L06: "Your page for this question can answer it more directly, so AI assistants can quote it.", L07: "AI answers quote this page of yours but do not say your business name.", L08: "AI answers cite this list for your questions, and it does not name your business yet.", L09: "AI answers cite this directory for your questions, and your business has no profile there yet.", L10: "AI answers cite this official list of providers, and your business may qualify to be on it.", L11: "Being mentioned by independent websites is what most often gets a business named in AI answers.", L12: "AI answers to business questions often cite LinkedIn articles written by named people.", L13: "AI answers cite community threads for these questions, and an open answer from your business can be cited too.", L14: "AI answers cite videos for these questions.", L15: "AI answers say something about your business that is not right.", L16: "AI answers cite this page today, and keeping it current keeps it cited.", L17: "Your business has enough independent mentions for a Wikidata entry, which AI assistants read." };
+  const SCORE_LINE = /\bcells?\b|cell\(s\)|expected gain|client time|\bprior\b|\bS[0-5]\s*(->|to)\s*S[0-5]\b/i;
+  /** the lever a scoring line is about: an "AI ranking (Lnn)" prefix, else the engine label before ": N cell(s)" ('' when none is known) */
+  const leverOfLine = (v) => { const t = S(v); const id = t.match(/^AI ranking \((L\d{2})\)/i); if (id) return id[1].toUpperCase();
+    const m = t.replace(/^AI ranking \(L\d{2}\):\s*/i, '').match(/^(.+?):\s*\d+\s*cell/); return m ? (LEVER_OF_LABEL[m[1].trim()] || '') : ''; };
+  /** an action's why for a client (app: aiRankWhyPlain): the scoring line becomes the lever's sentence, any other text is made plain */
+  const whyPlain = (v, lever) => { const t = S(v); if (SCORE_LINE.test(t)) return WHY[S(lever) || leverOfLine(t)] || '';
+    return plain(t.replace(/^AI ranking \(L\d{2}\):\s*/i, '').replace(/\bL\d{2}\b/g, '')); };
   const VERDICT = { 'likely helped': 'likely helped', "can't tell": "can't tell yet", 'no effect seen': 'no change seen yet', 'did not happen': 'the step did not happen', 'not due yet': 'too early to tell' };
   /** a free text (an action's why, a blocker) without ids, stage codes, money, the internal name or the model's figures */
   const plain = (v) => S(v)
@@ -74,5 +85,5 @@ const AIRC = (() => {
     const sections = [{ key: 'changed', title: 'What changed', lines: changed }, { key: 'why', title: 'Why it moved', lines: why }, { key: 'worked', title: 'Did our steps work', lines: worked },
       { key: 'did', title: 'What we did', lines: did.slice(0, 10) }, { key: 'you', title: 'What we need from you', lines: you.slice(0, 10) }].filter(s => s.lines.length);
     return { v: 1, sections, wins, spend_usd: spend }; };
-  return { view, plain, label, LABELS, ENGINE_LABELS, STAGE, WHO, STATUS };
+  return { view, plain, label, LABELS, ENGINE_LABELS, STAGE, WHO, STATUS, WHY, whyPlain, leverOfLine };
 })();
