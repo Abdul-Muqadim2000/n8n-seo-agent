@@ -1013,11 +1013,14 @@ L.agent('Outreach Sequence Writer', 'link_outreach.txt', {'type': 'object', 'pro
     'skip': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'reason': {'type': 'string'}}, 'required': ['n']}}}, 'required': ['sequences']}, at(32, -1), max_tokens=16000)
 L.code('LB Draft QA', 'LB_Draft_QA.js', at(33, -1))   # L2 (system review 2026-10-11): the deterministic gate every drafted e-mail passes
 L.code('LB Rows', 'LB_Rows.js', at(33, 0))
-def l_rows(name, comment, key, cols, pos):
-    L.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ";\nconst rows = $('LB Rows').all().flatMap(i => i.json." + key + " || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", pos)
-l_rows('Outreach Rows', 'Qualified prospects, contacts, our page, the link text and the drafted sequences (seo_link_outreach, upsert by site + prospect + type)', 'outreach_rows', LINK_OUTREACH_COLS, at(34, 0)); L.iff('Any Outreach Rows?', '{{ !$json.skip }}', at(35, 0))
+def l_rows(name, comment, key, cols, pos, keys=None):
+    # FX-LINKS (review R2 L2, 2026-11-18): a row without its upsert keys is never written (an empty prospect_domain / type would land on a
+    # row of no prospect at all); the keys are the table's own upsert keys
+    guard = (".filter(r => " + ' && '.join("String(r." + k + " ?? '').trim() !== ''" for k in keys) + ")") if keys else ''
+    L.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ";\nconst rows = $('LB Rows').all().flatMap(i => i.json." + key + " || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])))" + guard + ";\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", pos)
+l_rows('Outreach Rows', 'Qualified prospects, contacts, our page, the link text and the drafted sequences (seo_link_outreach, upsert by site + prospect + type)', 'outreach_rows', LINK_OUTREACH_COLS, at(34, 0), keys=['site_id', 'prospect_domain', 'type']); L.iff('Any Outreach Rows?', '{{ !$json.skip }}', at(35, 0))
 L.node('Save Link Outreach', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, ['site_id', 'prospect_domain', 'type']), at(36, -1), onError='continueRegularOutput')
-l_rows('LB Prospect Rows', 'New prospects of the new kinds (journalist requests, resource pages, broken links; seo_link_prospects, upsert by site + domain + type)', 'prospect_rows', PROSPECT_COLS, at(37, 0)); L.iff('Any LB Prospects?', '{{ !$json.skip }}', at(38, 0))
+l_rows('LB Prospect Rows', 'New prospects of the new kinds (journalist requests, resource pages, broken links; seo_link_prospects, upsert by site + domain + type)', 'prospect_rows', PROSPECT_COLS, at(37, 0), keys=['site_id', 'prospect_domain', 'type']); L.iff('Any LB Prospects?', '{{ !$json.skip }}', at(38, 0))
 L.node('Save LB Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), at(39, -1), onError='continueRegularOutput')
 l_rows('Listing Rows', 'The listings checklist (seo_listings, upsert by site + listing)', 'listing_rows', LISTINGS_COLS, at(40, 0)); L.iff('Any Listing Rows?', '{{ !$json.skip }}', at(41, 0))
 L.node('Save Listings', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LISTINGS_TABLE, LISTINGS_COLS, ['site_id', 'listing_id']), at(42, -1), onError='continueRegularOutput')

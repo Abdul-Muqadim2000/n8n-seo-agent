@@ -193,7 +193,7 @@ export async function kiData(site: Pick<SiteRow, 'domain' | 'brandNames'>): Prom
   const kRows = kiCurrentRows(k.filter(own), runRows);
   const gRows = kiCurrentRows(g.filter(own), runRows, { keepUserStatus: true });
   const value: KiData = {
-    competitors: c.filter(own).map(kiCompetitorView).filter((x) => x.compDomain).sort(kiCompetitorOrder),
+    competitors: latestDecision(c.filter(own).map(kiCompetitorView).filter((x) => x.compDomain)).sort(kiCompetitorOrder),
     keywords: kRows.map((x) => kiKeywordView(x, tokens)).filter((x) => x.kwKey && x.keyword),
     gaps: gRows.map(kiGapView).filter((x) => x.gapId),
     runs: runRows.map(kiRunView).sort((a, b) => b.startedAt.localeCompare(a.startedAt)),
@@ -213,6 +213,26 @@ export function kiMarketFor(data: Pick<KiData, 'runs' | 'keywords' | 'competitor
   return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 const inMarket = (m: string | null) => <T extends { market: string }>(x: T) => !m || !x.market || x.market === m;
+/**
+ * FX-LINKS (review R2 L5): the competitors of one market. A market-less row is the client's own decision on a domain outside the KI set ("Not a
+ * competitor" on AI visibility, "Mark as competitor" in Rankings): it is listed only when chosen (it is on the competitor list) and the market
+ * has no row of that domain, and it is never counted as a competitor the research found.
+ */
+export function compsInMarket<T extends { market: string; compDomain: string; status: string }>(all: readonly T[], m: string | null): T[] {
+  if (!m) return all.filter((x) => !!x.market || x.status === 'chosen');
+  const here = new Set(all.filter((x) => x.market === m).map((x) => x.compDomain));
+  return all.filter((x) => x.market === m || (!x.market && x.status === 'chosen' && !here.has(x.compDomain)));
+}
+/** FX-LINKS (review R2 M3): every row of a domain shows the client's latest decision on it (the engine writes every row now; older rows agree too) */
+export function latestDecision<T extends { compDomain: string; market: string; status: string; statusBy: string; fetchedAt: string }>(rows: T[]): T[] {
+  const latest = new Map<string, T>();
+  for (const r of rows) {
+    if (r.statusBy !== 'user' || !['chosen', 'watch', 'dismissed'].includes(r.status)) continue;
+    const was = latest.get(r.compDomain);
+    if (!was || r.fetchedAt > was.fetchedAt || (r.fetchedAt === was.fetchedAt && r.status === 'dismissed' && was.status !== 'dismissed')) latest.set(r.compDomain, r);   // same time: "not a competitor" wins (CMP.oneList)
+  }
+  return rows.map((r) => { const l = latest.get(r.compDomain); return l && (l.status !== r.status || r.statusBy !== 'user') ? { ...r, status: l.status, statusBy: 'user' } : r; });
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // GET .../ki
@@ -246,7 +266,7 @@ export async function kiOverview(site: SiteRow, user: UserRow | null, role: Role
   const f = inMarket(m);
   const lastRuns = [...data.runs.filter((r) => r.kind === 'competitors').slice(0, 3), ...data.runs.filter((r) => r.kind === 'keyword_research').slice(0, 3)]
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-  return { ...base, lastRuns, summary: kiSummaryOf(m, data.competitors.filter(f), data.keywords.filter(f), data.gaps.filter(f)) };
+  return { ...base, lastRuns, summary: kiSummaryOf(m, compsInMarket(data.competitors, m), data.keywords.filter(f), data.gaps.filter(f)) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -255,7 +275,7 @@ export async function kiOverview(site: SiteRow, user: UserRow | null, role: Role
 
 export function kiCompetitorsOf(data: KiData, st: Pick<KiState, 'maxCompetitors'>, q: { market?: string; status?: string; class?: string }): KiCompetitorsResponse {
   const m = kiMarketFor(data, q.market);
-  const all = data.competitors.filter(inMarket(m));
+  const all = compsInMarket(data.competitors, m);
   const items = all.filter((c) => (!q.status || c.status === q.status) && (!q.class || c.class === q.class));
   return { market: m, maxCompetitors: st.maxCompetitors, chosen: all.filter((c) => c.status === 'chosen').length, items };
 }
@@ -324,8 +344,9 @@ const hostOf = (d: unknown) => String(d ?? '').trim().toLowerCase().replace(/^ww
  * CR17-F (2026-11-17): THE competitor list of a website (Site settings + the Competitors page choices - not a competitor), from the monitors
  * row and the KI set's rows (KI on or off: the engine's monitors read the same rule, CMP.oneList). `max` is not applied (the caller checks it).
  */
-export function oneCompetitorList(site: Pick<SiteRow, 'domain'>, monitors: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined, kiRows: readonly Pick<KiCompetitorView, 'compDomain' | 'status' | 'statusBy'>[]): string[] {
-  return competitorList({ domain: site.domain, declared: splitList(monitors?.competitors), kiRows, notCompetitors: splitList(monitors?.not_competitors), max: 1000 }).list;
+export function oneCompetitorList(site: Pick<SiteRow, 'domain'>, monitors: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined, kiRows: readonly (Pick<KiCompetitorView, 'compDomain' | 'status' | 'statusBy'> & Partial<Pick<KiCompetitorView, 'market' | 'fetchedAt'>>)[]): string[] {
+  // FX-LINKS (review R2 M3): the market and the row's time travel with it, so the client's latest decision on a domain wins (CMP.oneList)
+  return competitorList({ domain: site.domain, declared: splitList(monitors?.competitors), kiRows: kiRows.map((k) => ({ ...k, market: k.market ?? '', updatedAt: k.fetchedAt ?? '' })), notCompetitors: splitList(monitors?.not_competitors), max: 1000 }).list;
 }
 
 /**
@@ -344,7 +365,8 @@ export async function setCompetitorStatus(
   const dom = hostOf(compDomain);
   if (dom === hostOf(site.domain)) throw new HttpError(400, 'This is your own website.', 'own_domain');
   const data = await kiData(site);
-  const row = data.competitors.find((c) => c.compDomain === dom) ?? null;
+  // FX-LINKS (review R2 M3): a row of the KI set first (a market-less row is the client's own; the engine updates every row of the domain anyway)
+  const row = data.competitors.find((c) => c.compDomain === dom && !!c.market) ?? data.competitors.find((c) => c.compDomain === dom) ?? null;
   if (opts.requireKiRow && !row) throw notFound(`${dom} is not in your competitor list.`);
   const listNow = oneCompetitorList(site, st.monitors, data.competitors);
   const others = listNow.filter((d) => d !== dom).length;
@@ -366,6 +388,23 @@ export async function setCompetitorStatus(
  * off the list is set to `watch` (or it would come back through the union), and a domain the person typed in that was marked not a competitor
  * is chosen again (or the one list would leave it out). One Site Admin call each; a refusal of one is skipped. Returns what changed.
  */
+/**
+ * FX-LINKS (review R2 L4): Site settings shows THE one list, but only its declared part is saved as the website's own competitor list: a
+ * domain the client chose on the Competitors page stays a Competitors page choice (so "Watch" there still takes it off), unless it was
+ * declared in Site settings before. A domain typed in that is not chosen there is declared, as before.
+ */
+export async function settingsDeclaredPart(site: SiteRow, kept: readonly string[]): Promise<string[]> {
+  const own = sameDomain(site.domain.toLowerCase());
+  const [kiRows, mons] = await Promise.all([
+    siteRows<KiCompetitorRow>('kiCompetitors', site.domain, { max: KI_READ_MAX.competitors, fresh: true }).then((x) => (Array.isArray(x) ? x.filter(own) : [])).catch(() => [] as KiCompetitorRow[]),
+    siteRows<MonitorsRow>('monitors', site.domain, { max: 5, fresh: true }).then((x) => (Array.isArray(x) ? x.filter(own) : [])).catch(() => [] as MonitorsRow[]),
+  ]);
+  const declaredBefore = new Set(splitList(mons[0]?.competitors).map(hostOf));
+  const one = competitorList({ domain: site.domain, declared: [...declaredBefore], kiRows: kiRows.map((r) => ({ compDomain: hostOf(r.comp_domain), status: String(r.status ?? ''), statusBy: String(r.status_by ?? ''), market: String(r.market ?? ''), updatedAt: String(r.updated_at ?? '') })), notCompetitors: splitList(mons[0]?.not_competitors), max: 1000 });
+  const chosenThere = new Set(one.chosen.map(hostOf));
+  return kept.filter((d) => { const h = hostOf(d); return !!h && (declaredBefore.has(h) || !chosenThere.has(h)); });
+}
+
 export async function syncSettingsCompetitors(site: SiteRow, kept: readonly string[]): Promise<{ watched: string[]; chosen: string[] }> {
   const own = sameDomain(site.domain.toLowerCase());
   const [kiRows, mons] = await Promise.all([
@@ -373,11 +412,13 @@ export async function syncSettingsCompetitors(site: SiteRow, kept: readonly stri
     siteRows<MonitorsRow>('monitors', site.domain, { max: 5, fresh: true }).then((x) => (Array.isArray(x) ? x.filter(own) : [])).catch(() => [] as MonitorsRow[]),
   ]);
   const keep = new Set(kept.map(hostOf));
-  const chosenKi = [...new Set(kiRows.filter((r) => String(r.status ?? '') === 'chosen').map((r) => hostOf(r.comp_domain)))];
-  const off = new Set([...splitList(mons[0]?.not_competitors).map(hostOf), ...kiRows.filter((r) => String(r.status ?? '') === 'dismissed' && String(r.status_by ?? '') === 'user').map((r) => hostOf(r.comp_domain))]);
+  // FX-LINKS (review R2 M3): what is chosen and what is off are the one list's (the client's latest decision on a domain wins)
+  const one = competitorList({ domain: site.domain, declared: splitList(mons[0]?.competitors), kiRows: kiRows.map((r) => ({ compDomain: hostOf(r.comp_domain), status: String(r.status ?? ''), statusBy: String(r.status_by ?? ''), market: String(r.market ?? ''), updatedAt: String(r.updated_at ?? '') })), notCompetitors: splitList(mons[0]?.not_competitors), max: 1000 });
+  const chosenKi = one.chosen;
+  const off = new Set(one.removed.map(hostOf));
   const watched = chosenKi.filter((d) => d && !keep.has(d));
   const chosen = [...keep].filter((d) => d && off.has(d));
-  const marketOf = (d: string) => String(kiRows.find((r) => hostOf(r.comp_domain) === d)?.market ?? '');
+  const marketOf = (d: string) => String(kiRows.find((r) => hostOf(r.comp_domain) === d && String(r.market ?? ''))?.market ?? '');
   const out = { watched: [] as string[], chosen: [] as string[] };
   for (const [list, status] of [[watched, 'watch'], [chosen, 'chosen']] as const)
     for (const d of list) {
@@ -474,7 +515,7 @@ export async function kiForRecs(site: SiteRow): Promise<KiForRecs | null> {
   const data = await kiData(site);
   const m = kiMarketFor(data, undefined);
   const f = inMarket(m);
-  const comps = data.competitors.filter(f).filter((c) => c.class === 'direct' || c.class === 'adjacent');
+  const comps = compsInMarket(data.competitors, m).filter((c) => !!c.market).filter((c) => c.class === 'direct' || c.class === 'adjacent');
   return { competitorsFound: comps.length, confirmed: data.competitors.some((c) => c.statusBy === 'user'), quickWins: data.keywords.filter(f).filter(kiQuickWin).length, market: m };
 }
 

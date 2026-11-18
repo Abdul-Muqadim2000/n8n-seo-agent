@@ -23,7 +23,7 @@ const ENDED = new Set(['finished', 'bounced', 'stopped', 'failed']);
 
 export const sequenceGroups = (d: LinkBuildingData) => ({
   running: d.sequences.filter((q) => RUNNING.has(q.status)),
-  replies: d.sequences.filter((q) => q.status === 'replied' || q.status === 'won'),
+  replies: d.sequences.filter((q) => q.status === 'replied' || q.status === 'claimed' || q.status === 'won'),
   ended: d.sequences.filter((q) => ENDED.has(q.status)),
 });
 
@@ -334,7 +334,7 @@ export function Replies({ d }: { d: LinkBuildingData }) {
       <Panel
         title="Replies"
         icon={<MessageSquareReply />}
-        description={replies.length ? `${open} to answer · ${replies.length - open} won` : 'What people answered, with a suggested reply'}
+        description={replies.length ? `${open} to answer · ${replies.filter((q) => q.status === 'claimed').length} waiting for our link check · ${replies.filter((q) => q.status === 'won').length} won` : 'What people answered, with a suggested reply'}
         info="Replies are read from your inbox every few minutes and sorted by what they say. Follow-ups stop at the first reply. Out-of-office replies are not counted: the next e-mail just waits."
         flush
       >
@@ -359,10 +359,11 @@ function ReplyRow({ q, d }: { q: OutreachSequence; d: LinkBuildingData }) {
   const member = can('member');
   const [answer, setAnswer] = useState(q.suggestedReply ?? '');
   const won = q.status === 'won';
+  const claimed = q.status === 'claimed';   // FX-LINKS (M5): marked won, waiting for our check of their page
   const good = won || q.replyClass === 'says_linked';
   const lastIn = [...q.messages].reverse().find((m) => m.direction === 'in');
   const answered = q.messages.filter((m) => m.direction === 'out' && m.kind === 'manual' && (!lastIn || m.at > lastIn.at));
-  const mayAnswer = !won && q.replyClass !== 'unsubscribe' && q.replyClass !== 'declined';
+  const mayAnswer = !won && !claimed && q.replyClass !== 'unsubscribe' && q.replyClass !== 'declined';
   const mb = sendingMailbox(d, q.mailboxId);
   const note = q.replyClass ? REPLY_NOTE[q.replyClass] : undefined;
 
@@ -374,7 +375,7 @@ function ReplyRow({ q, d }: { q: OutreachSequence; d: LinkBuildingData }) {
   const mark = (status: 'won' | 'rejected') =>
     outcome.mutate(
       { id: q.id, status },
-      { onSuccess: () => toast.success(`${q.prospectDomain}: ${status === 'won' ? 'marked won' : 'marked not a fit'}`), onError: (e) => toastError(e) },
+      { onSuccess: () => toast.success(status === 'won' ? `${q.prospectDomain}: we check their page in the next weekly run and count it won when we find your link` : `${q.prospectDomain}: marked not a fit`), onError: (e) => toastError(e) },
     );
 
   return (
@@ -388,13 +389,14 @@ function ReplyRow({ q, d }: { q: OutreachSequence; d: LinkBuildingData }) {
             <ExternalLink href={q.pageUrl || `https://${q.prospectDomain}`} className="text-sm font-semibold text-ink">
               {q.prospectDomain}
             </ExternalLink>
-            {won ? <StatusBadge tone="good">Won{q.wonAt ? ` ${fmtDate(q.wonAt)}` : ''}</StatusBadge> : <ReplyBadge cls={q.replyClass} />}
+            {won ? <StatusBadge tone="good">Won{q.wonAt ? ` ${fmtDate(q.wonAt)}` : ''}</StatusBadge> : claimed ? <StatusBadge tone="accent">Link claimed, checking</StatusBadge> : <ReplyBadge cls={q.replyClass} />}
             <Kind>{typeLabel(q.type)}</Kind>
             {q.replyAt && <span className="text-xs text-ink-3">replied {fmtAgo(q.replyAt)}</span>}
           </div>
           {q.replySummary && <p className="mt-1 text-sm text-ink">{q.replySummary}</p>}
           {note && <p className="mt-1 text-[13px] text-ink-3">{note}</p>}
           {won && <p className="mt-1 text-[13px] text-ink-3">Our link check confirms the link on their page; its effect on your page shows under "What your links did" after six weeks.</p>}
+          {claimed && <p className="mt-1 text-[13px] text-ink-3">You marked it won. We read their page in the next weekly run and count it won when we find your link there.</p>}
 
           {lastIn && (
             <div className="mt-2.5 rounded-lg border border-accent-text/20 bg-surface px-3 py-2.5">
@@ -423,7 +425,7 @@ function ReplyRow({ q, d }: { q: OutreachSequence; d: LinkBuildingData }) {
             </Collapsible>
           )}
 
-          {member && !won && (
+          {member && !won && !claimed && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {mayAnswer && (
                 <Button size="sm" icon={<Send className="size-3.5" />} loading={reply.isPending} disabled={answer.trim().length < 2} onClick={send}>

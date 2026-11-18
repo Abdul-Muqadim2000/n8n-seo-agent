@@ -194,4 +194,34 @@ module.exports = async (ctx) => {
     check('not a competitor for SAP (no KI row): its own row, market \'\', dismissed by the client; for edly.io (a KI row): that row, dismissed; a sixth choice refused', o1.ok && !o1.ki_row && o1.own_row && o1.own_row.market === '' && o1.own_row.status === 'dismissed' && o1.own_row.status_by === 'user'
       && o2.ok && o2.ki_row && o2.market === 'AE-en' && o2.status === 'dismissed' && !o3.ok && /at most 5/.test(o3.error), J({ o1, o2: [o2.ok, o2.ki_row, o2.market, o2.status], o3 }));
   });
+
+  await guard('CR17F9 one decision per domain (FX-LINKS)', async () => {
+    reset(); const SN = 'CR17F9 (FX-LINKS, review R2 M3 L5 L6) the client\'s latest decision on a domain wins on every row; the KI choice updates every row of the domain; the rule-change sentence names the new rule'; begin(SN); const check = mkCheck(SN);
+    const T1 = '2026-11-10T00:00:00.000Z', T2 = '2026-11-12T00:00:00.000Z';
+    const rowsA = [{ comp_domain: 'rival.ae', market: '', status: 'dismissed', status_by: 'user', updated_at: T1 }, { comp_domain: 'rival.ae', market: 'AE-en', status: 'chosen', status_by: 'user', updated_at: T2 }];
+    const a = CMP.oneList({ own_domain: 'devaicon.com', ki_rows: rowsA });
+    check('M3: an older market-less "not a competitor", then "choose" on the Competitors page: on the list, never removed', a.list.includes('rival.ae') && !a.removed.includes('rival.ae'), J(a));
+    check('M3: so the role is a competitor again (it is never pitched)', CMP.role('rival.ae', { ...dev, chosen: a.chosen, not_competitors: a.removed }).role !== 'not_competitor', J(CMP.role('rival.ae', { ...dev, chosen: a.chosen, not_competitors: a.removed })));
+    const rowsB = [{ comp_domain: 'rival.ae', market: '', status: 'dismissed', status_by: 'user', updated_at: T2 }, { comp_domain: 'rival.ae', market: 'AE-en', status: 'chosen', status_by: 'user', updated_at: T1 }];
+    const b = CMP.oneList({ own_domain: 'devaicon.com', ki_rows: rowsB });
+    check('M3: and the other way round: a later "not a competitor" removes an older choice', !b.list.includes('rival.ae') && b.removed.includes('rival.ae'), J(b));
+    const c = CMP.oneList({ own_domain: 'devaicon.com', declared: ['declared.ae'], ki_rows: [{ comp_domain: 'auto.ae', market: 'AE-en', status: 'chosen', status_by: 'auto', updated_at: T1 }, { comp_domain: 'off.ae', market: 'AE-en', status: 'dismissed', status_by: 'auto', updated_at: T2 }] });
+    check('M3: rows with no decision of the client keep the old rule (an automatic dismissal is not "not a competitor")', c.list.includes('declared.ae') && c.list.includes('auto.ae') && !c.removed.includes('off.ae'), J(c));
+    const W = (f) => { const d = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'workflows', f), 'utf8')); return Array.isArray(d) ? d[0] : d; };
+    const adm = W('SEO_Agent_Site_Admin.json');
+    const set = adm.nodes.find(n => n.name === 'Set KI Competitor');
+    check('M3: Set KI Competitor updates every row of the domain for the site (no market in its filter)', J(set.parameters.filters.conditions.map(x => x.keyName)) === J(['site_id', 'comp_domain']), J(set.parameters.filters));
+    const kc = new Function('$', ((adm.nodes.find(x => x.name === 'KI Competitor (Admin)') || {}).parameters || {}).jsCode || '');
+    const $ = (rows, a) => (n) => ({ first: () => ({ json: n === 'Admin Action' ? a : {} }), all: () => (n === 'Load KI Competitors (Admin)' ? rows : []).map(json => ({ json })) });
+    const A = (status, d, market) => ({ site_id: 'site_devaicon-com', domain: 'devaicon.com', ki_comp_domain: d, ki_status: status, ki_market: market || '', updated_at: '2026-11-18T00:00:00.000Z' });
+    const o = kc($([{ comp_domain: 'rival.ae', market: '', status: 'dismissed', status_by: 'user' }, { comp_domain: 'rival.ae', market: 'AE-en', status: 'candidate' }], A('chosen', 'rival.ae')))[0].json;
+    check('M3: choosing a domain that has a market-less row and a KI row updates (both) rows, no new row', o.ok && o.ki_row === true && !o.own_row && o.rows_of_domain === 2, J(o));
+    const o2 = kc($([{ comp_domain: 'two.ae', market: 'AE-en', status: 'candidate' }, { comp_domain: 'two.ae', market: 'PK-en', status: 'candidate' }], A('not_competitor', 'two.ae')))[0].json;
+    check('M3: a domain in two markets, no market given: the KI rows are updated, never a stray market-less row', o2.ok && o2.ki_row === true && !o2.own_row, J(o2));
+    // L6: the "new baseline" sentence names what changed between the two weeks' rules
+    const src = rd('AI_Metrics.js'); const i = src.indexOf('const entRuleOf = '); const end = "join('; '); };"; const j2 = src.indexOf(end, src.indexOf('const entRuleWhy = ')) + end.length;
+    const why = (now, prev) => new Function('AIE', src.slice(i, j2) + '\nreturn entRuleWhy(' + J(prev) + ');')({ RULE: now });
+    check('L6: f53 -> c17f says software makers and the platform you build on are no longer competitors (not F-53\'s heading / price sentence)', /software makers and the platform you build on/.test(why('c17f', 'f53')) && !/a heading, a price/.test(why('c17f', 'f53')), why('c17f', 'f53'));
+    check('L6: a week counted before F-53 names both changes; f53 itself keeps its own sentence', /a heading, a price/.test(why('c17f', '')) && /software makers/.test(why('c17f', '')) && /a heading, a price/.test(why('f53', '')) && !/software makers/.test(why('f53', '')), J([why('c17f', ''), why('f53', '')]));
+  });
 };

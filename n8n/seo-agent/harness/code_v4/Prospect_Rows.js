@@ -343,10 +343,18 @@ const LK = (() => {
     if (r.canonical_elsewhere === true || r.canonical_elsewhere === 'true') return 'a page that points search engines to another address';
     return '';
   }
-  // o: { prospect: { prospect_domain, status, contacted_at }, rows: ledger rows (any site; filtered here), site: the client's domain,
-  //      reading: a fresh LK.verify result with its url (optional), contacted: true when the caller knows we wrote (optional), farms, now,
+  // o: { prospect: { prospect_domain, status, contacted_at, won_at, verified_at, type, source_url }, rows: ledger rows (any site; filtered here),
+  //      site: the client's domain, reading: a fresh LK.verify result with its url (optional), contacted: true when the caller knows we wrote
+  //      (optional), won_url: the page the won link was found on (the Link Builder's checks.won.url; else the prospect's source_url), farms, now,
   //      max_age_days (a ledger reading older than this is not evidence, default 35) }
-  // -> { state: won | already_links | low_value | lost | not_found, won, contacted, reason, url, rel }
+  // -> { state: won | already_links | low_value | lost | not_found, won, contacted, reason, url, rel, gone, before_contact }
+  // FX-LINKS (review R2, 2026-11-18):
+  //  * M1: a won link is `lost` only when the ledger row of THE WON PAGE is lost (the Backlink Monitor's own two-miss rule on that page) and it
+  //    was lost AFTER the win; a lost row of another page of the domain, or one lost before the win (the reason we pitched "restore the
+  //    link"), is not about this link. A link never confirmed by our check (a person's claim, verified_at empty) cannot be lost either.
+  //  * L3: a link the ledger saw before anyone wrote to them is `already_links` (not a result), except for a pitch to restore a link (type
+  //    lost) and for a prospect that was already won or lost (its win stands while the link is there; a lost one comes back when found).
+  //  * L1: `gone` says every ledger row of the domain to us is lost: a stale reading (older than max_age_days) is "read again", never "gone".
   function wonCheck(o) {
     const x = o || {}; const p = x.prospect || {}; const site = String(x.site || '').toLowerCase().replace(/^www\./, '');
     const pd = String(p.prospect_domain || '').toLowerCase().replace(/^www\./, ''); const key = refKey(pd), reg = regDomain(pd);
@@ -356,18 +364,49 @@ const LK = (() => {
     const mine = (x.rows || []).filter(r => r && ofSite(r));
     const toUs = (u) => !!site && sameSite(hostOf(u), site);
     const fresh = (r) => { const t = Date.parse(r.verified_at || r.last_seen || ''); return !Number.isFinite(t) || now - t <= maxAge; };
+    const was = String(p.status || '');
+    const ct = Date.parse(String(p.contacted_at || ''));
+    // L3: when the ledger first saw this page link to us (a fresh reading takes the ledger row of the same page)
+    const firstSeen = (e) => { const own = Date.parse(String(e.first_seen || '')); if (Number.isFinite(own)) return own;
+      const u = normUrl(e.from_url || e.url || ''); const r = u ? mine.find(m => normUrl(m.from_url) === u && m.status !== 'lost') : null; return r ? Date.parse(String(r.first_seen || '')) : NaN; };
+    const beforeContact = (e) => { if (!Number.isFinite(ct) || ['won', 'lost'].includes(was) || String(p.type || '') === 'lost') return false; const f = firstSeen(e); return Number.isFinite(f) && f < ct - 864e5; };
     const ev = [];
     if (x.reading && x.reading.verify === 'found') ev.push({ ...x.reading, from_url: x.reading.url || x.reading.from_url || '', ref_domain: key, page_title: x.reading.title || x.reading.page_title || '' });
     for (const r of mine) if (r.status !== 'lost' && r.verify === 'found' && toUs(r.to_url) && fresh(r)) ev.push(r);
     const judged = ev.map(e => ({ e, junk: junkLink(e, { farms: x.farms }) }));
     const clean = judged.find(j => !j.junk);
-    if (clean) return { state: contacted ? 'won' : 'already_links', won: contacted, contacted, reason: contacted ? 'our check found your link on their page' : 'they link to you, but nobody was written to: not a link-building result', url: String(clean.e.from_url || ''), rel: String(clean.e.rel || '') };
-    if (judged.length) return { state: 'low_value', won: false, contacted, reason: 'a link to you is there, but on ' + judged[0].junk + ': it does not count', url: String(judged[0].e.from_url || ''), rel: String(judged[0].e.rel || '') };
-    const lost = mine.find(r => r.status === 'lost');
-    if (String(p.status || '') === 'won' && lost) return { state: 'lost', won: false, contacted, reason: 'the link is gone (' + String(lost.lost_reason || 'missing twice').replace(/_/g, ' ') + ')', url: String(lost.from_url || ''), rel: '' };
-    return { state: 'not_found', won: false, contacted, reason: 'no link to you was found on their pages', url: '', rel: '' };
+    const toUsRows = mine.filter(r => !r.to_url || toUs(r.to_url));
+    const gone = toUsRows.length > 0 && toUsRows.every(r => r.status === 'lost');
+    if (clean) {
+      const early = contacted && beforeContact(clean.e);
+      const won = contacted && !early;
+      return { state: won ? 'won' : 'already_links', won, contacted, gone: false, before_contact: early,
+        reason: won ? 'our check found your link on their page' : early ? 'they linked to you before anyone wrote to them: not a link-building result' : 'they link to you, but nobody was written to: not a link-building result',
+        url: String(clean.e.from_url || ''), rel: String(clean.e.rel || '') };
+    }
+    if (judged.length) return { state: 'low_value', won: false, contacted, gone: false, before_contact: false, reason: 'a link to you is there, but on ' + judged[0].junk + ': it does not count', url: String(judged[0].e.from_url || ''), rel: String(judged[0].e.rel || '') };
+    if (was === 'won' && String(p.verified_at || '').trim()) {
+      const wonUrl = normUrl(x.won_url || p.source_url || ''); const wonT = Date.parse(String(p.won_at || p.verified_at || ''));
+      const lostT = (r) => Date.parse(String(r.lost_at || r.verified_at || r.last_seen || ''));
+      const about = mine.filter(r => r.status === 'lost' && (!r.to_url || toUs(r.to_url)) && (wonUrl ? normUrl(r.from_url) === wonUrl : gone) && (!Number.isFinite(wonT) || (Number.isFinite(lostT(r)) && lostT(r) > wonT)));
+      const lost = about[0];
+      if (lost) return { state: 'lost', won: false, contacted, gone, before_contact: false, reason: 'the link is gone (' + String(lost.lost_reason || 'missing twice').replace(/_/g, ' ') + ')', url: String(lost.from_url || ''), rel: '' };
+    }
+    return { state: 'not_found', won: false, contacted, gone, before_contact: false, reason: 'no link to you was found on their pages', url: '', rel: '' };
   }
-  return { isJobBoard, profilePage, junkLink, wonCheck, text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
+  // FX-LINKS (review R2 M2, 2026-11-18): a note a PERSON wrote on a prospect ("who you contacted, replies, follow-up dates") is never
+  // overwritten by the engine or the app: our own line goes after it, behind "Our check: ", and replaces only our earlier line. A note that is
+  // ours (empty, or one of the sentences the engine / the app write) is replaced as before.
+  const NOTE_MARK = '\nOur check: ';
+  const SYS_NOTE = /^(not a won link:|won \d{4}-\d\d-\d\d|won again \d{4}|they link(ed)? to you|a link to you is there|no link to you|our check found|sent by you from your own e-mail|you said the link is live|not a fit \(marked|the AI question|the draft written for them earlier was withdrawn|the link builder writes to them|set aside:|found again)/i;
+  const personNote = (n) => { const t = String(n || '').split(NOTE_MARK)[0].trim(); return !!t && !SYS_NOTE.test(t); };
+  const noteWith = (old, add, max = 300) => {
+    const own = String(old || '').split(NOTE_MARK)[0].trim(); const a = String(add || '').trim();
+    if (!personNote(own)) return a.slice(0, max);
+    if (!a) return own.slice(0, Math.max(max, own.length));
+    return own.length + NOTE_MARK.length + a.length <= max ? own + NOTE_MARK + a : own.length + NOTE_MARK.length + 20 <= max ? own + NOTE_MARK + a.slice(0, max - own.length - NOTE_MARK.length) : own;   // the person's text is never cut
+  };
+  return { isJobBoard, profilePage, junkLink, wonCheck, noteWith, personNote, text, attr, hostOf, regDomain, isSuffix, refKey, sameSite, isInfra, isScraper, isAutoReport, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();
 
 const sites = $('Parse Backlinks').all().map(i => i.json);
@@ -381,19 +420,30 @@ for (const s of sites) {
   const contacts = new Map(ji >= 0 ? jobs[ji].prospects.filter(p => p.contact_email).map(p => [p.prospect_domain, p]) : []);
   const ledger = s.ledger_rows || [];
   // the won rule (LK.wonCheck) -> the prospect's next status, its dates and note
+  // FX-LINKS (review R2, 2026-11-18): M1 a won link turns lost only from the ledger row of the won page, lost after the win; a lost one is won
+  // again when our check finds the link. M2 a person's "won" (contacted_at stamped by Site Admin) is their claim: kept until our check finds
+  // the link (then verified_at) or finds it on a junk page; a person's note is never overwritten (LK.noteWith). L1 a site that already links
+  // stays `linked` while its ledger row is merely old: only a lost ledger row sends it back to new.
   const decide = (c, old) => {
-    const was = String(old.status || 'new'); const keep = { status: was, won_at: old.won_at || '', verified_at: old.verified_at || '', note: old.note || '' };
+    const was = String(old.status || 'new');
+    // M2: a "won" a person set by hand before Site Admin stamped contacted_at, with their own note: their claim, not a domain collision
+    const legacyClaim = was === 'won' && !String(old.contacted_at || '').trim() && !String(old.verified_at || '').trim() && LK.personNote(old.note);
+    const contacted_at = legacyClaim ? String(old.won_at || now) : String(old.contacted_at || '');
+    const keep = { status: was, won_at: old.won_at || '', verified_at: old.verified_at || '', note: old.note || '', contacted_at };
     if (c.type === 'reclaim') return keep;
-    const wc = LK.wonCheck({ prospect: { ...old, prospect_domain: c.prospect_domain }, rows: ledger, site: s.domain, now });
+    const wc = LK.wonCheck({ prospect: { ...old, contacted_at, prospect_domain: c.prospect_domain }, rows: ledger, site: s.domain, now });
+    const nt = (t) => LK.noteWith(old.note, String(t).slice(0, 300));
+    const day = String(now).slice(0, 10);
     if (was === 'won') {
-      if (!wc.contacted || wc.state === 'low_value' || wc.state === 'already_links') return { status: wc.state === 'already_links' ? 'linked' : wc.state === 'low_value' ? 'low_value' : 'new', won_at: '', verified_at: '', note: String('not a won link: ' + (wc.contacted ? wc.reason : 'nobody was written to; ' + wc.reason) + ' (corrected ' + String(now).slice(0, 10) + ')').slice(0, 300) };
-      if (wc.state === 'lost') return { status: 'lost', won_at: old.won_at || '', verified_at: now, note: String('won ' + String(old.won_at || '').slice(0, 10) + ', ' + wc.reason).slice(0, 300) };
+      if (!wc.contacted || wc.state === 'low_value' || wc.state === 'already_links') return { ...keep, status: wc.state === 'already_links' ? 'linked' : wc.state === 'low_value' ? 'low_value' : 'new', won_at: '', verified_at: '', note: nt('not a won link: ' + (wc.contacted ? wc.reason : 'nobody was written to; ' + wc.reason) + ' (corrected ' + day + ')') };
+      if (wc.state === 'lost') return { ...keep, status: 'lost', verified_at: now, note: nt('won ' + String(old.won_at || '').slice(0, 10) + ', ' + wc.reason) };
+      if (wc.state === 'won' && !String(old.verified_at || '').trim()) return { ...keep, verified_at: now, note: nt('won ' + day + ': ' + wc.reason + (wc.url ? ' (' + wc.url + ')' : '')) };   // a claim our check now confirms
       return keep;
     }
-    if (wc.state === 'won' && ['new', 'contacted', 'replied', 'linked', 'low_value'].includes(was)) return { status: 'won', won_at: now, verified_at: now, note: old.note || String('won ' + String(now).slice(0, 10) + ': ' + wc.reason + (wc.url ? ' (' + wc.url + ')' : '')).slice(0, 300) };   // a note someone wrote is kept
-    if (wc.state === 'already_links' && ['new', 'low_value'].includes(was)) return { ...keep, status: 'linked', note: String(wc.reason + (wc.url ? ' (' + wc.url + ')' : '')).slice(0, 300) };
-    if (wc.state === 'low_value' && was === 'new') return { ...keep, status: 'low_value', note: wc.reason.slice(0, 300) };
-    if (wc.state === 'not_found' && ['linked', 'low_value'].includes(was)) return { ...keep, status: 'new', note: '' };
+    if (wc.state === 'won' && ['new', 'contacted', 'replied', 'linked', 'low_value', 'lost'].includes(was)) return { ...keep, status: 'won', won_at: now, verified_at: now, note: nt((was === 'lost' ? 'won again ' : 'won ') + day + ': ' + wc.reason + (wc.url ? ' (' + wc.url + ')' : '')) };
+    if (wc.state === 'already_links' && ['new', 'low_value'].includes(was)) return { ...keep, status: 'linked', note: nt(wc.reason + (wc.url ? ' (' + wc.url + ')' : '')) };
+    if (wc.state === 'low_value' && was === 'new') return { ...keep, status: 'low_value', note: nt(wc.reason) };
+    if (wc.state === 'not_found' && ['linked', 'low_value'].includes(was) && wc.gone) return { ...keep, status: 'new', note: nt('') };   // L1: only a lost ledger row, never an old reading
     return keep;
   };
   const key = (x) => x.prospect_domain + '|' + x.type;
@@ -410,13 +460,13 @@ for (const s of sites) {
     rows.push({ site_id: s.site_id, domain: s.domain, prospect_domain: c.prospect_domain, type: c.type, rank: Number(c.rank ?? old.rank) || 0, spam_score: Number(c.spam_score ?? old.spam_score) || 0, detail: String(c.detail || old.detail || '').slice(0, 300),
       source_url: c.source_url || old.source_url || '', target_url: c.target_url || old.target_url || '', status: dz.status, first_seen: old.first_seen || now, last_seen: c.fresh ? now : (old.last_seen || now),
       won_at: dz.won_at, outreach_subject: kept.outreach_subject || (d ? String(d.subject || '').slice(0, 120) : ''), outreach_body: kept.outreach_body || (d ? String(d.body || '').slice(0, 1500) : ''),
-      drafted_at: d ? now : kept.drafted_at, note: kept.superseded ? DRAFTS.reason.slice(0, 300) : dz.note,
-      score: Number(c.score ?? old.score) || 0, origin: c.origin || old.origin || '', contact_email: old.contact_email || ct.contact_email || '', contact_url: old.contact_url || ct.contact_url || '', contacted_at: old.contacted_at || '',
+      drafted_at: d ? now : kept.drafted_at, note: kept.superseded ? LK.noteWith(dz.note, DRAFTS.reason) : dz.note,
+      score: Number(c.score ?? old.score) || 0, origin: c.origin || old.origin || '', contact_email: old.contact_email || ct.contact_email || '', contact_url: old.contact_url || ct.contact_url || '', contacted_at: dz.contacted_at,
       followup_step: f ? Number(f.followup) : (Number(old.followup_step) || 0), followup_subject: f ? String(f.subject || '').slice(0, 120) : (old.followup_subject || ''), followup_body: f ? String(f.body || '').slice(0, 1200) : (old.followup_body || ''),
       verified_at: dz.verified_at, retired_at: old.retired_at || '' }); };   // CR17-F: kept as stored
   for (const c of s.candidates) { const k = key(c); if (seen.has(k)) continue; seen.add(k); emit({ ...c, fresh: true }, mine.get(k) || {}); }
   // stored prospects not seen this run: only touched when they now link (won), or a draft / follow-up / contact was written for them
-  for (const [k, old] of mine) { if (seen.has(k)) continue; const won = decide({ prospect_domain: old.prospect_domain, type: old.type }, old).status !== String(old.status || 'new');   // CR17-E: a status the won rule changes (won, lost, corrected)
+  for (const [k, old] of mine) { if (seen.has(k)) continue; const dz0 = decide({ prospect_domain: old.prospect_domain, type: old.type }, old); const won = dz0.status !== String(old.status || 'new') || dz0.verified_at !== String(old.verified_at || '') || dz0.contacted_at !== String(old.contacted_at || '');   // CR17-E: a status the won rule changes (won, lost, corrected); FX-LINKS: a claim confirmed
     const d = drafts.some(x => String(x.prospect_domain || '').toLowerCase() === old.prospect_domain && (Number(x.followup) > 0 ? old.status === 'contacted' : !old.outreach_body));
     if (won || d || DRAFTS.superseded(old) || (contacts.has(old.prospect_domain) && !old.contact_email)) { seen.add(k); emit({ prospect_domain: old.prospect_domain, type: old.type }, old); } }   // P34-1: a superseded draft is cleared even when the prospect was not seen again
 }

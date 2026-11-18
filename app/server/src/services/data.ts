@@ -1391,14 +1391,19 @@ export function competitorSiteOf(
   mon: Pick<MonitorsRow, 'competitors' | 'not_competitors'> | null | undefined,
   ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[],
 ): CompetitorSiteContext {
+  // FX-LINKS (review R2 M3): chosen and not-a-competitor come from the one list (CMP.oneList), where the client's latest decision on a domain
+  // wins whichever row holds it; an older "not a competitor" can no longer outvote a later choice here
+  const one = competitorList({ domain: site.domain, declared: splitList(mon?.competitors).map(compHost), kiRows: kiRowsOf(ki), notCompetitors: splitList(mon?.not_competitors).map(compHost), max: 1000 });
   return {
     domain: site.domain,
     services: site.services ?? [],
     declared: splitList(mon?.competitors).map(compHost),
-    chosen: ki.filter((r) => s(r.status) === 'chosen').map((r) => compHost(r.comp_domain)),
-    notCompetitors: [...splitList(mon?.not_competitors).map(compHost), ...ki.filter((r) => s(r.status) === 'dismissed' && s(r.status_by) === 'user').map((r) => compHost(r.comp_domain))],
+    chosen: one.chosen,
+    notCompetitors: one.removed,
   };
 }
+const kiRowsOf = (ki: readonly Pick<KiCompetitorRow, 'comp_domain' | 'status' | 'status_by'>[]) =>
+  ki.map((r) => ({ compDomain: compHost(r.comp_domain), status: s(r.status), statusBy: s(r.status_by), market: s((r as Partial<KiCompetitorRow>).market), updatedAt: s((r as Partial<KiCompetitorRow>).updated_at) }));
 
 /** THE competitor list of a website (Site settings + the Competitors page choices - not a competitor), as every monitor reads it. */
 export function oneCompetitorListOf(
@@ -1409,7 +1414,7 @@ export function oneCompetitorListOf(
   return competitorList({
     domain: site.domain,
     declared: splitList(mon?.competitors).map(compHost),
-    kiRows: ki.map((r) => ({ compDomain: compHost(r.comp_domain), status: s(r.status), statusBy: s(r.status_by) })),
+    kiRows: kiRowsOf(ki),
     notCompetitors: splitList(mon?.not_competitors).map(compHost),
     max: 1000,
   }).list;

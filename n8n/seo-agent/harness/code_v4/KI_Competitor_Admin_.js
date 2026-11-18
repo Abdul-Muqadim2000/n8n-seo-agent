@@ -13,10 +13,13 @@ const rows = (() => { try { return $('Load KI Competitors (Admin)').all().map(i 
 const mon = (() => { try { return ($('Load KI Monitors (Admin)').first() || {}).json || {}; } catch (e) { return {}; } })();
 const host = (h) => S(h).toLowerCase().replace(/^www\./, '');
 const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;]+/)).map(host).filter(Boolean);
+// FX-LINKS (review R2 M3, 2026-11-18): one decision per domain. The update (Set KI Competitor) now matches EVERY row of the domain for this
+// site, every market and the market-less one, so a later choice always replaces an earlier one wherever it was stored (a market-less "not a
+// competitor" from AI visibility, then "choose" on the Competitors page, left the old row in force and the competitor was pitched). A new
+// market-less row is written only when the domain has no row at all.
 const d = host(a.ki_comp_domain);
-const markets = [...new Set(rows.filter(r => host(r.comp_domain) === d && S(r.market)).map(r => S(r.market)))];
-const market = a.ki_market || (markets.length === 1 ? markets[0] : '');
-const row = rows.find(r => host(r.comp_domain) === d && S(r.market) === market) || null;
+const mineD = rows.filter(r => host(r.comp_domain) === d);
+const row = (a.ki_market ? mineD.find(r => S(r.market) === a.ki_market) : (mineD.find(r => S(r.market)) || mineD[0])) || null;
 const n = Number(mon.ki_max_competitors); const max = S(mon.ki_max_competitors) === '' || !Number.isFinite(n) ? 5 : Math.min(5, Math.max(1, Math.round(n)));
 const want = a.ki_status;
 const kiStatus = want === 'not_competitor' ? 'dismissed' : want;
@@ -32,4 +35,4 @@ const COLS = ["site_id", "domain", "market", "comp_domain", "class", "class_basi
 const own = row ? null : Object.fromEntries(COLS.map(c => [c, null]));
 if (own) Object.assign(own, { site_id: a.site_id, domain: a.domain || '', market: '', comp_domain: d, class: 'adjacent', class_basis: 'user', status: kiStatus, status_by: 'user',
   declared: false, scored: false, first_seen: now, last_seen: now, misses: 0, reasons_json: JSON.stringify(['set by you']), updated_at: now });
-return [{ json: error ? { ok: false, error } : { ok: true, ki_row: !!row, site_id: a.site_id, market: row ? S(row.market) : '', comp_domain: row ? S(row.comp_domain) : d, status: kiStatus, status_by: 'user', updated_at: now, own_row: own } }];
+return [{ json: error ? { ok: false, error } : { ok: true, ki_row: !!row, rows_of_domain: mineD.length, site_id: a.site_id, market: row ? S(row.market) : '', comp_domain: row ? S(row.comp_domain) : d, status: kiStatus, status_by: 'user', updated_at: now, own_row: own } }];

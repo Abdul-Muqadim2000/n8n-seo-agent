@@ -819,6 +819,12 @@ const HEAD_RULE = 'f08';
 // alert rule. A pulse morning stored under another entity rule still counts for "named in" and "cited", but its competitors are left out (the
 // share of voice counts only answers whose businesses were recorded under this rule). Read after the AI_ENTITIES kit is inlined (AIE.RULE).
 const entRuleOf = () => (typeof AIE === 'object' && AIE && AIE.RULE) || 'f53';
+// FX-LINKS (review R2 L6, 2026-11-18): the "new baseline" sentence says what changed between the earlier week's rule and this one, rule by rule
+// (F-53, then CR17-F's c17f); a rule this file does not know yet keeps the latest sentence
+const ENT_RULES = [['f53', 'a competitor is now a business an answer names, not a heading, a price, a place or a regulator'], ['c17f', 'software makers and the platform you build on are no longer counted as competitors']];
+const entRuleWhy = (prevRule) => { const ids = ENT_RULES.map(r => r[0]); const now = ids.indexOf(entRuleOf()); const was = ids.indexOf(String(prevRule || ''));
+  const upto = now < 0 ? ENT_RULES.length - 1 : now; const from = was < 0 || was > upto ? 0 : was + 1;
+  const said = ENT_RULES.slice(from, upto + 1).map(r => r[1]); return (said.length ? said : [ENT_RULES[upto][1]]).join('; '); };
 const w2read = (n) => { try { return $(n).all().map(i => i.json).filter(Boolean); } catch (e) { return []; } };   // W2-E2: the loads and the Sentiment Reader, read defensively
 // ---- AI entities (F1a, 2026-10-23; docs/ai-visibility-2026-10-23/ENGINE_AUDIT.md E3 E4 E5 E8 E10 E16, PROD_STATE.md section 5) ----
 // WHO an AI answer names, as ONE entity per business, and in which ROLE. Inlined by build_monitors.py (the AI_ENTITIES placeholder) into
@@ -1180,8 +1186,18 @@ const CMP = (() => {
     const o = o0 || {}; const own = host(o.own_domain); const max = Math.max(1, Number(o.max) || 5);
     const rows = (Array.isArray(o.ki_rows) ? o.ki_rows : []).filter(r => r && r.comp_domain && (!o.site_id || !r.site_id || S(r.site_id) === S(o.site_id)));
     const st = (r) => S(r.status).toLowerCase();
-    const chosen = [...new Set(rows.filter(r => st(r) === 'chosen').map(r => host(r.comp_domain)))];
-    const off = new Set([...listOfH(o.not_competitors), ...rows.filter(r => st(r) === 'not_competitor' || (st(r) === 'dismissed' && S(r.status_by) === 'user')).map(r => host(r.comp_domain))]);
+    // FX-LINKS (review R2 M3, 2026-11-18): the client's LATEST decision on a domain wins, whichever row holds it (the market-less row of
+    // "Not a competitor" on AI visibility, or a market row of the Competitors page). Site Admin now writes every row of the domain at once;
+    // this keeps rows written before that consistent too. A domain with no decision of the client keeps the old rule.
+    const at = (r) => { const t = Date.parse(S(r.updated_at)); return Number.isFinite(t) ? t : 0; };
+    const latest = new Map();
+    for (const r of rows) { if (S(r.status_by) !== 'user' || !['chosen', 'watch', 'dismissed', 'not_competitor'].includes(st(r))) continue;
+      const d = host(r.comp_domain); const was = latest.get(d); const offR = ['dismissed', 'not_competitor'].includes(st(r));
+      if (!was || at(r) > at(was) || (at(r) === at(was) && offR && !['dismissed', 'not_competitor'].includes(st(was)))) latest.set(d, r); }   // same time (or none): "not a competitor" wins, as before
+    const decided = (d) => latest.has(d) ? st(latest.get(d)) : '';
+    const chosen = [...new Set(rows.filter(r => st(r) === 'chosen').map(r => host(r.comp_domain)))].filter(d => !decided(d) || decided(d) === 'chosen');
+    const offOf = (d) => decided(d) ? ['dismissed', 'not_competitor'].includes(decided(d)) : rows.some(r => host(r.comp_domain) === d && st(r) === 'not_competitor');
+    const off = new Set([...listOfH(o.not_competitors), ...[...new Set(rows.map(r => host(r.comp_domain)))].filter(offOf)]);   // the undated list (seo_monitors.not_competitors) has no time to compare: it stays off, as before
     const declared = listOfH(o.declared);
     const list = []; for (const d of [...declared, ...chosen]) { if (!d || (own && sameOrSub(d, own)) || off.has(d) || [...off].some(x => reg(x) === reg(d)) || list.includes(d)) continue; list.push(d); }
     return { list: list.slice(0, max), chosen, declared, removed: [...off] };
@@ -4094,7 +4110,7 @@ return plans.map(p => {
   const same_rule = prev ? (String(prev.rule_version || '') === AVM.RULE_VERSION ? (pulse_off_panel && !(prev.stats && prev.stats.headline_rule === HEAD_RULE)
       ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (the headline now counts the daily pulse answers to this week\'s questions only; ' + pulse_off_panel.answers + ' answer(s) to questions no longer on the panel were left out, and the earlier week counted such answers)' }
       : !(prev.stats && prev.stats.entity_rule === entRuleOf())   // FX-B RB-1: F-53's entity rule
-        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (a competitor is now a business an answer names, not a heading, a price, a place or a regulator, so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
+        ? { comparable: false, why: 'measurement rule changed: this week starts a new baseline (' + entRuleWhy(prev.stats && prev.stats.entity_rule) + ', so share of voice, your place among the businesses named and the competitor table are counted afresh)' }
       : { comparable: true, why: '' })
     : { comparable: false, why: 'measurement rule changed: this week starts a new baseline (from ' + AVM.RULE_VERSION.replace(/^aivis-/, '') + ' "named in" counts the answers that name you, not the ones that only cite a page, and share of voice counts every competitor named)' }) : null;
   // R-E6 (2026-10-23, docs/ai-visibility-2026-10-23/REVIEW_ENGINE.md): the daily pulse's answers join the headline, so the engines the pulse asks

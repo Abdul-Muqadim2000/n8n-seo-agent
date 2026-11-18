@@ -297,15 +297,21 @@ for (const p of plans) {
     const wc = LK.wonCheck({ prospect: { ...prow, prospect_domain: r.prospect_domain, contacted_at: prow.contacted_at || r.contacted_at || '' }, reading: { ...v, url: r.url }, site: p.domain, farms: farmMap, now: iso });
     if (r.kind === 'claim') {   // not won yet: only a found, clean link on a site we wrote to changes anything
       if (!wc.won) continue;
-      won_checks.push({ prospect_domain: r.prospect_domain, type: r.type, url: r.url, at: iso, state: 'live', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: String(v.anchor || '').slice(0, 120), why: 'our check found your link on their page', won_at: iso, was: 'contacted', new_win: true });
-      outreach_rows.push(base({ ...stored, contacts: (() => { try { return JSON.parse(stored.contacts_json || '[]'); } catch (e) { return []; } })(), status: stored.status || 'drafted', checks: { ...ck, won: { url: r.url, at: iso, state: 'live', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: String(v.anchor || '').slice(0, 120), why: 'our check found your link on their page', won_at: iso, was: 'contacted' } } }));
-      if (prow.prospect_domain) prospect_rows.push({ ...prow, status: 'won', won_at: iso, verified_at: iso, last_seen: iso, note: String('won ' + day + ': our check found your link on ' + r.url).slice(0, 300) });
+      // FX-LINKS (review R2): a claim is a site we wrote to, a person's "won" our check had not confirmed yet (M2: its won date is kept), or a
+      // lost link that came back (M1: won again). L2: the outreach row always carries its own keys (a site contacted outside the Link Builder
+      // has no stored row, and an upsert with empty keys would land on no prospect at all).
+      const was = String(prow.status || 'contacted'); const wonAt = was === 'won' && prow.won_at ? String(prow.won_at) : iso;
+      const why = was === 'lost' ? 'our check found your link on their page again' : 'our check found your link on their page';
+      const wonCk = { url: r.url, at: iso, state: 'live', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: String(v.anchor || '').slice(0, 120), why, won_at: wonAt, was };
+      won_checks.push({ prospect_domain: r.prospect_domain, type: r.type, ...wonCk, new_win: was !== 'won' });
+      outreach_rows.push(base({ ...stored, prospect_domain: r.prospect_domain, type: r.type, contacts: (() => { try { return JSON.parse(stored.contacts_json || '[]'); } catch (e) { return []; } })(), status: stored.status || 'drafted', checks: { ...ck, won: wonCk } }));
+      if (prow.prospect_domain) prospect_rows.push({ ...prow, status: 'won', won_at: wonAt, verified_at: iso, last_seen: iso, note: LK.noteWith(prow.note, (was === 'lost' ? 'won again ' : 'won ') + day + ': our check found your link on ' + r.url) });
       continue;
     }
     if (v.verify === 'found' && !wc.won) {   // a "won" that is not one: a junk page, or nobody was written to
       const status = wc.state === 'already_links' ? 'linked' : 'low_value';
       won_checks.push({ prospect_domain: r.prospect_domain, type: r.type, url: r.url, at: iso, state: 'not_won', misses: 0, verify: v.verify, rel: v.rel || '', placement: v.placement || '', anchor: '', why: wc.reason, won_at: String(r.won_at || ''), was: before.state || '' });
-      if (prow.prospect_domain) prospect_rows.push({ ...prow, status, won_at: '', verified_at: '', last_seen: iso, note: String('not a won link: ' + wc.reason + ' (corrected ' + day + ')').slice(0, 300) });
+      if (prow.prospect_domain) prospect_rows.push({ ...prow, status, won_at: '', verified_at: '', last_seen: iso, note: LK.noteWith(prow.note, 'not a won link: ' + wc.reason + ' (corrected ' + day + ')') });
       continue;
     }
     const readable = ['found', 'missing', 'gone'].includes(v.verify);
@@ -326,7 +332,7 @@ for (const p of plans) {
       country: stored.country || '', language: stored.language || '', target_url: v.verify === 'found' ? (v.to_url || stored.target_url || '') : (stored.target_url || ''),
       target_reason: stored.target_reason || '', anchor_hint: stored.anchor_hint || '', sequence_json: stored.sequence_json || '', deadline: stored.deadline || '', drafted_at: stored.drafted_at || '' }));
     if (state === 'lost') { const pr = myProspects.find(y => y.prospect_domain === r.prospect_domain && y.type === r.type);
-      if (pr) prospect_rows.push({ ...pr, status: 'lost', last_seen: iso, verified_at: iso, note: String('won ' + String(r.won_at || '').slice(0, 10) + ', gone by ' + day + ': ' + why).slice(0, 300) }); }
+      if (pr) prospect_rows.push({ ...pr, status: 'lost', last_seen: iso, verified_at: iso, note: LK.noteWith(pr.note, 'won ' + String(r.won_at || '').slice(0, 10) + ', gone by ' + day + ': ' + why) }); }
   }
   // ---- 4. the listings checklist ----
   if (p.due.listings) {

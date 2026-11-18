@@ -40,22 +40,32 @@ for (const p of plans) {
   // it); a won link on a page the ledger does not carry is read here even when the domain has other ledger rows (bebee.com was in the
   // ledger through a Search Console sample, so its "won" page was never read). And the sites we wrote to (contacted / replied: our sender
   // or "I sent it myself") are read too, as `claim`: the won check (LK.wonCheck) needs our own reading of their page.
+  // FX-LINKS (review R2, 2026-11-18): a "won" our check never confirmed (a person's claim, verified_at empty) is read as a `claim` (a miss
+  // changes nothing; a find confirms it), and a LOST prospect we wrote to is read again too, as a `claim`, so a link that came back is won
+  // again (M1). Priority inside the same budget: confirmed wins first, then the sites we wrote to, then lost ones (at most LB_LOST_MAX a
+  // run, a different few each week).
+  const LB_LOST_MAX = 4;
+  const week = Math.floor(Date.now() / (7 * 864e5));
+  const spin = (d) => { let h = week; for (const ch of String(d)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
   const ledgerPages = new Set(ledger.filter(l => l.site_id === p.site_id && l.status !== 'lost' && l.from_url).map(l => LK.normUrl(l.from_url)));
   const wonQueue = [];
-  for (const x of prospects.filter(y => y.site_id === p.site_id && ['won', 'contacted', 'replied'].includes(String(y.status || '')))) {
-    const won = String(x.status || '') === 'won'; if (!won && !String(x.contacted_at || '')) continue;
+  for (const x of prospects.filter(y => y.site_id === p.site_id && ['won', 'contacted', 'replied', 'lost'].includes(String(y.status || '')))) {
+    const stx = String(x.status || ''); const won = stx === 'won' && !!String(x.verified_at || '').trim(); const lost = stx === 'lost';
+    if (!won && !String(x.contacted_at || '')) continue;
     const key = LK.refKey(x.prospect_domain);
     const row = outreach.find(o => o.site_id === p.site_id && o.prospect_domain === x.prospect_domain && o.type === x.type) || {};
     let ck = {}; try { ck = JSON.parse(row.checks_json || '{}') || {}; } catch (e) { ck = {}; }
     const w = ck.won || {};
     const url = /^https?:\/\//i.test(w.url || '') ? w.url
       : (/^https?:\/\//i.test(x.source_url || '') && !DOC.test(x.source_url)) ? x.source_url : (/^https?:\/\//i.test(row.page_url || '') && !DOC.test(row.page_url)) ? row.page_url : 'https://' + x.prospect_domain + '/';
-    if (!key || (linking.has(key) && ledgerPages.has(LK.normUrl(url)))) continue;   // in the ledger: the Backlink Monitor reads that page itself
+    if (!key || (!lost && linking.has(key) && ledgerPages.has(LK.normUrl(url)))) continue;   // in the ledger: the Backlink Monitor reads that page itself (a lost one is read here: its ledger row is the loss)
     const at = Date.parse(w.at || '');
-    wonQueue.push({ x, url, won, age: Number.isFinite(at) ? (Date.now() - at) / 864e5 : 9999, misses: Number(w.misses) || 0 });
+    wonQueue.push({ x, url, won, lost, rank: won ? 2 : lost ? 0 : 1, spin: spin(x.prospect_domain + '|' + x.type), age: Number.isFinite(at) ? (Date.now() - at) / 864e5 : 9999, misses: Number(w.misses) || 0 });
   }
-  wonQueue.sort((a, b) => (b.won - a.won) || (b.misses - a.misses) || (b.age - a.age));
-  for (const w of wonQueue.slice(0, LB_WON_MAX)) add(w.won ? 'won' : 'claim', w.url, { prospect_domain: w.x.prospect_domain, type: w.x.type, won_at: String(w.x.won_at || ''), contacted_at: String(w.x.contacted_at || ''), url_source: /^https?:\/\//i.test(String(w.x.source_url || '')) && w.age > 9000 ? 'the page we pitched' : 'where the link was last found' });
+  wonQueue.sort((a, b) => (b.rank - a.rank) || (a.lost ? a.spin - b.spin : 0) || (b.misses - a.misses) || (b.age - a.age));
+  const picked = []; let nLost = 0;
+  for (const w of wonQueue) { if (picked.length >= LB_WON_MAX) break; if (w.lost && nLost >= LB_LOST_MAX) continue; if (w.lost) nLost++; picked.push(w); }
+  for (const w of picked) add(w.won ? 'won' : 'claim', w.url, { prospect_domain: w.x.prospect_domain, type: w.x.type, won_at: String(w.x.won_at || ''), contacted_at: String(w.x.contacted_at || ''), url_source: /^https?:\/\//i.test(String(w.x.source_url || '')) && w.age > 9000 ? 'the page we pitched' : 'where the link was last found' });
   // 2. resource pages found by search (monthly)
   let nRes = 0;
   sreqs.forEach((r, i) => { if (r.site_id !== p.site_id || r.kind !== 'resource_search') return; const j = body(sresps[i]) || {};

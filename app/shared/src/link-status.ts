@@ -17,15 +17,17 @@
 //   404, another language, off topic) on one row of a domain that also has a live pitch is not listed: the queue and the left-out list
 //   never name the same website.
 // - A draft nobody has sent is "waiting for you", never progress.
+// - FX-LINKS (review R2 M2 / M5): "they linked" said by a person (Mark won on a reply, Won on the Backlinks page) is CLAIMED until our check
+//   finds the link on their page: shown as such, never silently reverted and never counted as won; our check then makes it won.
 import { registrableDomain } from './domain';
 
-export const LINK_STATES = ['found', 'left_out', 'no_page', 'needs_contact', 'to_write', 'needs_edit', 'to_review', 'approved', 'sent', 'replied', 'won', 'lost', 'declined', 'already_links', 'low_value'] as const;
+export const LINK_STATES = ['found', 'left_out', 'no_page', 'needs_contact', 'to_write', 'needs_edit', 'to_review', 'approved', 'sent', 'replied', 'claimed', 'won', 'lost', 'declined', 'already_links', 'low_value'] as const;
 export type LinkState = (typeof LINK_STATES)[number];
 
 /** what the client reads for each state (short, plain) */
 export const LINK_STATE_LABEL: Record<LinkState, string> = {
   found: 'Found', left_out: 'Left out', no_page: 'Waiting for a page of yours', needs_contact: 'No e-mail address yet', to_write: 'Pitch not written yet', needs_edit: 'Needs your edit',
-  to_review: 'Pitch ready for you', approved: 'Approved, not sent yet', sent: 'Sent', replied: 'Replied', won: 'Won (link checked)', lost: 'Link gone', declined: 'Declined',
+  to_review: 'Pitch ready for you', approved: 'Approved, not sent yet', sent: 'Sent', replied: 'Replied', claimed: 'You said it is live: checking', won: 'Won (link checked)', lost: 'Link gone', declined: 'Declined',
   already_links: 'Already links to you', low_value: 'Found, low value',
 };
 
@@ -93,7 +95,7 @@ const NOT_A_PITCH = new Set(['redirect', 'reclaim']);
 export function prospectLinkState(p: LinkStatusProspect | null | undefined): LinkState {
   if (!p) return 'found';
   const st = s(p.status);
-  if (st === 'won') return s(p.verified_at) && s(p.contacted_at) ? 'won' : s(p.verified_at) ? 'already_links' : 'found';
+  if (st === 'won') return s(p.verified_at) && s(p.contacted_at) ? 'won' : s(p.verified_at) ? 'already_links' : s(p.contacted_at) ? 'claimed' : 'found';
   if (st === 'lost') return 'lost';
   if (st === 'linked') return 'already_links';
   if (st === 'low_value') return 'low_value';
@@ -105,6 +107,7 @@ export function prospectLinkState(p: LinkStatusProspect | null | undefined): Lin
 
 function sequenceState(q: LinkStatusSequence): LinkState | null {
   if (q.status === 'won') return 'won';
+  if (q.status === 'claimed') return 'claimed';
   if (q.replyClass === 'declined' || q.replyClass === 'unsubscribe') return 'declined';
   if (q.status === 'replied' || (q.replyAt && q.replyClass !== 'out_of_office')) return 'replied';
   if (q.startedAt) return 'sent';
@@ -150,7 +153,8 @@ export function linkStates(input: LinkStatusInput): LinkStatusRow[] {
     else if (qs) state = qs;
     else if (p && ['rejected', 'ignored', 'replied'].includes(s(p.status))) state = prospectLinkState(p);
     else if (p && s(p.status) === 'contacted' && s(p.contacted_at)) state = 'sent';
-    else if (p && s(p.status) === 'won' && prospectLinkState(p) === 'already_links') state = 'already_links';   // a "won" nobody wrote to: a link that was there anyway, not a result (a "won" with no check at all is a collision and counts as nothing)
+    else if (p && s(p.status) === 'won' && prospectLinkState(p) === 'already_links') state = 'already_links';
+    else if (p && s(p.status) === 'won' && contacted) state = 'claimed';   // FX-LINKS: a person's "won" our check has not confirmed yet   // a "won" nobody wrote to: a link that was there anyway, not a result (a "won" with no check at all is a collision and counts as nothing)
     if (!state && o) { state = outreachState(o); if (state === 'left_out' || state === 'no_page') { reason = s(o.fit_reason); code = s(o.reason_code) || linkReasonCode(o.fit_reason) || (state === 'no_page' ? 'no_matching_page' : ''); } }
     if (!state) state = o ? null : 'found';
     if (!state) continue;
@@ -173,6 +177,8 @@ export function linkStates(input: LinkStatusInput): LinkStatusRow[] {
 
 export interface LinkStatusCounts {
   found: number; leftOut: number; noPage: number; needsContact: number; toWrite: number; needsEdit: number; toReview: number; approved: number; sent: number; replied: number;
+  /** FX-LINKS: links a person said are live, not found by our check yet (never counted as won) */
+  claimed: number;
   won: number; wonThisMonth: number; lost: number; declined: number; alreadyLinks: number; lowValue: number;
   /** pitches written and waiting for a person (ready to read + held for an edit): never progress until someone sends them */
   waitingForYou: number;
@@ -184,7 +190,7 @@ export interface LinkStatusCounts {
 export function linkStatusCounts(input: LinkStatusInput | readonly LinkStatusRow[], opts: { now?: number | Date; month?: string } = {}): LinkStatusCounts {
   const rows = Array.isArray(input) ? (input as readonly LinkStatusRow[]) : linkStates(input as LinkStatusInput);
   const month = opts.month ?? new Date(opts.now ?? Date.now()).toISOString().slice(0, 7);
-  const c: LinkStatusCounts = { found: 0, leftOut: 0, noPage: 0, needsContact: 0, toWrite: 0, needsEdit: 0, toReview: 0, approved: 0, sent: 0, replied: 0, won: 0, wonThisMonth: 0, lost: 0, declined: 0, alreadyLinks: 0, lowValue: 0, waitingForYou: 0, inQueue: 0 };
+  const c: LinkStatusCounts = { found: 0, leftOut: 0, noPage: 0, needsContact: 0, toWrite: 0, needsEdit: 0, toReview: 0, approved: 0, sent: 0, replied: 0, claimed: 0, won: 0, wonThisMonth: 0, lost: 0, declined: 0, alreadyLinks: 0, lowValue: 0, waitingForYou: 0, inQueue: 0 };
   // a website counts once per state (two pitches to one website are one website to the client)
   const seen = new Set<string>();
   for (const r of rows) {
@@ -193,7 +199,7 @@ export function linkStatusCounts(input: LinkStatusInput | readonly LinkStatusRow
     switch (r.state) {
       case 'found': c.found++; break; case 'left_out': c.leftOut++; break; case 'no_page': c.noPage++; break; case 'needs_contact': c.needsContact++; break;
       case 'to_write': c.toWrite++; break; case 'needs_edit': c.needsEdit++; break; case 'to_review': c.toReview++; break; case 'approved': c.approved++; break;
-      case 'sent': c.sent++; break; case 'replied': c.replied++; break; case 'lost': c.lost++; break; case 'declined': c.declined++; break;
+      case 'sent': c.sent++; break; case 'replied': c.replied++; break; case 'claimed': c.claimed++; break; case 'lost': c.lost++; break; case 'declined': c.declined++; break;
       case 'already_links': c.alreadyLinks++; break; case 'low_value': c.lowValue++; break;
       case 'won': c.won++; if (r.wonAt.slice(0, 7) === month) c.wonThisMonth++; break;
     }
