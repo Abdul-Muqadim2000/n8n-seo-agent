@@ -177,7 +177,7 @@ module.exports = async (ctx) => {
       { site_id: SID, domain: DOM, url: D + '/services/ai-automation-services-pakistan', http_status: 200, final_url: '', noindex: '' }]));
     delete store['Manual Run']; mock('Manual Run', [{ json: { domain: DOM } }]);
     const out = (await run('LB Plan', [{ json: {} }])).map(i => i.json)[0] || {};
-    const urls = (out.pages || []).map(p => p.url.replace(/^https:\/\/(www\.)?devaicon\.com/, ''));
+    const urls = (out.pages || []).map(p => p.url.replace(/^https:\/\/(www\.)?devaicon\.com(?=\/|$)/, ''));
     console.log('   CR17E5 pages ->', J((out.pages || []).map(p => [p.url.replace(D, ''), p.kind])));
     check('the Open edX service page (not in Search Console\'s top 15) is a target, as a service page', (out.pages || []).some(p => /\/capabilities\/open-edx-services$/.test(p.url) && p.kind === 'money'), J(urls));
     check('the ladder\'s 301 address is followed to the page it lands on; the old address is never a target', urls.includes('/services/ai-automation-services-pakistan') && !urls.includes('/ai-automation-services-pakistan'), J(urls));

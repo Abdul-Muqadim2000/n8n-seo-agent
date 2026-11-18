@@ -92,7 +92,7 @@ describe('security.txt', () => {
   it('is canonical on the hosts that serve it, points at the security page and expires within a year', () => {
     const canon = [...txt.matchAll(/^Canonical: (.+)$/gm)].map((m) => m[1]);
     expect(canon).toEqual(expect.arrayContaining([`${SITE_ORIGIN}/.well-known/security.txt`, 'https://app.alaventra.com/.well-known/security.txt']));
-    expect(txt).toMatch(new RegExp(`^Policy: ${SITE_ORIGIN.replace(/\./g, '\\.')}/security$`, 'm'));
+    expect(txt.split(/\r?\n/)).toContain(`Policy: ${SITE_ORIGIN}/security`);
     expect(txt).toMatch(/^Contact: mailto:\S+@\S+$/m);
     const exp = /^Expires: (\S+)$/m.exec(txt)?.[1] ?? '';
     const days = -daysAgo(exp.slice(0, 10));

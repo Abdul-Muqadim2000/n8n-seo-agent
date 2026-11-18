@@ -40,7 +40,7 @@ describe('a prerendered page', () => {
     const types = ldBlocks(doc).map((b) => b['@type']);
     expect(types).toEqual(expect.arrayContaining(['Organization', 'WebSite']));
     // canonical and structured data name the public origin only, never the host that served the build (app.*)
-    expect(doc).not.toMatch(/https?:\/\/app\.alaventra\.com/);
+    for (const scheme of ['http', 'https']) expect(doc).not.toContain(`${scheme}://app.alaventra.com`);
   });
 
   it('home and pricing describe the software without offers (prices are placeholders), and FAQPage only where the FAQ is visible', async () => {

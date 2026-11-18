@@ -3,6 +3,8 @@
 // change, change it here: users.terms_version then tells who agreed to which version, and Me.user.termsAccepted turns false for
 // everyone on an older one, so a later release can ask them again (no forced prompt today: the texts are still drafts).
 
+import { trimEndMatching } from './linear-text';
+
 export const LEGAL_VERSION = '2026-10-08';
 
 /** the public pages (the marketing site and the app share one deployment, so these paths work on every host) */
@@ -10,7 +12,7 @@ export const LEGAL_PATHS = { privacy: '/privacy', terms: '/terms' } as const;
 
 /** `base` is a site origin (config.appUrl on the server); a trailing slash is fine */
 export function legalUrl(base: string, page: keyof typeof LEGAL_PATHS): string {
-  return `${String(base).replace(/\/+$/, '')}${LEGAL_PATHS[page]}`;
+  return `${trimEndMatching(String(base), /\//)}${LEGAL_PATHS[page]}`;
 }
 
 /** the person agreed to the CURRENT version */

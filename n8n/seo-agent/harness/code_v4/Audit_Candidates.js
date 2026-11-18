@@ -165,7 +165,11 @@ const AIRF = (() => {
 //    Nothing here buys anything.
 const CMP = (() => {
   const S = (v) => String(v == null ? '' : v);
-  const host = (h) => S(h).toLowerCase().trim().replace(/^[a-z]+:\/\//, '').replace(/^www\d?\./, '').replace(/[\/?#:].*$/, '').replace(/\.$/, '');
+  // KIT-LINEAR (2026-11-18, CodeQL on PR #71): s cut at the first of `chars` with no line break after it, which is exactly
+  // s.replace(/[chars].*$/, '') in one pass (that pattern backtracks over every "#" of "####...\n": quadratic on a crafted address)
+  const cutTail = (s, chars) => { let i = s.length; while (i > 0 && !'\n\r\u2028\u2029'.includes(s[i - 1])) i--;
+    for (; i < s.length; i++) if (chars.includes(s[i])) return s.slice(0, i); return s; };
+  const host = (h) => cutTail(S(h).toLowerCase().trim().replace(/^[a-z]+:\/\//, '').replace(/^www\d?\./, ''), '/?#:').replace(/\.$/, '');
   const reg = (h) => { const x = host(h); const p = x.split('.').filter(Boolean); if (p.length <= 2) return x;
     const sl = p.slice(-2).join('.'); return /^(co|com|org|net|gov|ac|edu|ltd|plc|sch|nic|mil|gob|gouv)\.[a-z]{2}$/.test(sl) ? p.slice(-3).join('.') : sl; };
   const LABEL = { you: 'your own site', job: 'job board', directory: 'business directory', marketplace: 'marketplace or freelance platform',
@@ -173,8 +177,18 @@ const CMP = (() => {
     social: 'social network', qa: 'Q&A site or forum', help: 'help, docs or community pages of another product', education: 'course or education provider',
     reference: 'encyclopedia or reference site', platform: 'global software platform', list: 'list of companies, not a seller', business: 'business', unknown: 'unreadable address' };
   // the name, then only a public suffix (indeed.com, uk.indeed.com, indeed.ae, x.co.uk): a business's own subdomain "connect.acme.com" is not "connect"
-  const SUF = '(?:com|net|org|co|io|ai|info|biz|me|tv|ly|app|fyi|news|[a-z]{2})(?:\\.[a-z]{2})?';
-  const alt = (a) => new RegExp('(^|\\.)(' + a.join('|').replace(/\./g, '\\.') + ')\\.' + SUF + '$');
+  // KIT-LINEAR: a host list is read label by label, never built into a pattern: test(h) is true when the host ends in one of `names` as
+  // whole labels, then one public ending (SUF_ONE or two letters) and an optional two-letter country. The same answer as the pattern
+  // /(^|\.)(names)\.(?:com|net|org|co|io|ai|info|biz|me|tv|ly|app|fyi|news|[a-z]{2})(?:\.[a-z]{2})?$/ it replaces (CR17 CodeQL test).
+  const SUF_ONE = new Set(['com', 'net', 'org', 'co', 'io', 'ai', 'info', 'biz', 'me', 'tv', 'ly', 'app', 'fyi', 'news']);
+  const cc2 = (l) => /^[a-z]{2}$/.test(l);
+  const alt = (names) => { const set = new Set(names); const most = Math.max(1, ...names.map(n => n.split('.').length));
+    return { names, test: (h) => { const p = String(h).split('.');
+      for (const k of [1, 2]) {   // the ending: one label, or one label plus a two-letter country
+        const e = p.length - k; if (e < 1 || !(SUF_ONE.has(p[e]) || cc2(p[e])) || (k === 2 && !cc2(p[e + 1]))) continue;
+        for (let j = 1; j <= most && j <= e; j++) if (set.has(p.slice(e - j, e).join('.'))) return true;
+      }
+      return false; } }; };
   // host lists: the name before the public suffix, any country ending (indeed.com, indeed.ae)
   const HOSTS = [
     ['search', alt(['google', 'bing', 'yahoo', 'duckduckgo', 'baidu', 'yandex', 'ask', 'ecosia', 'naver', 'brave'])],
@@ -228,7 +242,7 @@ const CMP = (() => {
   const LIST_T = /\b(?:top|best|leading)\s+(?:\d+\s+)?[\w\s&.,-]{0,50}?\b(?:companies|firms|agencies|providers|consultants|consultancies|partners|vendors|developers|integrators|implementers|tools)\b|\b\d+\s+(?:best|top|leading)\b|\blist of\b|\btop\s*\d+\b/i;
   // the address of a list article: /rankings/..., /top-10-ai-consulting-companies, /blog/ai-companies-in-dubai (r04: consultancy-me.com, leewayhertz.com)
   const LIST_P = /\/(?:rankings?\/|[^\/?#]*\b(?:top|best)-(?:\d+-)?[^\/?#]*(?:companies|firms|agencies|providers|consultants|consultancies|vendors|partners|developers|tools)\b|[^\/?#]*\b(?:companies|firms|agencies)-in-)/;   // not "consultants-in-dubai": that is a vendor's own service page (hlbhamt.com)
-  const LIST_AR = /(أفضل\s*\d*\s*شركات|قائمة)/;
+  const LIST_AR = /(أفضل\s*(?:\d+\s*)?شركات|قائمة)/;   // KIT-LINEAR: \s*\d*\s* (two space runs side by side) backtracked on long space runs
   const COURSE_T = /\b(course|courses|certification (?:course|program(?:me)?|exam|training)|certificate program(?:me)?|bootcamp|diploma|program fee|enrol(?:l|ment)?|syllabus|curriculum|online training)\b/i;
   const COURSE_AR = /(دورة|دورات|شهادة معتمدة)/;
   const kindOfResult = (url, title, snippet) => {
@@ -246,7 +260,20 @@ const CMP = (() => {
   // the name must be a whole segment of the title (the site name before or after "|", " - ", ":"), so a case study titled "How we helped
   // the Roads and Transport Authority" on a business's site is not read as the authority's own page
   const GOV_NAME_SEG = /^(?:the\s+)?(?:[A-Z][\w'&.-]*\s+(?:(?:of|and|for|the|de)\s+)?){1,6}(?:Foundation|Authority|Council|Chamber(?: of Commerce(?: and Industry)?)?|Municipality)(?:\s*\([A-Z]{2,6}\))?$|^(?:the\s+)?(?:Ministry|Government) of\s+[A-Z][\w\s&'-]{1,60}$/;
-  const GOV_NAME_T = { test: (t) => S(t).split(/\s+[|\u2013\u2014:-]\s+|\s*\|\s*/).map(x => x.trim()).filter(Boolean).some(x => GOV_NAME_SEG.test(x)) };
+  // KIT-LINEAR: the parts of a title around "|" (any spaces) and a spaced " - ", " \u2013 ", " \u2014 ", " : ", exactly what
+  // split(/\s+[|\u2013\u2014:-]\s+|\s*\|\s*/) gives, in one pass (that pattern re-read every space of a long run from each space)
+  const isWs = (c) => /\s/.test(c);
+  const titleParts = (t) => { const out = []; const n = t.length; let seg = '', i = 0;
+    const skipWs = (k) => { while (k < n && isWs(t[k])) k++; return k; };
+    while (i < n) {
+      if (t[i] === '|') { out.push(seg); seg = ''; i = skipWs(i + 1); continue; }
+      if (isWs(t[i])) { const j = skipWs(i);
+        if (j < n && (t[j] === '|' || ('\u2013\u2014:-'.includes(t[j]) && j + 1 < n && isWs(t[j + 1])))) { out.push(seg); seg = ''; i = skipWs(j + 1); continue; }
+        seg += t.slice(i, j); i = j; continue; }
+      seg += t[i]; i++;
+    }
+    out.push(seg); return out; };
+  const GOV_NAME_T = { test: (t) => titleParts(S(t)).map(x => x.trim()).filter(Boolean).some(x => GOV_NAME_SEG.test(x)) };
   const GOV_SNIP = /\b(?:(?:a|an|the)\s+(?:federal|government|governmental|public)\s+(?:entity|initiative|agency|body|authority|department|foundation|organi[sz]ation|program(?:me)?|platform)|government[- ](?:owned|backed|led|initiative|entity)|established by (?:the )?(?:government|(?:an? |royal |emiri )?decree|law)|chamber of commerce|ministry of)\b/i;
   const govSignal = (title, snippet) => GOV_NAME_T.test(S(title)) || GOV_SNIP.test(S(title) + ' ' + S(snippet));
   const kindOf = (domain, url, title, snippet, own) => {
@@ -351,7 +378,7 @@ const CMP = (() => {
   //    settings, plus what it chose on the Competitors page, minus what it marked not a competitor (or dismissed there). Monitors and the app
   //    read this one list.
   //  * CMP.LEFT_OUT - the reason codes (and plain words) of a prospect the competitor gate leaves out; the Link Builder stores the code.
-  const RX = (names) => new RegExp('(^|\\.)(' + names.map(n => n.replace(/\./g, '\\.')).join('|') + ')\\.' + SUF + '$');
+  const RX = alt;   // the role lists use the one host-list reader above (KIT-LINEAR)
   const ROLE_LISTS = {
     // makers of software a buyer may consider (KI PLATFORM_HOSTS / PRINCIPALS, AIE PLATFORMS, CMP platform): never a competitor of a services firm
     software: RX(['microsoft', 'dynamics', 'office', 'azure', 'sap', 'oracle', 'netsuite', 'salesforce', 'hubspot', 'zoho', 'odoo', 'infor', 'epicor', 'ifs', 'unit4', 'sage', 'acumatica',
@@ -507,7 +534,7 @@ const CMP = (() => {
     const list = []; for (const d of [...declared, ...chosen]) { if (!d || (own && sameOrSub(d, own)) || off.has(d) || [...off].some(x => reg(x) === reg(d)) || list.includes(d)) continue; list.push(d); }
     return { list: list.slice(0, max), chosen, declared, removed: [...off] };
   };
-  return { kindOf, kindOfHost, kindOfResult, govSignal, select, weight, host, reg, LABEL, role, isCompetitor, oneList, partnerDirectory, listPage, principalHosts, ROLES, ROLE_WORDS, LEFT_OUT, ROLE_LISTS, PRINCIPALS, KI_ROLE, SOFT_CAT };
+  return { kindOf, kindOfHost, kindOfResult, govSignal, titleParts, select, weight, host, reg, LABEL, role, isCompetitor, oneList, partnerDirectory, listPage, principalHosts, ROLES, ROLE_WORDS, LEFT_OUT, ROLE_LISTS, PRINCIPALS, KI_ROLE, SOFT_CAT };
 })();
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };

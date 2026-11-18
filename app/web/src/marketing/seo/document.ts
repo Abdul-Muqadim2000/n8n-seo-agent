@@ -56,8 +56,9 @@ export function renderDocument(shell: string, page: PageDocument): string {
 /** the visible text of a rendered body (for the build's own checks): no tags, no scripts, collapsed spaces */
 export const visibleText = (html: string): string =>
   html
-    .replace(/<script[\s\S]*?<\/script>/g, ' ')
-    .replace(/<style[\s\S]*?<\/style>/g, ' ')
+    // any case, attributes, and the end tags browsers accept ("</script >", "</SCRIPT foo>"): CodeQL js/bad-tag-filter
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&[a-z#0-9]+;/gi, ' ')
     .replace(/\s+/g, ' ')

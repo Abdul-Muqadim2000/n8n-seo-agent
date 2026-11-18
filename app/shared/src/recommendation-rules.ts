@@ -14,6 +14,7 @@
 import type { GuideId } from './guides';
 import type { Priority, Recommendation, RecommendationBoard, RecommendationRuleView } from './data';
 import { priorityFromScore } from './queue';
+import { trimEndMatching } from './linear-text';
 
 export type RecommendationState = 'open' | 'in_progress' | 'waiting_for_google' | 'resolved' | 'failed' | 'dismissed' | 'expired';
 export const RECOMMENDATION_STATES: readonly RecommendationState[] = ['open', 'in_progress', 'waiting_for_google', 'resolved', 'failed', 'dismissed', 'expired'];
@@ -174,7 +175,7 @@ export function recRuleView(id: string): RecommendationRuleView | undefined {
 export function pageKey(url: string): string {
   const m = String(url ?? '').trim().toLowerCase().match(/^(?:https?:\/\/)?(?:www\.)?([^/?#\s]+)([^?#\s]*)/);
   if (!m) return '';
-  return `${m[1]}${m[2].replace(/\/+$/, '')}`;
+  return `${m[1]}${trimEndMatching(m[2], /\//)}`;
 }
 const normSearch = (s: string) => String(s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 

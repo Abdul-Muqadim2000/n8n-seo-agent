@@ -20,6 +20,7 @@
 // - FX-LINKS (review R2 M2 / M5): "they linked" said by a person (Mark won on a reply, Won on the Backlinks page) is CLAIMED until our check
 //   finds the link on their page: shown as such, never silently reverted and never counted as won; our check then makes it won.
 import { registrableDomain } from './domain';
+import { cutAtFirst } from './linear-text';
 
 export const LINK_STATES = ['found', 'left_out', 'no_page', 'needs_contact', 'to_write', 'needs_edit', 'to_review', 'approved', 'sent', 'replied', 'claimed', 'won', 'lost', 'declined', 'already_links', 'low_value'] as const;
 export type LinkState = (typeof LINK_STATES)[number];
@@ -226,19 +227,45 @@ export function anchorDisplay(o: { anchorText?: string | null; anchorHint?: stri
 // ---- the junk gate for a page that links to the client (integration of CR17-E into the recommendations) ----
 // The engine's LK.junkLink (v5/code/_link_kit.js) decides won links; the app needs the same answer for a LOST link: a job listing, a profile,
 // a code host, a link farm or a scraper page is never worth a "win back the link" step. The job-board host list is the engine's, character
-// for character (link-status.test.ts compares them).
-const JOB_HOST = /(^|\.)(bebee|indeed|glassdoor|rozee|naukri|naukrigulf|bayt|monster|ziprecruiter|jooble|careerjet|simplyhired|wuzzuf|gulftalent|mustakbil|jobstreet|seek|reed|totaljobs|stepstone|dice|jobrapido|adzuna|neuvoo|careerbuilder|jobsdb|laimoon|workable|recruitee|smartrecruiters|greenhouse|lever|wellfound)\.[a-z.]+$|^(jobs|careers)\.[a-z0-9-]+\.[a-z.]+$/;
+// for character (link-status.cr17integ.test.ts compares them).
+// KIT-LINEAR (CodeQL js/polynomial-redos, PR #71): the host lists are read label by label (nameBeforeLetters) instead of the patterns
+// /(^|\.)(names)\.[a-z.]+$/, which re-read the tail from every dot of a crafted host; the answer is the same (link-status.test.ts).
+/** the job boards (the engine's LK.junkLink JOB_HOST names, v5/code/_link_kit.js) */
+export const JOB_HOST_NAMES: ReadonlySet<string> = new Set(['bebee', 'indeed', 'glassdoor', 'rozee', 'naukri', 'naukrigulf', 'bayt', 'monster', 'ziprecruiter', 'jooble', 'careerjet',
+  'simplyhired', 'wuzzuf', 'gulftalent', 'mustakbil', 'jobstreet', 'seek', 'reed', 'totaljobs', 'stepstone', 'dice', 'jobrapido', 'adzuna', 'neuvoo', 'careerbuilder', 'jobsdb',
+  'laimoon', 'workable', 'recruitee', 'smartrecruiters', 'greenhouse', 'lever', 'wellfound']);
+const JOB_SUBDOMAIN = /^(jobs|careers)\.[a-z0-9-]+\.[a-z.]+$/;
+const LINKEDIN: ReadonlySet<string> = new Set(['linkedin']);
+const PINTEREST: ReadonlySet<string> = new Set(['pinterest']);
+/**
+ * True when one whole label of host `h` is in `names` and is followed by "." and a non-empty tail of letters and dots only: exactly
+ * /(^|\.)(names)\.[a-z.]+$/.test(h), in one pass.
+ */
+export function nameBeforeLetters(h: string, names: ReadonlySet<string>): boolean {
+  let tail = h.length; // where the run of [a-z.] that ends the host starts
+  while (tail > 0 && /[a-z.]/.test(h[tail - 1])) tail--;
+  let start = 0;
+  for (let i = 0; i < h.length; i++) {
+    if (h[i] !== '.') continue;
+    if (i + 1 < h.length && i + 1 >= tail && names.has(h.slice(start, i))) return true;
+    start = i + 1;
+  }
+  return false;
+}
+/** a job board's host: the engine's LK.junkLink job-host rule (v5/code/_link_kit.js JOB_HOST), the same names */
+export const isJobHost = (h: string): boolean => nameBeforeLetters(h, JOB_HOST_NAMES) || JOB_SUBDOMAIN.test(h);
 const JOB_PATH = /(^|\/)(jobs?|job-listings?|vacanc(?:y|ies)|careers?\/jobs?)(\/|$)/i;
 const JOB_TITLE = /\b\d+\+?\s+[^|]{0,60}\bjobs?\b|\bjobs? in\b|\bhiring\b|\bvacanc(?:y|ies)\b|\bapply now\b|\|\s*bebee\b/i;
 const CODE_HOST = /(^|\.)(github\.com|gitlab\.com|bitbucket\.org|sourceforge\.net)$/;
-const PROFILE_PATH: [RegExp, RegExp][] = [
-  [/(^|\.)linkedin\.[a-z.]+$/, /^\/(in|pub|company|school|showcase)\//i],
-  [/(^|\.)(x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|threads\.net|pinterest\.[a-z.]+|behance\.net|dribbble\.com|about\.me|linktr\.ee|producthunt\.com)$/, /^\/[^/]+\/?$|^\/@/],
-  [/(^|\.)medium\.com$/, /^\/@/],
-  [/(^|\.)youtube\.com$/, /^\/(@|channel\/|c\/|user\/)/i],
+const SOCIAL_HOST = /(^|\.)(x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|threads\.net|behance\.net|dribbble\.com|about\.me|linktr\.ee|producthunt\.com)$/;
+const PROFILE_PATH: [(h: string) => boolean, RegExp][] = [
+  [(h) => nameBeforeLetters(h, LINKEDIN), /^\/(in|pub|company|school|showcase)\//i],
+  [(h) => SOCIAL_HOST.test(h) || nameBeforeLetters(h, PINTEREST), /^\/[^/]+\/?$|^\/@/],
+  [(h) => /(^|\.)medium\.com$/.test(h), /^\/@/],
+  [(h) => /(^|\.)youtube\.com$/.test(h), /^\/(@|channel\/|c\/|user\/)/i],
 ];
-const hostOfUrl = (u: string) => s(u).toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/^www\./, '');
-const pathOfUrl = (u: string) => (/^[a-z][a-z0-9+.-]*:\/\//i.test(s(u)) ? s(u).replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '').replace(/[?#].*$/, '') || '/' : '');
+const hostOfUrl = (u: string) => cutAtFirst(s(u).toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, ''), /[/?#]/).replace(/:\d+$/, '').replace(/^www\./, '');
+const pathOfUrl = (u: string) => (/^[a-z][a-z0-9+.-]*:\/\//i.test(s(u)) ? cutAtFirst(s(u).replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, ''), /[?#]/) || '/' : '');
 /** '' when the linking page is a real page, else the plain reason it is not worth a link-building step (lost or won). */
 export function junkLinkSite(o: { domain?: string | null; url?: string | null; title?: string | null; linkType?: string | null; spam?: number | null }): string {
   const url = s(o.url);
@@ -248,9 +275,9 @@ export function junkLinkSite(o: { domain?: string | null; url?: string | null; t
   if (lt === 'spam') return 'a link-farm or spam page';
   if (lt === 'scraper') return 'an automatic report page';
   if ((Number(o.spam) || 0) >= 30) return 'a page with a high spam score';
-  if (h && (JOB_HOST.test(h) || (/(^|\.)linkedin\.[a-z.]+$/.test(h) && /^\/jobs(\/|$)/i.test(path)) || (JOB_PATH.test(path) && JOB_TITLE.test(s(o.title))))) return 'a job listing';
+  if (h && (isJobHost(h) || (nameBeforeLetters(h, LINKEDIN) && /^\/jobs(\/|$)/i.test(path)) || (JOB_PATH.test(path) && JOB_TITLE.test(s(o.title))))) return 'a job listing';
   if (h && CODE_HOST.test(h)) return 'a code host';
-  if (h && path && PROFILE_PATH.some(([hr, pr]) => hr.test(h) && pr.test(path))) return 'a profile';
+  if (h && path && PROFILE_PATH.some(([hr, pr]) => hr(h) && pr.test(path))) return 'a profile';
   if (lt === 'profile') return 'a profile';
   return '';
 }

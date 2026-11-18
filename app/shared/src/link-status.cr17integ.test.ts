@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DOMAIN_REASON_CODES, junkLinkSite, linkReasonCode } from './link-status';
+import { DOMAIN_REASON_CODES, JOB_HOST_NAMES, junkLinkSite, linkReasonCode } from './link-status';
 import { leftOutWords } from './competitor-roles';
 
 const kit = (f: string) => readFileSync(join(__dirname, '..', '..', '..', 'n8n', 'seo-agent', 'v5', 'code', f), 'utf8');
@@ -55,11 +55,11 @@ describe('CR17 integration: a lost link on a junk page is never worth winning ba
     expect(junkLinkSite({ domain: 'peppol.org', url: 'https://peppol.org/members/providers/', title: 'Peppol service providers' })).toBe('');
     expect(junkLinkSite({ domain: 'medium.com', url: 'https://medium.com/some-pub/an-article-123' })).toBe('');
   });
-  it("the job-board host list is the engine's (LK in v5/code/_link_kit.js), character for character", () => {
-    const re = (src: string) => (src.match(/const JOB_HOST = (\/.*\/);/) ?? [])[1] ?? '';
-    const engine = re(kit('_link_kit.js'));
-    const app = re(readFileSync(join(__dirname, 'link-status.ts'), 'utf8'));
-    expect(engine.length).toBeGreaterThan(50);
-    expect(app).toBe(engine);
+  it("the job-board host list is the engine's (LK in v5/code/_link_kit.js), name for name", () => {
+    // CR17 CodeQL (PR #71): the app reads the list label by label (JOB_HOST_NAMES, isJobHost) instead of a copy of the engine's pattern,
+    // which backtracked on a crafted host; so the names are compared here, and linear-text.test.ts checks every answer against the pattern
+    const names = (kit('_link_kit.js').match(/const JOB_HOST = \/\(\^\|\\\.\)\(([a-z|]+)\)/) ?? [])[1] ?? '';
+    expect(names.length).toBeGreaterThan(50);
+    expect(new Set(names.split('|'))).toEqual(new Set(JOB_HOST_NAMES));
   });
 });

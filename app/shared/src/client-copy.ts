@@ -6,6 +6,7 @@
 // and report string builder over real production strings through it; the engine has the same guard as harness CR17H + build section 198.
 // Pure: no imports with side effects, usable in the server, the web and tests.
 import { AI_RANK_SCORE_LINE, aiRankWhyPlain } from './ai-rank-client';
+import { replaceSpaced, trimEndMatching } from './linear-text';
 
 /** One forbidden pattern: an internal shape that must never reach a client. */
 export interface ClientCopyRule {
@@ -56,7 +57,7 @@ export function providerErrorText(v: unknown): string {
   if (!t) return '';
   const i = t.search(PROVIDER_DUMP);
   if (i < 0) return t;
-  const label = t.slice(0, i).replace(/[\s:,-]+$/, '').trim();
+  const label = trimEndMatching(t.slice(0, i), /[\s:,-]/).trim();
   return label ? `${label}: ${PROVIDER_ERROR_TEXT}` : `A source ${PROVIDER_ERROR_TEXT}`;
 }
 
@@ -79,21 +80,20 @@ export function clientText(v: unknown, opts: { lever?: string } = {}): string {
     .split(/;\s*/)
     .map((part) => (PROVIDER_DUMP.test(part) ? providerErrorText(part) : part))
     .join('; ');
-  return t
-    .replace(/^AI ranking \(L\d{2}\):\s*/i, '')
-    .replace(/\s*\((?:L(?:0[1-9]|1[0-7]))\)/g, '')
+  // the patterns with spaces on a side go through replaceSpaced (linear-text.ts): the same result as /\s*X\s*/g, without re-reading a long
+  // run of spaces from each of its characters (CodeQL js/polynomial-redos, PR #71)
+  t = replaceSpaced(t.replace(/^AI ranking \(L\d{2}\):\s*/i, ''), /\((?:L(?:0[1-9]|1[0-7]))\)/g, '*', '', '')
     .replace(/\bL(?:0[1-9]|1[0-7])\b\s*/g, '')
     .replace(/\b(?:cad|air|aip|ait|lad|aud)_[A-Za-z0-9][A-Za-z0-9_.:-]{3,}/g, '')
-    .replace(/\bseo_[a-z][a-z_]+/gi, 'our records')
-    .replace(/\s*→\s*/g, ', then ')
-    .replace(/\s+[—–]\s+/g, ': ')
+    .replace(/\bseo_[a-z][a-z_]+/gi, 'our records');
+  t = replaceSpaced(replaceSpaced(t, /→/g, '*', '*', ', then '), /[—–]/g, '+', '+', ': ')
     .replace(/[—–]/g, '-')
     .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/\s*(?:…|\.\.\.)\s*/g, ' ')
+    .replace(/[“”]/g, '"');
+  t = replaceSpaced(t, /…|\.\.\./g, '*', '*', ' ')
     .replace(/\[object Object\]|\bundefined\b|\bNaN\b/g, '')
-    .replace(/\(\s*\)/g, '')
-    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\(\s*\)/g, '');
+  return replaceSpaced(t, /[,.;:]/g, '+', '', (m) => m[0])
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
